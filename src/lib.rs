@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
+use std::collections::HashMap;
 
 #[cfg(test)]
 mod tests {
@@ -15,7 +15,6 @@ pub type META = String;
 ///Id of the simulation
 pub type Sid = String;
 
-
 pub type Model = String;
 
 ///Id of an entity
@@ -24,34 +23,41 @@ pub type Eid = String;
 ///Id of an attribute of a Model
 pub type Attribute_Id = String;
 
-
-enum Object{
-
-}
-trait mosaik_api{
+enum Object {}
+trait mosaik_api {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
     fn init(&mut self, sid: Sid, sim_params: HashMap<String, Object>) -> META;
 
     ///Create *num* instances of *model* using the provided *model_params*.
-    fn create<Entity>(&self, num: usize, model: Model, model_params: HashMap<String, Object>) -> Vec<Entity>;
+    fn create<Entity>(
+        &self,
+        num: usize,
+        model: Model,
+        model_params: HashMap<String, Object>,
+    ) -> Vec<Entity>;
 
     fn setup_done(&self);
 
     ///perform a simulatino step and return the new time
-    fn step<Value>(&self, time: usize, inputs: HashMap<Eid, HashMap<Attribute_Id, Vec<Value>>>) -> usize;
+    fn step<Value>(
+        &self,
+        time: usize,
+        inputs: HashMap<Eid, HashMap<Attribute_Id, Vec<Value>>>,
+    ) -> usize;
 
     //collect data from the simulation and return a nested Vector containing the information
-    fn get_data<Value>(&self, outputs: HashMap<Eid, Vec<Attribute_Id>>) -> HashMap<Eid, HashMap<Attribute_Id, Value>>;
+    fn get_data<Value>(
+        &self,
+        outputs: HashMap<Eid, Vec<Attribute_Id>>,
+    ) -> HashMap<Eid, HashMap<Attribute_Id, Value>>;
 
     fn stop();
 }
 
-
 #[async_trait]
-trait async_api{
+trait async_api {
     async fn get_progress();
     async fn get_related_entities();
     async fn get_data();
     async fn set_data();
-
 }
