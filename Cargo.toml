@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 async-trait = "0.1.41"
 jsonrpc-core = "15.1.0"
+jsonrpc-http-server = "15.1.0"
