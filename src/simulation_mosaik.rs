@@ -1,3 +1,103 @@
+//mod lib;
+//use lib::mosaik_api;
+//mod simple_simulator;
+use std::collections::HashMap;
+
+fn meta(){
+    let META = json::parse(r#"
+    {"models":{
+        "ExampleModel":{
+            "public": True,
+            "params": ["init_val"],
+            "attrs": ["val", "delta"]
+            }
+        }
+    }"#).unwrap();
+    return META;
+}
+
+pub struct ExampleSim{
+    simulator: String, //simple_Simulator.simple_simulator()
+    eid_prefix: String,
+    entities: Vec!(),
+}
+
+pub trait mosaik_api{
+
+}
+
+///implementation of the trait in mosaik_api.rs
+impl mosaik_api for ExampleSim{
+    fn _init_();
+
+    fn init(&mut self, sid: String, eid_prefix: Option<String>){
+        match eid_prefix {
+            Some(eid_prefix) => {
+                self.eid_prefix = eid_prefix;
+            }
+            None() => {}
+        }
+        return self.META; 
+    }
+    
+    fn create(&self, num: usize, model: Model, init_val: usize){
+        let mut entities = vec::new();
+        let next_eid = self.entities.len();
+
+        for i in next_eid..(next_eid + num){
+            let mut eid = to_string(self.eid_prefix, i); //eid = '%s%d' % (self.eid_prefix, i)
+            //self.simulator::add_model(init_val);
+            self.entities[eid] = i;
+            entities.push(/* {'eid': eid, 'type': model} */)
+        }
+        return entities;
+    }
+
+    /*fn setup_done(&self){
+
+    }*/
+
+    fn step(&self, time: usize, inputs: HashMap<>){
+        let mut deltas = vec::new();
+        let mut new_delta = 0;
+        for (eid, attrs) in inputs.iter(){
+            for (attr, value) in attrs.iter(){
+                let mut model_idx = self.entities[eid];
+                new_delta += value;
+                deltas[model_idx] = new_delta;
+            }
+        }
+        //self.simulator::step(deltas);
+        
+        return time + 60;
+    }
+
+    fn get_data(&self, Output: HashMap<>){
+        let mut data = vec::new();
+        for (eid, attrs) in Output.iter(){
+            let mut model_idx = self.enitites[eid];
+            data[eid] = vec::new();
+            for attr in attrs{
+                /*if attr not in self.meta['models']['ExampleModel']['attrs']:
+                    raise ValueError('Unknown output attribute: %s' % attr)
+
+                # Get model.val or model.delta:
+                data[eid][attr] = getattr(models[model_idx], attr)*/
+            }
+        }
+        return data;
+
+    }
+
+    fn stop(){
+        break;
+    }
+}
+
+
+
+
+
 
 ///Current Python code needs to get converted to rust for testing purposes.
 
@@ -22,7 +122,7 @@ META = {
 
 class ExampleSim(mosaik_api.Simulator):
     def __init__(self):
-        super().__init__(META)
+        super().__init__(META) #gibt die META an die mosaik_api.Simulator weiter
         self.simulator = simulator.Simulator()
         self.eid_prefix = 'Model_'
         self.entities = {} #Maps entitiy IDs to model indicies in self.simulator

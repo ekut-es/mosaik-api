@@ -23,8 +23,9 @@ pub type Eid = String;
 ///Id of an attribute of a Model
 pub type Attribute_Id = String;
 
-enum Object {}
-trait mosaik_api {
+pub enum Object {}
+///the class for the "empty" API calls
+pub trait mosaik_api {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
     fn init(&mut self, sid: Sid, sim_params: HashMap<String, Object>) -> META;
 
