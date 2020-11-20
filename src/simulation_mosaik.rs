@@ -17,18 +17,16 @@ fn meta(){
 }
 
 pub struct ExampleSim{
-    simulator: String, //simple_Simulator.simple_simulator()
+    simulator: String, //simple_Simulator.simulator() -> let mut sim:Simulator = Simulator::init_simulator();
     eid_prefix: String,
-    entities: Vec!(),
-}
-
-pub trait mosaik_api{
-
+    entities: vec::new(),
 }
 
 ///implementation of the trait in mosaik_api.rs
 impl mosaik_api for ExampleSim{
-    fn _init_();
+    fn init_simulator(&mut self){
+
+    }
 
     fn init(&mut self, sid: String, eid_prefix: Option<String>){
         match eid_prefix {
@@ -46,7 +44,7 @@ impl mosaik_api for ExampleSim{
 
         for i in next_eid..(next_eid + num){
             let mut eid = to_string(self.eid_prefix, i); //eid = '%s%d' % (self.eid_prefix, i)
-            //self.simulator::add_model(init_val);
+            //self.simulator.add_model(init_val);
             self.entities[eid] = i;
             entities.push(/* {'eid': eid, 'type': model} */)
         }
@@ -67,7 +65,7 @@ impl mosaik_api for ExampleSim{
                 deltas[model_idx] = new_delta;
             }
         }
-        //self.simulator::step(deltas);
+        //self.simulator.step(deltas);
         
         return time + 60;
     }
@@ -93,13 +91,6 @@ impl mosaik_api for ExampleSim{
         break;
     }
 }
-
-
-
-
-
-
-///Current Python code needs to get converted to rust for testing purposes.
 
 
 

@@ -6,13 +6,13 @@ from sys import platform
 
 sim_config = {
     'rust_sim':{
-        'cmd': 'cargo run %(addr)s', #cd ../../mosaik-rust-api && 
+        #'cmd': 'cargo run %(addr)s', #cd ../../mosaik-rust-api && 
         #'env': '../../mosaik-rust-api',
-        #'connect': '127.0.0.1:3030',
+        'connect': '127.0.0.1:3030',
     },
 }
 
-END = 24 * 3600 * 10  # 10 days
+END = 100   # 100 s
 
 print("call Sim_Manager")
 world = mosaik.World(sim_config)
