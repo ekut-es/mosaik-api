@@ -1,4 +1,4 @@
-
+mod simulation_mosaik;
 pub struct Model{
     val: f32,
     delta: f32,
@@ -9,7 +9,7 @@ pub trait RunModel{
     fn step(&mut self);
 }
 
-impl RunModel for Model{
+pub impl RunModel for Model{
     fn initmodel(init_value: f32) -> Model{
         Model {
             val: init_value,
@@ -27,7 +27,14 @@ pub struct Simulator{
     data: Vec<Vec<f32>> //brauch ich 2d Array?
 }
 
-impl Simulator{
+pub trait RunSimulator{
+    fn init_simulator() -> Simulator;
+    fn add_model(&mut self, init_value: f32);
+    fn step(&mut self, deltas: Option<Vec<(usize, f32)>>);
+}
+
+
+pub impl RunSimulator for Simulator{
     fn init_simulator() -> Simulator{
         Simulator{
             models: vec![],
