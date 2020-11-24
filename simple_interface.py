@@ -8,7 +8,7 @@ sim_config = {
     'rust_sim':{
         #'cmd': 'cargo run %(addr)s', #cd ../../mosaik-rust-api && 
         #'env': '../../mosaik-rust-api',
-        'connect': '127.0.0.1:3030',
+        'connect': '127.0.0.1:3456',
     },
 }
 

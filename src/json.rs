@@ -1,6 +1,56 @@
-use serde_json::{json, map::Map, Result, Value};
+use serde_json::{json, map::Map, Value};
 
-// https://book.async.rs/tutorial/all_together.html
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum MosaikError {
+    #[error("Parsing Mosaik Payload: {0}")]
+    ParseError(String),
+    #[error("Parsing Error")]
+    Serde(#[from] serde_json::Error),
+}
+
+pub(crate) fn parse_request(data: String) -> Result<Request, MosaikError> {
+    // Parse the string of data into serde_json::Value.
+    let mut payload = match serde_json::from_str(&data)? {
+        Value::Array(vecs) if vecs.len() == 3 => vecs,
+        e => {
+            return Err(MosaikError::ParseError(format!("Invalid Payload: {:?}", e)));
+        }
+    };
+
+    if payload[0] != 0 {
+        return Err(MosaikError::ParseError(format!(
+            "Payload is not a request: {:?}",
+            payload
+        )));
+    }
+
+    let id: u64 = payload[1].as_u64().unwrap();
+
+    use std::iter::FromIterator;
+    match &payload[2] {
+        Value::Array(call) if call.len() == 3 => match (call[0].as_str(), &call[1], &call[2]) {
+            (Some(method), Value::Array(args), Value::Object(kwargs)) => {
+                let args: Vec<String> = args.clone().iter_mut().map(|e| e.to_string()).collect();
+                Ok(Request {
+                    id,
+                    method: method.to_string(),
+                    args,
+                    kwargs: kwargs.clone(),
+                })
+            }
+            (e1, e2, e3) => Err(MosaikError::ParseError(format!(
+                "Payload is not a valid request: {:?} | {:?} | {:?}",
+                e1, e2, e3
+            ))),
+        },
+        e => Err(MosaikError::ParseError(format!(
+            "Payload doesn't have valid method, args, kwargs Array: {:?}",
+            e
+        ))),
+    }
+}
 
 enum MsgType {
     REQ,
@@ -8,9 +58,9 @@ enum MsgType {
     ERROR,
 }
 
-struct Request {
-    msg_type: MsgType,
-    id: usize,
+#[derive(Debug)]
+pub struct Request {
+    id: u64,
     method: String,
     args: Vec<String>,
     kwargs: Map<String, Value>,
