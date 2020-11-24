@@ -1,9 +1,12 @@
-use std::collections::HashMap;
 use serde_json::json;
+use std::collections::HashMap;
 
-use crate::{Model, Object, mosaik_api, simple_simulator::{self, RunSimulator}};
+use crate::{
+    simple_simulator::{self, RunSimulator, Simulator},
+    Model, MosaikAPI, Object,
+};
 
-fn meta()-> serde_json::Value {
+fn meta() -> serde_json::Value {
     let meta = json!({
     "api_version": "2.2",
     "models":{
@@ -19,16 +22,16 @@ fn meta()-> serde_json::Value {
 
 type Value = usize;
 type Entity = String;
-pub struct ExampleSim{
-    simulator: simple_simulator::Simulator,  //simple_Simulator.simulator()
-    eid_prefix: String,                         //HashMap<String, Object>,
+pub struct ExampleSim {
+    simulator: simple_simulator::Simulator, //simple_Simulator.simulator()
+    eid_prefix: String,                     //HashMap<String, Object>,
     entities: Vec<Entity>,
     meta: serde_json::Value,
 }
 
-fn init_sim() -> ExampleSim{
-    ExampleSim{
-        simulator: RunSimulator::init_simulator(), //"simple_simulator_aufruf", //simple_Simulator.simulator()
+fn init_sim() -> ExampleSim {
+    ExampleSim {
+        simulator: Simulator::init_simulator(), //"simple_simulator_aufruf", //simple_Simulator.simulator()
         eid_prefix: String::from("model_"),
         entities: vec![], //HashMap
         meta: meta(),
@@ -36,40 +39,49 @@ fn init_sim() -> ExampleSim{
 }
 
 ///implementation of the trait in mosaik_api.rs
-impl mosaik_api for ExampleSim{
-    
-    fn init(&mut self, sid: String, sim_params: Option<HashMap<String, Object>>) -> serde_json::Value{
+impl MosaikAPI for ExampleSim {
+    fn init(
+        &mut self,
+        sid: String,
+        sim_params: Option<HashMap<String, Object>>,
+    ) -> serde_json::Value {
         match sim_params {
             Some(sim_params) => {
-                self.eid_prefix = todo!();//ExampleSim.eid_prefix;
+                self.eid_prefix = todo!(); //ExampleSim.eid_prefix;
             }
             None => {}
         }
         meta()
-        //return self.META; 
+        //return self.META;
     }
-    
-    fn create<Entity>(&self, num: usize, model: String, init_val: usize) -> Vec<Entity>{ //, model_params: HashMap<String, Vec<Value>>
+
+    fn create<Entity>(&self, num: usize, model: String, init_val: usize) -> Vec<Entity> {
+        //, model_params: HashMap<String, Vec<Value>>
         let mut out_entities: HashMap<String, String> = HashMap::new();
         let next_eid = self.entities.len();
 
-        for i in next_eid..(next_eid + num){
+        for i in next_eid..(next_eid + num) {
             let mut eid = format!(self.eid_prefix, i); //eid = '%s%d' % (self.eid_prefix, i)
-            //self.simulator::add_model(init_val);
+                                                       //self.simulator::add_model(init_val);
             self.entities[eid] = i; //create a mapping from the entity ID to our model
-            //out_entities.push( ("eid": eid, "type": model) );
+                                    //out_entities.push( ("eid": eid, "type": model) );
         }
         return out_entities;
     }
 
-    fn step<Value: std::ops::AddAssign>(&self, time: usize, inputs: HashMap<String, HashMap<String, Vec<Value>>>) -> usize{
+    fn step<Value: std::ops::AddAssign>(
+        &self,
+        time: usize,
+        inputs: HashMap<String, HashMap<String, Vec<Value>>>,
+    ) -> usize {
         let mut deltas = vec![];
         let mut new_delta: Value;
-        for (eid, attrs) in inputs.iter(){
+        for (eid, attrs) in inputs.iter() {
             let mut i = 0;
-            for (attr, values) in attrs.iter(){ //values ist eine weitere HashMap<String, Value>.
-                let mut model_idx = todo!();                    //self.entities[*eid];
-                new_delta += values[i];                           //new_delta = sum(values.values())
+            for (attr, values) in attrs.iter() {
+                //values ist eine weitere HashMap<String, Value>.
+                let mut model_idx = todo!(); //self.entities[*eid];
+                new_delta += values[i]; //new_delta = sum(values.values())
                 deltas[model_idx] = new_delta;
             }
         }
@@ -78,13 +90,16 @@ impl mosaik_api for ExampleSim{
         return time;
     }
 
-    fn get_data<Value>(&self, output: HashMap<String, Vec<String>>) -> HashMap<String, HashMap<String, Vec<Value>>>{
+    fn get_data<Value>(
+        &self,
+        output: HashMap<String, Vec<String>>,
+    ) -> HashMap<String, HashMap<String, Vec<Value>>> {
         //models = self.simulator.models
-        let mut data: HashMap<String, HashMap<String, Vec<Value>>> = HashMap::new();//vec![];
-        for (eid, attrs) in output.iter(){
-            let mut model_idx = self.entities;//[eid];
-            //data[eid] = vec![];
-            for attr in attrs{  
+        let mut data: HashMap<String, HashMap<String, Vec<Value>>> = HashMap::new(); //vec![];
+        for (eid, attrs) in output.iter() {
+            let mut model_idx = self.entities; //[eid];
+                                               //data[eid] = vec![];
+            for attr in attrs {
                 /*if attr not in self.meta['models']['ExampleModel']['attrs']:
                     raise ValueError('Unknown output attribute: %s' % attr)
 
@@ -93,22 +108,18 @@ impl mosaik_api for ExampleSim{
             }
         }
         return data;
-
     }
 
-    fn stop(){
-    }
+    fn stop() {}
 
     fn setup_done(&self) {
         println!("Setup is done.");
     }
 }
 
-pub fn run(){
+pub fn run() {
     init_sim();
 }
-
-
 
 /* # simulator_mosaik.py
 """Mosaik interface for the example simulator"""
@@ -150,7 +161,7 @@ class ExampleSim(mosaik_api.Simulator):
         entities = []
 
         for i in range(next_eid, next_eid + num): # each entity gets a new ID and a model instance
-            eid = '%s%d' % (self.eid_prefix, i) 
+            eid = '%s%d' % (self.eid_prefix, i)
             self.simulator.add_model(init_val)
             self.entities[eid] = i # mapping from EID to our model (i think)
             entities.append({'eid': eid, 'type': model})
@@ -168,7 +179,7 @@ class ExampleSim(mosaik_api.Simulator):
                 model_idx = self.entities[eid]
                 new_delta = sum(values.values())
                 deltas[model_idx] = new_delta
-        
+
         # Perform simulation step
         self.simulator.step(deltas)
 

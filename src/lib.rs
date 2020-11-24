@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
-mod simulation_mosaik;
 mod simple_simulator;
+mod simulation_mosaik;
 
 #[cfg(test)]
 mod tests {
@@ -29,7 +29,7 @@ pub type Attribute_Id = String;
 
 pub enum Object {}
 ///the class for the "empty" API calls
-pub trait mosaik_api {
+pub trait MosaikAPI {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
     fn init(&mut self, sid: Sid, sim_params: Option<HashMap<String, Object>>) -> META;
 
@@ -38,13 +38,14 @@ pub trait mosaik_api {
         &self,
         num: usize,
         model: Model,
-        model_params: HashMap<String, Vec<Value>>
+        model_params: HashMap<String, Vec<Value>>,
     ) -> Vec<Entity>;
 
     fn setup_done(&self);
 
     ///perform a simulatino step and return the new time
-    fn step<Value: std::ops::AddAssign>( //AddAssign is a quickfix for the addition of two values -> needed for delta
+    fn step<Value: std::ops::AddAssign>(
+        //AddAssign is a quickfix for the addition of two values -> needed for delta
         &self,
         time: usize,
         inputs: HashMap<Eid, HashMap<Attribute_Id, Vec<Value>>>,
