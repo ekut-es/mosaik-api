@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 mod simulation_mosaik;
+mod simple_simulator;
 
 #[cfg(test)]
 mod tests {
@@ -11,7 +12,7 @@ mod tests {
 }
 
 ///information about the model(s) of the simulation
-pub type META = json::JsonValue;
+pub type META = serde_json::Value;
 
 ///Id of the simulation
 pub type Sid = String;

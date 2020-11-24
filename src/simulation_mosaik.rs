@@ -1,30 +1,29 @@
 use std::collections::HashMap;
-use jsonrpc_core::to_string;
+use serde_json::json;
 
-use crate::{Model, Object, mosaik_api};//, RunSimulator};
+use crate::{Model, Object, mosaik_api, simple_simulator::{self, RunSimulator}};
 
-fn meta()-> json::JsonValue {
-    let meta = json::parse(r#"
-    {
+fn meta()-> serde_json::Value {
+    let meta = json!({
     "api_version": "2.2",
     "models":{
         "ExampleModel":{
-            "public": True,
+            "public": "True",
             "params": ["init_val"],
             "attrs": ["val", "delta"]
             }
         }
-    }"#).unwrap();
+    });
     return meta;
 }
 
 type Value = usize;
 type Entity = String;
 pub struct ExampleSim{
-    simulator: simple_simulator::RunSimulator,  //simple_Simulator.simulator()
+    simulator: simple_simulator::Simulator,  //simple_Simulator.simulator()
     eid_prefix: String,                         //HashMap<String, Object>,
     entities: Vec<Entity>,
-    meta: json::JsonValue,
+    meta: serde_json::Value,
 }
 
 fn init_sim() -> ExampleSim{
@@ -39,7 +38,7 @@ fn init_sim() -> ExampleSim{
 ///implementation of the trait in mosaik_api.rs
 impl mosaik_api for ExampleSim{
     
-    fn init(&mut self, sid: String, sim_params: Option<HashMap<String, Object>>) -> json::JsonValue{
+    fn init(&mut self, sid: String, sim_params: Option<HashMap<String, Object>>) -> serde_json::Value{
         match sim_params {
             Some(sim_params) => {
                 self.eid_prefix = todo!();//ExampleSim.eid_prefix;
