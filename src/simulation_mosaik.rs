@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::{
     simple_simulator::{self, RunSimulator, Simulator},
-    Model, MosaikAPI, Object,
+    Model, MosaikAPI,
 };
 
 fn meta() -> serde_json::Value {
@@ -64,7 +64,7 @@ impl MosaikAPI for ExampleSim {
             Some(model_params) => {
                 if let Some(init_val) = model_params.get("init_val") {
                     for i in next_eid..(next_eid + num) {
-                        let mut eid = format!("{}_{}", self.eid_prefix, i); //eid = '%s%d' % (self.eid_prefix, i)
+                        let mut eid = format!("{}_{}", self.eid_prefix, i);
                         Simulator::add_model(&mut self.simulator, init_val.parse::<f32>());
                         self.entities.insert(eid, Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), Value::from(eid));
@@ -77,33 +77,27 @@ impl MosaikAPI for ExampleSim {
         return out_entities;
     }
 
-    fn step<Value: std::ops::AddAssign>(
-        &self,
-        time: usize,
-        inputs: Map<String, Map<String, Value>>,
-    ) -> usize {
-        let mut deltas = vec![];
+    fn step(&self, time: usize, inputs: Map<String, Map<String, Value>>) -> usize {
+        let mut deltas: Vec<(usize, f32)> = Vec::new();
         let mut new_delta: Value;
         for (eid, attrs) in inputs.iter() {
-            let mut i = 0;
             for (attr, values) in attrs.iter() {
-                //values ist eine weitere Map<String, Value>.
-                let mut model_idx = todo!(); //self.entities[*eid];
-                new_delta += values[i]; //new_delta = sum(values.values())
-                deltas[model_idx] = new_delta;
+                let mut model_idx = self.entities.get(eid);
+                new_delta = values.values().sum(); //new_delta = sum(values.values())
+                                                   //deltas.push(model_idx, new_delta); //data conversion from value to usize and f32
             }
         }
-        //self.simulator::step(deltas);
+        Simulator::step(&mut self.simulator, Some(deltas));
         time = time + 60;
         return time;
     }
 
-    fn get_data<Value>(&self, output: Map<String, Vec<String>>) -> Map<String, Map<String, Value>> {
-        //models = self.simulator.models
-        let mut data: Map<String, Map<String, Value>> = Map::new(); //vec![];
+    fn get_data(&self, output: HashMap<String, Vec<String>>) -> Map<String, Map<String, Value>> {
+        let mut models = self.simulator.models;
+        let mut data: Map<String, Map<String, Value>> = Map::new();
         for (eid, attrs) in output.iter() {
-            let mut model_idx = self.entities; //[eid];
-                                               //data[eid] = vec![];
+            let mut model_idx = self.entities.get(eid);
+            //data[eid] = vec![];
             for attr in attrs {
                 /*if attr not in self.meta['models']['ExampleModel']['attrs']:
                     raise ValueError('Unknown output attribute: %s' % attr)

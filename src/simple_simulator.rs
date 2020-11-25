@@ -22,7 +22,7 @@ impl RunModel for Model {
 }
 
 pub struct Simulator {
-    models: Vec<Model>,
+    pub models: Vec<Model>,
     data: Vec<Vec<f32>>, //brauch ich 2d Array?
 }
 

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use serde_json::{Map, Value};
 mod simple_simulator;
@@ -42,7 +44,7 @@ pub trait MosaikAPI {
     fn setup_done(&self);
 
     ///perform a simulatino step and return the new time
-    fn step<Value: std::ops::AddAssign>(
+    fn step(
         //AddAssign is a quickfix for the addition of two values -> needed for delta
         &self,
         time: usize,
@@ -50,9 +52,9 @@ pub trait MosaikAPI {
     ) -> usize;
 
     //collect data from the simulation and return a nested Vector containing the information
-    fn get_data<Value>(
+    fn get_data(
         &self,
-        outputs: Map<Eid, Vec<Attribute_Id>>,
+        outputs: HashMap<Eid, Vec<Attribute_Id>>,
     ) -> Map<Eid, Map<Attribute_Id, Value>>;
 
     fn stop();
