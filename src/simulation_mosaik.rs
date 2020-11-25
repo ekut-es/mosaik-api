@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
 use crate::{
@@ -11,7 +11,7 @@ fn meta() -> serde_json::Value {
     "api_version": "2.2",
     "models":{
         "ExampleModel":{
-            "public": "True",
+            "public": true,
             "params": ["init_val"],
             "attrs": ["val", "delta"]
             }
@@ -20,12 +20,11 @@ fn meta() -> serde_json::Value {
     return meta;
 }
 
-type Value = usize;
 type Entity = String;
 pub struct ExampleSim {
     simulator: simple_simulator::Simulator, //simple_Simulator.simulator()
-    eid_prefix: String,                     //HashMap<String, Object>,
-    entities: Vec<Entity>,
+    eid_prefix: String,                     //Map<String, Object>,
+    entities: Map<String, Value>,
     meta: serde_json::Value,
 }
 
@@ -33,38 +32,47 @@ fn init_sim() -> ExampleSim {
     ExampleSim {
         simulator: Simulator::init_simulator(), //"simple_simulator_aufruf", //simple_Simulator.simulator()
         eid_prefix: String::from("model_"),
-        entities: vec![], //HashMap
+        entities: Map::new(),
         meta: meta(),
     }
 }
 
 ///implementation of the trait in mosaik_api.rs
 impl MosaikAPI for ExampleSim {
-    fn init(
-        &mut self,
-        sid: String,
-        sim_params: Option<HashMap<String, Object>>,
-    ) -> serde_json::Value {
+    fn init(&mut self, sid: String, sim_params: Option<Map<String, Value>>) -> serde_json::Value {
         match sim_params {
             Some(sim_params) => {
-                self.eid_prefix = todo!(); //ExampleSim.eid_prefix;
+                if let Some(eid_prefix) = sim_params.get("eid_prefix") {
+                    self.eid_prefix = eid_prefix.to_string();
+                }
             }
             None => {}
         }
         meta()
-        //return self.META;
     }
-
-    fn create<Entity>(&self, num: usize, model: String, init_val: usize) -> Vec<Entity> {
-        //, model_params: HashMap<String, Vec<Value>>
-        let mut out_entities: HashMap<String, String> = HashMap::new();
+    //model_params: Map<String, Vec<Value>> init_val: usize
+    fn create<Entity>(
+        &self,
+        num: usize,
+        model: String,
+        model_params: Option<Map<String, Value>>,
+    ) -> Map<String, Value> {
+        //, model_params: Map<String, Vec<Value>>
+        let mut out_entities: Map<String, Value> = Map::new();
         let next_eid = self.entities.len();
-
-        for i in next_eid..(next_eid + num) {
-            let mut eid = format!(self.eid_prefix, i); //eid = '%s%d' % (self.eid_prefix, i)
-                                                       //self.simulator::add_model(init_val);
-            self.entities[eid] = i; //create a mapping from the entity ID to our model
-                                    //out_entities.push( ("eid": eid, "type": model) );
+        match model_params {
+            Some(model_params) => {
+                if let Some(init_val) = model_params.get("init_val") {
+                    for i in next_eid..(next_eid + num) {
+                        let mut eid = format!("{}_{}", self.eid_prefix, i); //eid = '%s%d' % (self.eid_prefix, i)
+                        Simulator::add_model(&mut self.simulator, init_val.parse::<f32>());
+                        self.entities.insert(eid, Value::from(i)); //create a mapping from the entity ID to our model
+                        out_entities.insert(String::from("eid"), Value::from(eid));
+                        out_entities.insert("type".to_string(), Value::from(model));
+                    }
+                }
+            }
+            None => {}
         }
         return out_entities;
     }
@@ -72,14 +80,14 @@ impl MosaikAPI for ExampleSim {
     fn step<Value: std::ops::AddAssign>(
         &self,
         time: usize,
-        inputs: HashMap<String, HashMap<String, Vec<Value>>>,
+        inputs: Map<String, Map<String, Value>>,
     ) -> usize {
         let mut deltas = vec![];
         let mut new_delta: Value;
         for (eid, attrs) in inputs.iter() {
             let mut i = 0;
             for (attr, values) in attrs.iter() {
-                //values ist eine weitere HashMap<String, Value>.
+                //values ist eine weitere Map<String, Value>.
                 let mut model_idx = todo!(); //self.entities[*eid];
                 new_delta += values[i]; //new_delta = sum(values.values())
                 deltas[model_idx] = new_delta;
@@ -90,12 +98,9 @@ impl MosaikAPI for ExampleSim {
         return time;
     }
 
-    fn get_data<Value>(
-        &self,
-        output: HashMap<String, Vec<String>>,
-    ) -> HashMap<String, HashMap<String, Vec<Value>>> {
+    fn get_data<Value>(&self, output: Map<String, Vec<String>>) -> Map<String, Map<String, Value>> {
         //models = self.simulator.models
-        let mut data: HashMap<String, HashMap<String, Vec<Value>>> = HashMap::new(); //vec![];
+        let mut data: Map<String, Map<String, Value>> = Map::new(); //vec![];
         for (eid, attrs) in output.iter() {
             let mut model_idx = self.entities; //[eid];
                                                //data[eid] = vec![];

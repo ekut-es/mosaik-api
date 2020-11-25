@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::collections::HashMap;
+use serde_json::{Map, Value};
 mod simple_simulator;
 mod simulation_mosaik;
 
@@ -19,8 +19,6 @@ pub type Sid = String;
 
 pub type Model = String;
 
-pub type Value = usize;
-
 ///Id of an entity
 pub type Eid = String;
 
@@ -31,15 +29,15 @@ pub enum Object {}
 ///the class for the "empty" API calls
 pub trait MosaikAPI {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
-    fn init(&mut self, sid: Sid, sim_params: Option<HashMap<String, Object>>) -> META;
+    fn init(&mut self, sid: Sid, sim_params: Option<Map<String, Value>>) -> META;
 
     ///Create *num* instances of *model* using the provided *model_params*.
     fn create<Entity>(
         &self,
         num: usize,
         model: Model,
-        model_params: HashMap<String, Vec<Value>>,
-    ) -> Vec<Entity>;
+        model_params: Option<Map<String, Value>>,
+    ) -> Map<String, Value>;
 
     fn setup_done(&self);
 
@@ -48,14 +46,14 @@ pub trait MosaikAPI {
         //AddAssign is a quickfix for the addition of two values -> needed for delta
         &self,
         time: usize,
-        inputs: HashMap<Eid, HashMap<Attribute_Id, Vec<Value>>>,
+        inputs: Map<Eid, Map<Attribute_Id, Value>>,
     ) -> usize;
 
     //collect data from the simulation and return a nested Vector containing the information
     fn get_data<Value>(
         &self,
-        outputs: HashMap<Eid, Vec<Attribute_Id>>,
-    ) -> HashMap<Eid, HashMap<Attribute_Id, Vec<Value>>>;
+        outputs: Map<Eid, Vec<Attribute_Id>>,
+    ) -> Map<Eid, Map<Attribute_Id, Value>>;
 
     fn stop();
 }

@@ -8,12 +8,7 @@ use futures::channel::mpsc;
 use futures::sink::SinkExt;
 use futures::{select, FutureExt};
 use log::error;
-use std::{
-    collections::hash_map::{Entry, HashMap},
-    future::Future,
-    io::Read,
-    sync::Arc,
-};
+use std::{future::Future, io::Read, sync::Arc};
 
 mod json;
 use json::parse_request;
@@ -128,7 +123,7 @@ enum Void {}
 // async fn broker_loop(events: Receiver<Event>) {
 //     let (disconnect_sender, mut disconnect_receiver) = // 1
 //         mpsc::unbounded::<(String, Receiver<String>)>();
-//     let mut peers: HashMap<String, Sender<String>> = HashMap::new();
+//     let mut peers: Map<String, Sender<String>> = Map::new();
 //     let mut events = events.fuse();
 //     loop {
 //         let event = select! {
