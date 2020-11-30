@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use serde_json::{Map, Value};
+mod json;
 mod simple_simulator;
 mod simulation_mosaik;
 
@@ -48,14 +49,11 @@ pub trait MosaikAPI {
         //AddAssign is a quickfix for the addition of two values -> needed for delta
         &self,
         time: usize,
-        inputs: Map<Eid, Map<Attribute_Id, Value>>,
+        inputs: HashMap<Eid, Map<Attribute_Id, Value>>,
     ) -> usize;
 
     //collect data from the simulation and return a nested Vector containing the information
-    fn get_data(
-        &self,
-        outputs: HashMap<Eid, Vec<Attribute_Id>>,
-    ) -> Map<Eid, Map<Attribute_Id, Value>>;
+    fn get_data(&self, outputs: HashMap<Eid, Vec<Attribute_Id>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
 
     fn stop();
 }

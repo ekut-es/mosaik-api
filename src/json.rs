@@ -1,3 +1,5 @@
+use std::todo;
+
 use serde_json::{json, map::Map, Value};
 
 use thiserror::Error;
@@ -9,6 +11,8 @@ pub enum MosaikError {
     #[error("Parsing Error")]
     Serde(#[from] serde_json::Error),
 }
+
+pub enum APIError {}
 
 pub(crate) fn parse_request(data: String) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
@@ -39,6 +43,7 @@ pub(crate) fn parse_request(data: String) -> Result<Request, MosaikError> {
                     args,
                     kwargs: kwargs.clone(),
                 })
+                //parse_response(id, method, args, kwargs);
             }
             (e1, e2, e3) => Err(MosaikError::ParseError(format!(
                 "Payload is not a valid request: {:?} | {:?} | {:?}",
@@ -50,6 +55,27 @@ pub(crate) fn parse_request(data: String) -> Result<Request, MosaikError> {
             e
         ))),
     }
+}
+
+pub(crate) fn parse_response(
+    id: u64,
+    method: String,
+    args: Vec<String>,
+    kwargs: Map<String, Value>,
+) -> Result<Response, APIError> {
+    todo!();
+    /*match method {
+        "init".to_string() => let mut payload = MosaikAPI::init(),
+        "create".to_string() => let mut payload = MosaikAPI::create(),
+        "step".to_string() => let mut payload = MosaikAPI::step(),
+        "get_data".to_string() => let mut payload = MosaikAPI::get_data(),
+    }*/
+
+    //match the requested function in each case get the return values from the functions in lib.rs a.k.a the api calls.
+    //they should be in json format already -> parse the return value to json and map it to the payload.
+    //Append the payload to the response 1 and the id.
+    //calculate the bytes of the response and put it infront of the response 1.
+    //return the finished response to main.rs and stream.write it there.
 }
 
 enum MsgType {

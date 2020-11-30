@@ -1,15 +1,15 @@
 pub struct Model {
-    val: f32,
-    delta: f32,
+    val: f64,
+    delta: f64,
 }
 
 pub trait RunModel {
-    fn initmodel(init_value: f32) -> Model;
+    fn initmodel(init_value: f64) -> Model;
     fn step(&mut self);
 }
 
 impl RunModel for Model {
-    fn initmodel(init_value: f32) -> Model {
+    fn initmodel(init_value: f64) -> Model {
         Model {
             val: init_value,
             delta: 1.0,
@@ -23,13 +23,13 @@ impl RunModel for Model {
 
 pub struct Simulator {
     pub models: Vec<Model>,
-    data: Vec<Vec<f32>>, //brauch ich 2d Array?
+    data: Vec<Vec<f64>>, //brauch ich 2d Array?
 }
 
 pub trait RunSimulator {
     fn init_simulator() -> Simulator;
-    fn add_model(&mut self, init_value: f32);
-    fn step(&mut self, deltas: Option<Vec<(usize, f32)>>);
+    fn add_model(&mut self, init_value: Option<f64>);
+    fn step(&mut self, deltas: Option<Vec<(u64, f64)>>);
 }
 
 impl RunSimulator for Simulator {
@@ -40,13 +40,18 @@ impl RunSimulator for Simulator {
         }
     }
 
-    fn add_model(&mut self, init_value: f32) {
-        let /*mut*/ model:Model = Model::initmodel(init_value);
-        self.models.push(model);
-        self.data.push(vec![]); //Add list for simulation data
+    fn add_model(&mut self, init_value: Option<f64>) {
+        match init_value {
+            Some(init_value) => {
+                let /*mut*/ model:Model = Model::initmodel(init_value);
+                self.models.push(model);
+                self.data.push(vec![]); //Add list for simulation data
+            }
+            None => {}
+        }
     }
 
-    fn step(&mut self, deltas: Option<Vec<(usize, f32)>>) {
+    fn step(&mut self, deltas: Option<Vec<(u64, f64)>>) {
         match deltas {
             Some(deltas) => {
                 for (idx, deltax) in deltas.iter() {
@@ -68,7 +73,7 @@ pub fn run() {
                                                           //sim = Simulator()
 
     for i in 0..3 {
-        sim.add_model(0.0);
+        sim.add_model(Some(0.0));
     }
 
     sim.step(None); //values = 1.0 , 1.0
