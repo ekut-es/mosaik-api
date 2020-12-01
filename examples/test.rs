@@ -10,8 +10,7 @@ use futures::{select, FutureExt};
 use log::error;
 use std::{future::Future, io::Read, sync::Arc};
 
-mod json;
-use json::{parse_request, parse_response};
+use mosaik_rust_api::json::{parse_request, parse_response};
 
 pub fn main() {
     let addr = "127.0.0.1:3456";
@@ -211,7 +210,7 @@ fn tcp<T: std::net::ToSocketAddrs>(addr: T) {
                                             Ok(json_data) => {
                                                 /* parse */
                                                 println!("JSON: {}", &json_data);
-                                                println!("JSON: {:?}", parse_request(json_data));
+                                                println!("JSON: {:?}", parse_request(json_data.clone()));
 
                                                 match parse_request(json_data) {
                                                     Ok(request) => {

@@ -17,7 +17,7 @@ pub enum MosaikError {
 
 pub enum APIError {}
 
-pub(crate) fn parse_request(data: String) -> Result<Request, MosaikError> {
+pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
     let mut payload = match serde_json::from_str(&data)? {
         Value::Array(vecs) if vecs.len() == 3 => vecs,
@@ -58,7 +58,7 @@ pub(crate) fn parse_request(data: String) -> Result<Request, MosaikError> {
     }
 }
 
-pub(crate) fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T)
+pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T)
 /* -> Result<Response, APIError>*/
 {
     let mut payload = match request.method.as_ref() {

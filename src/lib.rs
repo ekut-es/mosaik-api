@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use serde_json::{Map, Value};
-mod json;
+pub mod json;
 mod simple_simulator;
 mod simulation_mosaik;
 
