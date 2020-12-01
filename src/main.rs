@@ -11,7 +11,7 @@ use log::error;
 use std::{future::Future, io::Read, sync::Arc};
 
 mod json;
-use json::parse_request;
+use json::{parse_request, parse_response};
 
 pub fn main() {
     let addr = "127.0.0.1:3456";
@@ -218,6 +218,8 @@ fn tcp<T: std::net::ToSocketAddrs>(addr: T) {
                                                         /* call specific function */
 
                                                         /* and reply */
+
+                                                        //parse_response(request);
                                                     }
                                                     Err(e) => {
                                                         error!(

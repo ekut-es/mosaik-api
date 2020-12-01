@@ -35,8 +35,8 @@ pub trait MosaikAPI {
     fn init(&mut self, sid: Sid, sim_params: Option<Map<String, Value>>) -> META;
 
     ///Create *num* instances of *model* using the provided *model_params*.
-    fn create<Entity>(
-        &self,
+    fn create(
+        &mut self,
         num: usize,
         model: Model,
         model_params: Option<Map<String, Value>>,
@@ -47,13 +47,13 @@ pub trait MosaikAPI {
     ///perform a simulatino step and return the new time
     fn step(
         //AddAssign is a quickfix for the addition of two values -> needed for delta
-        &self,
+        &mut self,
         time: usize,
         inputs: HashMap<Eid, Map<Attribute_Id, Value>>,
     ) -> usize;
 
     //collect data from the simulation and return a nested Vector containing the information
-    fn get_data(&self, outputs: HashMap<Eid, Vec<Attribute_Id>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
+    fn get_data(&mut self, outputs: HashMap<Eid, Vec<Attribute_Id>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
 
     fn stop();
 }

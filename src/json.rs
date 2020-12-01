@@ -1,8 +1,11 @@
-use std::todo;
+use std::{collections::HashMap, todo};
 
-use serde_json::{json, map::Map, Value};
+use log::error;
+use serde_json::{json, map::Map, to_string, Value};
 
 use thiserror::Error;
+
+use crate::{Attribute_Id, Eid, MosaikAPI};
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
@@ -33,23 +36,21 @@ pub(crate) fn parse_request(data: String) -> Result<Request, MosaikError> {
     let id: u64 = payload[1].as_u64().unwrap();
 
     use std::iter::FromIterator;
-    match &payload[2] {
-        Value::Array(call) if call.len() == 3 => match (call[0].as_str(), &call[1], &call[2]) {
-            (Some(method), Value::Array(args), Value::Object(kwargs)) => {
-                let args: Vec<String> = args.clone().iter_mut().map(|e| e.to_string()).collect();
-                Ok(Request {
+    match payload[2].clone() {
+        Value::Array(call) if call.len() == 3 => {
+            match (call[0].as_str(), call[1].clone(), call[2].clone()) {
+                (Some(method), Value::Array(args), Value::Object(kwargs)) => Ok(Request {
                     id,
                     method: method.to_string(),
-                    args,
+                    args: args,
                     kwargs: kwargs.clone(),
-                })
-                //parse_response(id, method, args, kwargs);
+                }),
+                (e1, e2, e3) => Err(MosaikError::ParseError(format!(
+                    "Payload is not a valid request: {:?} | {:?} | {:?}",
+                    e1, e2, e3
+                ))),
             }
-            (e1, e2, e3) => Err(MosaikError::ParseError(format!(
-                "Payload is not a valid request: {:?} | {:?} | {:?}",
-                e1, e2, e3
-            ))),
-        },
+        }
         e => Err(MosaikError::ParseError(format!(
             "Payload doesn't have valid method, args, kwargs Array: {:?}",
             e
@@ -57,19 +58,24 @@ pub(crate) fn parse_request(data: String) -> Result<Request, MosaikError> {
     }
 }
 
-pub(crate) fn parse_response(
-    id: u64,
-    method: String,
-    args: Vec<String>,
-    kwargs: Map<String, Value>,
-) -> Result<Response, APIError> {
-    todo!();
-    /*match method {
-        "init".to_string() => let mut payload = MosaikAPI::init(),
-        "create".to_string() => let mut payload = MosaikAPI::create(),
-        "step".to_string() => let mut payload = MosaikAPI::step(),
-        "get_data".to_string() => let mut payload = MosaikAPI::get_data(),
-    }*/
+pub(crate) fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T)
+/* -> Result<Response, APIError>*/
+{
+    let mut payload = match request.method.as_ref() {
+        "init" => simulator.init(request.args[0].to_string(), Some(request.kwargs)),
+        "create" => Value::Object(simulator.create(
+            request.args[0].as_u64().unwrap_or_default() as usize,
+            request.args[1].to_string(),
+            Some(request.kwargs),
+        )),
+        "step" => Value::from(simulator.step(
+            request.args[0].as_u64().unwrap_or_default() as usize,
+            inputs_to_hashmap(request.args[1].clone()),
+        )),
+        "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
+        "setup_done" => return simulator.setup_done(),
+        _ => return error!("A different method got requested"),
+    };
 
     //match the requested function in each case get the return values from the functions in lib.rs a.k.a the api calls.
     //they should be in json format already -> parse the return value to json and map it to the payload.
@@ -78,6 +84,31 @@ pub(crate) fn parse_response(
     //return the finished response to main.rs and stream.write it there.
 }
 
+fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<Attribute_Id, Value>> {
+    let mut hashmap = HashMap::new();
+    if let Value::Object(eid_map) = inputs {
+        for (eid, attr_values) in eid_map.into_iter() {
+            if let Value::Object(attrId_map) = attr_values {
+                hashmap.insert(eid, attrId_map);
+            }
+        }
+    }
+    hashmap
+}
+
+fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<Attribute_Id>> {
+    let mut hashmap = HashMap::new();
+    for output in outputs {
+        if let Value::Object(eid_map) = output {
+            for (eid, attr_Id_Array) in eid_map.into_iter() {
+                if let Value::Array(attr_Id) = attr_Id_Array {
+                    hashmap.insert(eid, attr_Id.iter().map(|x| x.to_string()).collect());
+                }
+            }
+        }
+    }
+    hashmap
+}
 enum MsgType {
     REQ,
     SUCCESS,
@@ -88,7 +119,7 @@ enum MsgType {
 pub struct Request {
     id: u64,
     method: String,
-    args: Vec<String>,
+    args: Vec<Value>,
     kwargs: Map<String, Value>,
 }
 

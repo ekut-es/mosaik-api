@@ -1,6 +1,28 @@
+use log::error;
+use serde_json::{json, Map, Value};
 pub struct Model {
     val: f64,
     delta: f64,
+}
+impl Model {
+    pub fn to_serde_values(&self) -> Map<String, Value> {
+        let mut map = Map::new();
+        map.insert("val".to_string(), Value::from(self.val));
+        map.insert("delta".to_string(), Value::from(self.delta));
+
+        map
+    }
+
+    pub fn get_value(&self, attr: &str) -> Option<Value> {
+        Some(match attr {
+            "val" => Value::from(self.val),
+            "delta" => Value::from(self.delta),
+            x => {
+                error!("no known attr requested: {}", x);
+                return None;
+            }
+        })
+    }
 }
 
 pub trait RunModel {
@@ -55,7 +77,7 @@ impl RunSimulator for Simulator {
         match deltas {
             Some(deltas) => {
                 for (idx, deltax) in deltas.iter() {
-                    self.models[*idx].delta = *deltax;
+                    self.models[*idx as usize].delta = *deltax;
                 }
             }
             None => {}

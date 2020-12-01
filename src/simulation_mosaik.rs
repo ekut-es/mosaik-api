@@ -1,9 +1,10 @@
+use log::error;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
 use crate::{
     simple_simulator::{self, RunSimulator, Simulator},
-    Model, MosaikAPI,
+    Attribute_Id, Eid, Model, MosaikAPI,
 };
 
 pub fn meta() -> serde_json::Value {
@@ -51,8 +52,8 @@ impl MosaikAPI for ExampleSim {
         meta()
     }
 
-    fn create<Entity>(
-        &self,
+    fn create(
+        &mut self,
         num: usize,
         model: String,
         model_params: Option<Map<String, Value>>,
@@ -65,9 +66,9 @@ impl MosaikAPI for ExampleSim {
                     for i in next_eid..(next_eid + num) {
                         let mut eid = format!("{}_{}", self.eid_prefix, i);
                         Simulator::add_model(&mut self.simulator, init_val.as_f64());
-                        self.entities.insert(eid, Value::from(i)); //create a mapping from the entity ID to our model
+                        self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), Value::from(eid));
-                        out_entities.insert("type".to_string(), Value::from(model));
+                        out_entities.insert("type".to_string(), Value::from(model.clone()));
                     }
                 }
             }
@@ -76,37 +77,62 @@ impl MosaikAPI for ExampleSim {
         return out_entities;
     }
 
-    fn step(&self, time: usize, inputs: HashMap<String, Map<String, Value>>) -> usize {
-        let mut deltas: Vec<(Option<u64>, Option<f64>)> = Vec::new();
-        let mut new_delta: Value;
+    fn step(&mut self, mut time: usize, inputs: HashMap<Eid, Map<Attribute_Id, Value>>) -> usize {
+        let mut deltas: Vec<(u64, f64)> = Vec::new();
+        let mut new_delta: f64;
         for (eid, attrs) in inputs.iter() {
             for (attr, attr_values) in attrs.iter() {
-                let mut model_idx = self.entities.get(eid);
-                new_delta = attr_values.values().sum(); //values() ist ein iterator der die werte von ihren keys nimmt
-                deltas.push((model_idx.as_u64(), new_delta.as_f64())); //data conversion from value to usize and f64
+                let mut model_idx = match self.entities.get(eid) {
+                    Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
+                    _ => panic!(
+                        "No correct model eid available. Input: {:?}, Entities: {:?}",
+                        inputs, self.entities
+                    ),
+                };
+                if let Value::Object(values) = attr_values {
+                    new_delta = values
+                        .values()
+                        .map(|x| x.as_f64().unwrap_or_default())
+                        .sum(); //unwrap -> default = 0 falls kein f64
+                    deltas.push((model_idx, new_delta));
+                };
+                //data conversion from value to usize and f64
+                //wie bekomm ich das option weg
             }
         }
-        Simulator::step(&mut self.simulator, Some(deltas)); //wie bekomm ich das option weg
+        Simulator::step(&mut self.simulator, Some(deltas));
         time = time + 60;
         return time;
     }
 
-    fn get_data(&self, output: HashMap<String, Vec<String>>) -> Map<String, Value> {
+    fn get_data(&mut self, output: HashMap<Eid, Vec<Attribute_Id>>) -> Map<String, Value> {
         let mut meta = meta();
-        let mut models = self.simulator.models;
+        let models = &self.simulator.models;
         let mut data: Map<String, Value> = Map::new();
-        for (eid, attrs) in output.iter() {
-            let mut model_idx = self.entities.get(eid);
-            let mut values = Map::new();
-            data.insert(*eid, Value::from(values));
-            for attr in attrs.iter() {
-                assert_eq!(meta["models"]["ExampleModel"]["attrs"], json!(attr));
+        for (eid, attrs) in output.into_iter() {
+            let mut model_idx = match self.entities.get(&eid) {
+                Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
+                _ => panic!("No correct model eid available.",),
+            };
+            let mut attribute_values = Map::new();
+            match models.get(model_idx as usize) {
+                Some(model) => {
+                    for attr in attrs.into_iter() {
+                        assert_eq!(
+                            meta["models"]["ExampleModel"]["attrs"],
+                            json!(attr),
+                            "Unknown output attribute: {}",
+                            attr
+                        );
 
-                /*if attr not in self.meta['models']['ExampleModel']['attrs']:
-                raise ValueError('Unknown output attribute: %s' % attr)*/
-
-                //Get model.val or model.delta:
-                data.insert(*eid, models.get(model_idx)); //data[eid][attr] = getattr(models[model_idx], attr)
+                        //Get model.val or model.delta:
+                        if let Some(value) = model.get_value(&attr) {
+                            attribute_values.insert(attr, value);
+                        }
+                    }
+                    data.insert(eid, Value::from(attribute_values));
+                }
+                None => error!("No model_idx in models: {}", model_idx),
             }
         }
         return data;
@@ -135,6 +161,12 @@ impl MosaikAPI for ExampleSim {
     fn setup_done(&self) {
         println!("Setup is done.");
     }
+}
+
+fn test() {
+    todo!();
+    //for assert_eq!
+    //look at json.rs for examples
 }
 
 pub fn run() {
