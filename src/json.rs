@@ -1,7 +1,7 @@
 use std::{collections::HashMap, todo};
 
 use log::error;
-use serde_json::{json, map::Map, to_string, Value};
+use serde_json::{json, map::Map, to_string, to_vec, Value};
 
 use thiserror::Error;
 
@@ -15,7 +15,11 @@ pub enum MosaikError {
     Serde(#[from] serde_json::Error),
 }
 
-pub enum APIError {}
+#[derive(Error, Debug)]
+pub enum APIerror {
+    #[error("Failed getting the data")]
+    DataError(String),
+}
 
 pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
@@ -59,10 +63,10 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
 }
 
 pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T)
-/* -> Result<Response, APIError>*/
+/*-> Result<Response, APIerror>*/
 {
-    let mut payload = match request.method.as_ref() {
-        "init" => simulator.init(request.args[0].to_string(), Some(request.kwargs)),
+    let content: Value = match request.method.as_ref() {
+        "init" => Value::String(simulator.init(request.args[0].to_string(), Some(request.kwargs))),
         "create" => Value::Object(simulator.create(
             request.args[0].as_u64().unwrap_or_default() as usize,
             request.args[1].to_string(),
@@ -77,19 +81,28 @@ pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T)
         _ => return error!("A different method got requested"),
     };
 
-    //match the requested function in each case get the return values from the functions in lib.rs a.k.a the api calls.
-    //they should be in json format already -> parse the return value to json and map it to the payload.
-    //Append the payload to the response 1 and the id.
-    //calculate the bytes of the response and put it infront of the response 1.
-    //return the finished response to main.rs and stream.write it there.
+    let id = request.id.to_string();
+    println!("content: {:?}", content);
+    let content_str = content.as_str();
+    let response = r#"[1, "#.to_owned() + id.as_str() + r#", "# + content_str.unwrap() + r#"]"#;
+    let data = response.as_str();
+    println!("the requested data: {}", data);
+
+    let data_value: Value = serde_json::from_str(data).unwrap();
+    let vect = to_vec(&data_value);
+    let vect_unwrapped = vect.unwrap();
+    let vect_unwrapped_length = vect_unwrapped.len();
+    let length_u32 = vect_unwrapped_length as u32;
+    let big_endian = length_u32.to_be_bytes();
+    //merge big_endian with vect_unwrapped to get the final response...
 }
 
 fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<Attribute_Id, Value>> {
     let mut hashmap = HashMap::new();
     if let Value::Object(eid_map) = inputs {
         for (eid, attr_values) in eid_map.into_iter() {
-            if let Value::Object(attrId_map) = attr_values {
-                hashmap.insert(eid, attrId_map);
+            if let Value::Object(attrid_map) = attr_values {
+                hashmap.insert(eid, attrid_map);
             }
         }
     }
@@ -100,9 +113,9 @@ fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<Attribute_Id>> {
     let mut hashmap = HashMap::new();
     for output in outputs {
         if let Value::Object(eid_map) = output {
-            for (eid, attr_Id_Array) in eid_map.into_iter() {
-                if let Value::Array(attr_Id) = attr_Id_Array {
-                    hashmap.insert(eid, attr_Id.iter().map(|x| x.to_string()).collect());
+            for (eid, attr_id_array) in eid_map.into_iter() {
+                if let Value::Array(attr_id) = attr_id_array {
+                    hashmap.insert(eid, attr_id.iter().map(|x| x.to_string()).collect());
                 }
             }
         }
@@ -126,11 +139,14 @@ pub struct Request {
 struct Response {
     msg_type: MsgType,
     id: usize,
+    payload: String,
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::{json, Result, Value};
+    use std::println;
+
+    use serde_json::{json, to_string, to_vec, Result, Value};
     #[test]
     fn untyped_example() -> Result<()> {
         // Some JSON input data as a &str. Maybe this comes from the user.
@@ -178,6 +194,38 @@ mod tests {
         assert_eq!(2 + 2, 4);
     }
 
+    #[test]
+    fn to_bytes() {
+        let v = json!(["an", "array"]);
+        let data1 = r#"[1, 1,
+        {
+            "api_version": "2.2",
+            "models":{
+                "ExampleModel":{
+                    "public": true,
+                    "params": ["init_val"],
+                    "attrs": ["val", "delta"]
+                    }
+                }
+            }]"#;
+
+        let data = r#"[1, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
+        let data_value: Value = serde_json::from_str(data).unwrap();
+        let vect = to_vec(&data_value);
+        let vect_unwrapped = vect.unwrap();
+        let vect_unwrapped_length = vect_unwrapped.len();
+        let length_u32 = vect_unwrapped_length as u32;
+        let big_endian = length_u32.to_be_bytes();
+
+        println!("the length of r#: {}", data.len());
+        println!("r# as string: {:?}", vect_unwrapped);
+        println!("number of bytes: {}", vect_unwrapped_length);
+        /*let data_bytes = data.bytes();
+        let data_bytes_len = data_bytes.len();
+
+
+        //println!("The length of the array: {}", length);*/
+    }
     #[test]
     fn request_example() {
         let data = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;

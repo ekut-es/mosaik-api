@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use serde_json::{Map, Value};
 pub mod json;
 mod simple_simulator;
-mod simulation_mosaik;
+pub mod simulation_mosaik;
 
 #[cfg(test)]
 mod tests {
@@ -15,7 +15,7 @@ mod tests {
 }
 
 ///information about the model(s) of the simulation
-pub type META = serde_json::Value;
+pub type META = String; //serde_json::Value;
 
 ///Id of the simulation
 pub type Sid = String;

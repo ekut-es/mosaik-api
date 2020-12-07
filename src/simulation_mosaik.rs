@@ -4,11 +4,14 @@ use std::collections::HashMap;
 
 use crate::{
     simple_simulator::{self, RunSimulator, Simulator},
-    Attribute_Id, Eid, Model, MosaikAPI,
+    Attribute_Id, Eid, MosaikAPI,
 };
 
-pub fn meta() -> serde_json::Value {
-    let mut meta = json!({
+pub fn meta() -> String {
+    //&'static str {
+    //serde_json::Value {
+    /*
+    let meta = json!({
     "api_version": "2.2",
     "models":{
         "ExampleModel":{
@@ -17,19 +20,28 @@ pub fn meta() -> serde_json::Value {
             "attrs": ["val", "delta"]
             }
         }
-    });
-    return meta;
+    });*/
+    let meta = r#"{
+        "api_version": "2.2",
+        "models":{
+            "ExampleModel":{
+                "public": true,
+                "params": ["init_val"],
+                "attrs": ["val", "delta"]
+                }
+            }
+        }"#;
+    return meta.to_string();
 }
 
-type Entity = String;
 pub struct ExampleSim {
     simulator: simple_simulator::Simulator,
     eid_prefix: String,
     entities: Map<String, Value>,
-    meta: serde_json::Value,
+    meta: String, //serde_json::Value,
 }
 
-fn init_sim() -> ExampleSim {
+pub fn init_sim() -> ExampleSim {
     ExampleSim {
         simulator: Simulator::init_simulator(),
         eid_prefix: String::from("model_"),
@@ -40,7 +52,9 @@ fn init_sim() -> ExampleSim {
 
 ///implementation of the trait in mosaik_api.rs
 impl MosaikAPI for ExampleSim {
-    fn init(&mut self, sid: String, sim_params: Option<Map<String, Value>>) -> serde_json::Value {
+    fn init(&mut self, sid: String, sim_params: Option<Map<String, Value>>) -> String {
+        //&'static str {
+        //serde_json::Value {
         match sim_params {
             Some(sim_params) => {
                 if let Some(eid_prefix) = sim_params.get("eid_prefix") {
@@ -96,8 +110,6 @@ impl MosaikAPI for ExampleSim {
                         .sum(); //unwrap -> default = 0 falls kein f64
                     deltas.push((model_idx, new_delta));
                 };
-                //data conversion from value to usize and f64
-                //wie bekomm ich das option weg
             }
         }
         Simulator::step(&mut self.simulator, Some(deltas));
@@ -106,7 +118,7 @@ impl MosaikAPI for ExampleSim {
     }
 
     fn get_data(&mut self, output: HashMap<Eid, Vec<Attribute_Id>>) -> Map<String, Value> {
-        let mut meta = meta();
+        let meta = meta();
         let models = &self.simulator.models;
         let mut data: Map<String, Value> = Map::new();
         for (eid, attrs) in output.into_iter() {
@@ -115,15 +127,17 @@ impl MosaikAPI for ExampleSim {
                 _ => panic!("No correct model eid available.",),
             };
             let mut attribute_values = Map::new();
+            let mut i = 0;
             match models.get(model_idx as usize) {
                 Some(model) => {
                     for attr in attrs.into_iter() {
-                        assert_eq!(
-                            meta["models"]["ExampleModel"]["attrs"],
+                        /*assert_eq!(
+                            meta["models"]["ExampleModel"]["attrs"][i],
                             json!(attr),
                             "Unknown output attribute: {}",
                             attr
-                        );
+                        );*/
+                        i += 1;
 
                         //Get model.val or model.delta:
                         if let Some(value) = model.get_value(&attr) {
@@ -137,36 +151,26 @@ impl MosaikAPI for ExampleSim {
         }
         return data;
     }
-
-    /*
-    ) -> HashMap<String, Map<String, Value>> {
-        let mut models = self.simulator.models;
-        let mut data: HashMap<String, Map<String, Value>> = HashMap::new();
-        for (eid, attrs) in output.iter() {
-            let mut model_idx = self.entities.get(eid);
-            data.insert(*eid, Value::from(vec![]));
-            for attr in attrs {
-                /*if attr not in self.meta['models']['ExampleModel']['attrs']:
-                    raise ValueError('Unknown output attribute: %s' % attr)
-
-                # Get model.val or model.delta:
-                data[eid][attr] = getattr(models[model_idx], attr)*/ //data.insert(String::from(eid), attr)
-            }
-        }
-        return data;
-    }*/
-
     fn stop() {}
 
     fn setup_done(&self) {
         println!("Setup is done.");
     }
 }
-
+#[test]
 fn test() {
-    todo!();
-    //for assert_eq!
-    //look at json.rs for examples
+    let meta = json!({
+    "api_version": "2.2",
+    "models":{
+        "ExampleModel":{
+            "public": true,
+            "params": ["init_val"],
+            "attrs": ["val", "delta"]
+            }
+        }
+    });
+    let attr = "val";
+    assert_eq!(meta["models"]["ExampleModel"]["attrs"][0], json!(attr));
 }
 
 pub fn run() {

@@ -10,7 +10,11 @@ use futures::{select, FutureExt};
 use log::error;
 use std::{future::Future, io::Read, sync::Arc};
 
-use mosaik_rust_api::json::{parse_request, parse_response};
+use mosaik_rust_api::simulation_mosaik::{init_sim, run, ExampleSim};
+use mosaik_rust_api::{
+    json::{parse_request, parse_response},
+    MosaikAPI,
+};
 
 pub fn main() {
     let addr = "127.0.0.1:3456";
@@ -18,6 +22,7 @@ pub fn main() {
     // https://book.async.rs/tutorial/all_together.html
     //task::block_on(accept_loop(addr))
     tcp(addr);
+    run();
 }
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -210,7 +215,10 @@ fn tcp<T: std::net::ToSocketAddrs>(addr: T) {
                                             Ok(json_data) => {
                                                 /* parse */
                                                 println!("JSON: {}", &json_data);
-                                                println!("JSON: {:?}", parse_request(json_data.clone()));
+                                                println!(
+                                                    "JSON: {:?}",
+                                                    parse_request(json_data.clone())
+                                                );
 
                                                 match parse_request(json_data) {
                                                     Ok(request) => {
@@ -218,7 +226,7 @@ fn tcp<T: std::net::ToSocketAddrs>(addr: T) {
 
                                                         /* and reply */
 
-                                                        //parse_response(request);
+                                                        parse_response(request, init_sim());
                                                     }
                                                     Err(e) => {
                                                         error!(
