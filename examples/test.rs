@@ -8,7 +8,7 @@ use futures::channel::mpsc;
 use futures::sink::SinkExt;
 use futures::{select, FutureExt};
 use log::error;
-use std::{future::Future, io::Read, sync::Arc};
+use std::{future::Future, io::Read, io::Write, sync::Arc};
 
 use mosaik_rust_api::simulation_mosaik::{init_sim, run, ExampleSim};
 use mosaik_rust_api::{
@@ -226,7 +226,14 @@ fn tcp<T: std::net::ToSocketAddrs>(addr: T) {
 
                                                         /* and reply */
 
-                                                        parse_response(request, init_sim());
+                                                        if let Some(value) =
+                                                            parse_response(request, init_sim())
+                                                        {
+                                                            if let Err(e) = stream.write(&value) {
+                                                                error!("{:?} ", e);
+                                                            }
+                                                            println!("Antwort wurde geschrieben!");
+                                                        }
                                                     }
                                                     Err(e) => {
                                                         error!(

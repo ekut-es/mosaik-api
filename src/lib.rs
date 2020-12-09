@@ -15,7 +15,7 @@ mod tests {
 }
 
 ///information about the model(s) of the simulation
-pub type META = String; //serde_json::Value;
+pub type META = serde_json::Value;
 
 ///Id of the simulation
 pub type Sid = String;

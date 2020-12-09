@@ -62,11 +62,9 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     }
 }
 
-pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T)
-/*-> Result<Response, APIerror>*/
-{
+pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T) -> Option<Vec<u8>> {
     let content: Value = match request.method.as_ref() {
-        "init" => Value::String(simulator.init(request.args[0].to_string(), Some(request.kwargs))),
+        "init" => simulator.init(request.args[0].to_string(), Some(request.kwargs)),
         "create" => Value::Object(simulator.create(
             request.args[0].as_u64().unwrap_or_default() as usize,
             request.args[1].to_string(),
@@ -76,27 +74,28 @@ pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T)
             request.args[0].as_u64().unwrap_or_default() as usize,
             inputs_to_hashmap(request.args[1].clone()),
         )),
-        "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
-        "setup_done" => return simulator.setup_done(),
-        _ => return error!("A different method got requested"),
+        "get_data" => Value::Object(simulator.get_data(outputs_to_hashmap(request.args))),
+        "setup_done" => {
+            simulator.setup_done();
+            return None;
+        }
+        _ => {
+            error!("A different method got requested");
+            return None;
+        }
     };
 
-    let id = request.id.to_string();
-    println!("content: {:?}", content);
-    let content_str = content.as_str();
-    let response = r#"[1, "#.to_owned() + id.as_str() + r#", "# + content_str.unwrap() + r#"]"#;
-    let data = response.as_str();
-    println!("the requested data: {}", data);
+    let response: Value = Value::Array(vec![json!(1), json!(request.id), content]);
 
-    let data_value: Value = serde_json::from_str(data).unwrap();
-    let vect = to_vec(&data_value);
-    let vect_unwrapped = vect.unwrap();
-    let vect_unwrapped_length = vect_unwrapped.len();
-    let length_u32 = vect_unwrapped_length as u32;
-    let big_endian = length_u32.to_be_bytes();
-    //merge big_endian with vect_unwrapped to get the final response...
+    let vect = to_vec(&response); // Make a u8 vector with the data
+    let mut vect_unwrapped = vect.expect("Vector unwrapped.");
+    let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
+    big_endian.append(&mut vect_unwrapped);
+    println!("{:?}", big_endian);
+    Some(big_endian) //return the final response to the main for stream.write()
 }
 
+///Transform the requested map to hashmap of Id to a mapping
 fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<Attribute_Id, Value>> {
     let mut hashmap = HashMap::new();
     if let Value::Object(eid_map) = inputs {
@@ -109,6 +108,7 @@ fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<Attribute_Id, Value>> {
     hashmap
 }
 
+///Transform the requested map to hashmap of Id to a vector
 fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<Attribute_Id>> {
     let mut hashmap = HashMap::new();
     for output in outputs {
