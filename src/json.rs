@@ -92,6 +92,7 @@ pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T) -> Optio
     let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
     big_endian.append(&mut vect_unwrapped);
     println!("{:?}", big_endian);
+    //let mut string_endian = big_endian.to_string();
     Some(big_endian) //return the final response to the main for stream.write()
 }
 
