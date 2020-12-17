@@ -1,9 +1,4 @@
-use async_std::{
-    io::BufReader,
-    net::{TcpListener, TcpStream, ToSocketAddrs},
-    prelude::*,
-    task,
-};
+use async_std::{io::BufReader, sync::Mutex, net::{TcpListener, TcpStream, ToSocketAddrs}, prelude::*, task};
 use futures::sink::SinkExt;
 use futures::FutureExt;
 use futures::{channel::mpsc, select};
@@ -49,10 +44,8 @@ async fn accept_loop(addr: impl ToSocketAddrs) -> Result<()> {
 }
 
 async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result<()> {
-    let stream = Arc::new(stream);
-    let reader = BufReader::new(&*stream);
-    let mut lines = reader.lines();
-
+    
+    let stream = Arc::new(Mutex::new(stream));
     let name = stream.peer_addr().unwrap();
 
     let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
@@ -68,75 +61,33 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
     let mut size_data = [0u8; 4]; // using 4 byte buffer
     let mut full_package = [0u8; 1000000];
 
-    if let number = stream.read_exact(&mut size_data){
+    if let dummy = stream.read_exact(&mut size_data) {
         let size = u32::from_be_bytes(size_data);
         println!("Received {} Bytes Message", size);
         stream.read(&mut full_package);
         let read_size = full_package.len() as u32;
-        if size == read_size{
+        if size == read_size {
             broker
-                    .send(Event::Request {
-                        full_data: String::from_utf8(full_package[0..(size as usize)].to_vec())
-                            .unwrap(),
-                        addr: stream.peer_addr().unwrap(),
-                    })
-                    .await
-                    .unwrap();
+                .send(Event::Request {
+                    full_data: String::from_utf8(full_package[0..(size as usize)].to_vec())
+                        .unwrap(),
+                    addr: stream.peer_addr().unwrap(),
+                })
+                .await
+                .unwrap();
+        } else {
+            error!("Problem with reading the full request");
         }
-
+    } else {
+        error!("Problem with reading the big endian");
     }
-    match stream.read_exact(&mut size_data) {
-        Ok(()) => {
-            let size = u32::from_be_bytes(size_data);
-            println!("Received {} Bytes Message", size);
-            match stream.read(&mut full_package) {
-                Ok(size) => {
-                    //dieses full_package dann über channel an broker senden.
-                    broker
-                        .send(Event::Request {
-                            full_data: String::from_utf8(full_package[0..(size as usize)].to_vec())
-                                .unwrap(),
-                            addr: stream.peer_addr().unwrap(),
-                        })
-                        .await
-                        .unwrap();
-                }
-                Err(e) => {
-                    /* use log::err! instead of println */
-                    println!("Parsing failed: {:?}", e);
-                }
-            }*/
-        }
-        Err(e) => {}
-    }
-    //an requests anpassen
-    while let Some(line) = lines.next().await {
-        let line = line?;
-        let (dest, msg) = match line.find(':') {
-            None => continue,
-            Some(idx) => (&line[..idx], line[idx + 1..].trim()),
-        };
-        let dest: Vec<String> = dest
-            .split(',')
-            .map(|name| name.trim().to_string())
-            .collect();
-        let msg: String = msg.trim().to_string();
-
-        /*broker
-            .send(Event::Message {
-                from: name.clone(),
-                to: dest,
-                msg,
-            })
-            .await
-            .unwrap();*/
-    }
+    
     Ok(())
 }
 
 async fn connection_writer_loop(
     messages: &mut Receiver<String>,
-    stream: Arc<TcpStream>,
+    stream: Arc<Mutex<TcpStream>>,
     shutdown: Receiver<Void>,
 ) -> Result<()> {
     let mut stream = &*stream;
@@ -161,7 +112,7 @@ async fn connection_writer_loop(
 enum Event {
     NewPeer {
         name: std::net::SocketAddr,
-        stream: Arc<TcpStream>,
+        stream: Arc<Mutex<TcpStream>>,
         shutdown: Receiver<Void>,
     },
     Message {
