@@ -1,5 +1,4 @@
 use async_std::{
-    io::BufReader,
     net::{TcpListener, TcpStream, ToSocketAddrs},
     prelude::*,
     task,
@@ -7,20 +6,15 @@ use async_std::{
 use futures::sink::SinkExt;
 use futures::FutureExt;
 use futures::{channel::mpsc, select};
-use log::{debug, error};
+use log::{debug, error, info, trace};
 use std::{
     collections::{hash_map::Entry, HashMap},
     future::Future,
-    io::Read,
-    io::Write,
     sync::Arc,
 };
 
-use mosaik_rust_api::simulation_mosaik::{init_sim, run, ExampleSim};
-use mosaik_rust_api::{
-    json::{parse_request, parse_response},
-    MosaikAPI,
-};
+use mosaik_rust_api::json::{parse_request, parse_response};
+use mosaik_rust_api::simulation_mosaik::init_sim;
 
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -50,7 +44,7 @@ async fn accept_loop(addr: impl ToSocketAddrs) -> Result<()> {
     let mut incoming = listener.incoming();
     while let Some(stream) = incoming.next().await {
         let stream = stream?;
-        println!("Accepting from: {}", stream.peer_addr()?);
+        info!("Accepting from: {}", stream.peer_addr()?);
         spawn_and_log_error(connection_loop(broker_sender.clone(), stream));
     }
     drop(broker_sender);
@@ -59,7 +53,9 @@ async fn accept_loop(addr: impl ToSocketAddrs) -> Result<()> {
 }
 
 async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result<()> {
-    let stream = Arc::new(stream);
+    info!("Started connection loop");
+
+    let mut stream = stream;
     let name = String::from("Mosaik");
     //let addr = stream.peer_addr().unwrap();
 
@@ -67,30 +63,34 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
     broker
         .send(Event::NewPeer {
             name: name.clone(),
-            stream: Arc::clone(&stream),
+            stream: Arc::new(stream.clone()),
             shutdown: shutdown_receiver,
         })
         .await
         .unwrap();
 
     let mut size_data = [0u8; 4]; // using 4 byte buffer
-    let mut full_package = [0u8; 1000000];
-
-    (&*stream).read_exact(&mut size_data); //no check if Ok or not
-    let size = u32::from_be_bytes(size_data);
-    println!("Received {} Bytes Message", size);
-    (&*stream).read(&mut full_package);
-    let read_size = full_package.len() as u32;
-    if size == read_size {
-        broker
-            .send(Event::Request {
-                full_data: String::from_utf8(full_package[0..(size as usize)].to_vec()).unwrap(),
-                name: name,
-            })
-            .await
-            .unwrap();
-    } else {
-        error!("Problem with reading the full request");
+                                  //let mut full_package = [0u8; 10000];
+    while let Ok(()) = stream.read_exact(&mut size_data).await {
+        //no check if Ok or not
+        let size = u32::from_be_bytes(size_data) as usize;
+        info!("Received {} Bytes Message", size);
+        let mut full_package = vec![0; size];
+        match stream.read_exact(&mut full_package).await {
+            Ok(()) => {
+                if let Err(e) = broker
+                    .send(Event::Request {
+                        full_data: String::from_utf8(full_package[0..(size as usize)].to_vec())
+                            .expect("string from utf 8 connction loops"),
+                        name: name.clone(),
+                    })
+                    .await
+                {
+                    error!("Error sending package to broker: {:?}", e);
+                }
+            }
+            Err(e) => error!("Error reading Full Package: {:?}", e),
+        }
     }
 
     Ok(())
@@ -149,7 +149,7 @@ async fn broker_loop(events: Receiver<Event>) {
                 continue;
             },
         };
-        debug!("recieved event: {:?}", event);
+        debug!("Received event: {:?}", event);
         match event {
             Event::Request { full_data, name } => {
                 let request = parse_request(full_data).unwrap();
@@ -198,9 +198,11 @@ fn spawn_and_log_error<F>(fut: F) -> task::JoinHandle<()>
 where
     F: Future<Output = Result<()>> + Send + 'static,
 {
+    trace!("Spawn task");
     task::spawn(async move {
+        trace!("Task Spawned");
         if let Err(e) = fut.await {
-            eprintln!("{}", e)
+            error!("{}", e)
         }
     })
 }

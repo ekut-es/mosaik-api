@@ -1,6 +1,6 @@
 use std::{collections::HashMap, todo};
 
-use log::error;
+use log::*;
 use serde_json::{json, map::Map, to_string, to_vec, Value};
 
 use thiserror::Error;
@@ -91,7 +91,7 @@ pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T) -> Optio
     let mut vect_unwrapped = vect.expect("Vector unwrapped.");
     let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
     big_endian.append(&mut vect_unwrapped);
-    println!("{:?}", big_endian);
+    debug!("{:?}", big_endian);
     //let mut string_endian = big_endian.to_string();
     Some(big_endian) //return the final response to the main for stream.write()
 }
@@ -145,7 +145,7 @@ struct Response {
 
 #[cfg(test)]
 mod tests {
-    use std::println;
+    use log::*;
 
     use serde_json::{json, to_string, to_vec, Result, Value};
     #[test]
@@ -218,9 +218,9 @@ mod tests {
         let length_u32 = vect_unwrapped_length as u32;
         let big_endian = length_u32.to_be_bytes();
 
-        println!("the length of r#: {}", data.len());
-        println!("r# as string: {:?}", vect_unwrapped);
-        println!("number of bytes: {}", vect_unwrapped_length);
+        debug!("the length of r#: {}", data.len());
+        debug!("r# as string: {:?}", vect_unwrapped);
+        debug!("number of bytes: {}", vect_unwrapped_length);
         /*let data_bytes = data.bytes();
         let data_bytes_len = data_bytes.len();
 

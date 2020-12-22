@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, info};
 use serde_json::{json, Map, Value};
 pub struct Model {
     val: f64,
@@ -102,9 +102,9 @@ pub fn run() {
     sim.step(Some(vec![(0, 8.0), (1, 13.0), (2, 19.0)]));
     sim.step(Some(vec![(0, 23.0), (1, 42.0), (2, 68.0)])); //values = 24.0 , 43.0
 
-    println!("Simulation finished with data:");
+    info!("Simulation finished with data:");
 
     for (i, inst) in sim.data.iter().enumerate() {
-        println!("{}: {:?}", i, inst);
+        info!("{}: {:?}", i, inst);
     }
 }

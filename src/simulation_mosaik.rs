@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, info};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
@@ -147,7 +147,7 @@ impl MosaikAPI for ExampleSim {
     fn stop() {}
 
     fn setup_done(&self) {
-        println!("Setup is done.");
+        info!("Setup is done.");
     }
 }
 #[test]
