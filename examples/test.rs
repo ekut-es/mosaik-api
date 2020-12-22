@@ -1,9 +1,20 @@
-use async_std::{io::BufReader, net::{TcpListener, TcpStream, ToSocketAddrs}, prelude::*, task};
+use async_std::{
+    io::BufReader,
+    net::{TcpListener, TcpStream, ToSocketAddrs},
+    prelude::*,
+    task,
+};
 use futures::sink::SinkExt;
 use futures::FutureExt;
 use futures::{channel::mpsc, select};
-use log::error;
-use std::{collections::{hash_map::Entry, HashMap}, future::Future, io::Read, io::Write, sync::Arc};
+use log::{debug, error};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    future::Future,
+    io::Read,
+    io::Write,
+    sync::Arc,
+};
 
 use mosaik_rust_api::simulation_mosaik::{init_sim, run, ExampleSim};
 use mosaik_rust_api::{
@@ -11,13 +22,16 @@ use mosaik_rust_api::{
     MosaikAPI,
 };
 
-pub fn main() {
+type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
+pub fn main() -> AResult<()> {
+    env_logger::init();
     let addr = "127.0.0.1:3456";
     // tcp ersetzen mit async tcp:
     // https://book.async.rs/tutorial/all_together.html
-    //task::block_on(accept_loop(addr))
-    accept_loop(addr);
-    run();
+    debug!("main debug");
+    task::block_on(accept_loop(addr))
+    //run();
 }
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -29,6 +43,7 @@ type Receiver<T> = mpsc::UnboundedReceiver<T>;
 enum Void {}
 
 async fn accept_loop(addr: impl ToSocketAddrs) -> Result<()> {
+    debug!("accept loop debug");
     let listener = TcpListener::bind(addr).await?;
     let (broker_sender, broker_receiver) = mpsc::unbounded();
     let broker_handle = task::spawn(broker_loop(broker_receiver));
@@ -44,10 +59,9 @@ async fn accept_loop(addr: impl ToSocketAddrs) -> Result<()> {
 }
 
 async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result<()> {
-    
     let stream = Arc::new(stream);
     let name = String::from("Mosaik");
-    let addr = stream.peer_addr().unwrap();
+    //let addr = stream.peer_addr().unwrap();
 
     let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
     broker
@@ -62,7 +76,7 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
     let mut size_data = [0u8; 4]; // using 4 byte buffer
     let mut full_package = [0u8; 1000000];
 
-   (&*stream).read_exact(&mut size_data); //no check if Ok or not
+    (&*stream).read_exact(&mut size_data); //no check if Ok or not
     let size = u32::from_be_bytes(size_data);
     println!("Received {} Bytes Message", size);
     (&*stream).read(&mut full_package);
@@ -70,8 +84,7 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
     if size == read_size {
         broker
             .send(Event::Request {
-                full_data: String::from_utf8(full_package[0..(size as usize)].to_vec())
-                    .unwrap(),
+                full_data: String::from_utf8(full_package[0..(size as usize)].to_vec()).unwrap(),
                 name: name,
             })
             .await
@@ -79,7 +92,7 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
     } else {
         error!("Problem with reading the full request");
     }
-    
+
     Ok(())
 }
 
@@ -109,20 +122,20 @@ async fn connection_writer_loop(
 #[derive(Debug)]
 enum Event {
     NewPeer {
-        name: String,//std::net::SocketAddr,
+        name: String, //std::net::SocketAddr,
         stream: Arc<TcpStream>,
         shutdown: Receiver<Void>,
     },
     Request {
         full_data: String,
-        name: String
+        name: String,
     },
 }
 
 async fn broker_loop(events: Receiver<Event>) {
     let (disconnect_sender, mut disconnect_receiver) = // 1
          mpsc::unbounded::<(String, Receiver<String>)>();
-    let mut peers: HashMap< String/*std::net::SocketAddr*/, Sender<String>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
+    let mut peers: HashMap<String /*std::net::SocketAddr*/, Sender<String>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
     let mut events = events.fuse();
     loop {
         let event = select! {
@@ -136,15 +149,19 @@ async fn broker_loop(events: Receiver<Event>) {
                 continue;
             },
         };
-        
+        debug!("recieved event: {:?}", event);
         match event {
             Event::Request { full_data, name } => {
                 let request = parse_request(full_data).unwrap();
                 let response = parse_response(request, init_sim()).unwrap();
                 if let Some(peer) = peers.get_mut(&name) {
-                    peer.send(String::from_utf8(response).unwrap()); //-> send the message to mosaik channel reciever
+                    if let Err(e) = peer
+                        .send(String::from_utf8(response).expect("bytes to utf8"))
+                        .await
+                    {
+                        error!("error sending response to peer: {}", e);
+                    } //-> send the message to mosaik channel reciever
                 }
-                
             }
             Event::NewPeer {
                 name,
@@ -170,7 +187,6 @@ async fn broker_loop(events: Receiver<Event>) {
                     }
                 }
             }
-            
         }
     }
     drop(peers); // 5
