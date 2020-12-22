@@ -20,13 +20,13 @@ pub type META = serde_json::Value;
 ///Id of the simulation
 pub type Sid = String;
 
-pub type Model = String;
+pub type Model = Value;
 
 ///Id of an entity
 pub type Eid = String;
 
 ///Id of an attribute of a Model
-pub type Attribute_Id = String;
+pub type AttributeId = String;
 
 pub enum Object {}
 ///the class for the "empty" API calls
@@ -40,7 +40,7 @@ pub trait MosaikAPI {
         num: usize,
         model: Model,
         model_params: Option<Map<String, Value>>,
-    ) -> Map<String, Value>;
+    ) -> Vec<Value>;
 
     fn setup_done(&self);
 
@@ -49,11 +49,11 @@ pub trait MosaikAPI {
         //AddAssign is a quickfix for the addition of two values -> needed for delta
         &mut self,
         time: usize,
-        inputs: HashMap<Eid, Map<Attribute_Id, Value>>,
+        inputs: HashMap<Eid, Map<AttributeId, Value>>,
     ) -> usize;
 
     //collect data from the simulation and return a nested Vector containing the information
-    fn get_data(&mut self, outputs: HashMap<Eid, Vec<Attribute_Id>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
+    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
 
     fn stop();
 }

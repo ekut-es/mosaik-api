@@ -1,5 +1,5 @@
 use log::{error, info};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 pub struct Model {
     val: f64,
     delta: f64,

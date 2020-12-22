@@ -5,7 +5,7 @@ use serde_json::{json, map::Map, to_string, to_vec, Value};
 
 use thiserror::Error;
 
-use crate::{Attribute_Id, Eid, MosaikAPI};
+use crate::{AttributeId, Eid, MosaikAPI};
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
@@ -65,9 +65,9 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
 pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T) -> Option<Vec<u8>> {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(request.args[0].to_string(), Some(request.kwargs)),
-        "create" => Value::Object(simulator.create(
+        "create" => Value::Array(simulator.create(
             request.args[0].as_u64().unwrap_or_default() as usize,
-            request.args[1].to_string(),
+            request.args[1].clone(),
             Some(request.kwargs),
         )),
         "step" => Value::from(simulator.step(
@@ -97,7 +97,7 @@ pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T) -> Optio
 }
 
 ///Transform the requested map to hashmap of Id to a mapping
-fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<Attribute_Id, Value>> {
+fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<AttributeId, Value>> {
     let mut hashmap = HashMap::new();
     if let Value::Object(eid_map) = inputs {
         for (eid, attr_values) in eid_map.into_iter() {
@@ -110,7 +110,7 @@ fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<Attribute_Id, Value>> {
 }
 
 ///Transform the requested map to hashmap of Id to a vector
-fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<Attribute_Id>> {
+fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
     let mut hashmap = HashMap::new();
     for output in outputs {
         if let Value::Object(eid_map) = output {
@@ -147,7 +147,7 @@ struct Response {
 mod tests {
     use log::*;
 
-    use serde_json::{json, to_string, to_vec, Result, Value};
+    use serde_json::{json, to_vec, Result, Value};
     #[test]
     fn untyped_example() -> Result<()> {
         // Some JSON input data as a &str. Maybe this comes from the user.

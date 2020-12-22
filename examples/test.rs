@@ -153,12 +153,12 @@ async fn broker_loop(events: Receiver<Event>) {
         match event {
             Event::Request { full_data, name } => {
                 let request = parse_request(full_data).unwrap();
+                println!("the request: {:?}", request);
                 let response = parse_response(request, init_sim()).unwrap();
+                let response_string = String::from_utf8(response).expect("bytes to string");
+                println!("the response: {}", response_string);
                 if let Some(peer) = peers.get_mut(&name) {
-                    if let Err(e) = peer
-                        .send(String::from_utf8(response).expect("bytes to utf8"))
-                        .await
-                    {
+                    if let Err(e) = peer.send(response_string).await {
                         error!("error sending response to peer: {}", e);
                     } //-> send the message to mosaik channel reciever
                 }

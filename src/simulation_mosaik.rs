@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
     simple_simulator::{self, RunSimulator, Simulator},
-    Attribute_Id, Eid, MosaikAPI,
+    AttributeId, Eid, MosaikAPI,
 };
 
 pub fn meta() -> serde_json::Value {
@@ -64,16 +64,17 @@ impl MosaikAPI for ExampleSim {
     fn create(
         &mut self,
         num: usize,
-        model: String,
+        model: Value,
         model_params: Option<Map<String, Value>>,
-    ) -> Map<String, Value> {
+    ) -> Vec<Value> {
         let mut out_entities: Map<String, Value> = Map::new();
+        let mut out_vector = Vec::new();
         let next_eid = self.entities.len();
         match model_params {
             Some(model_params) => {
                 if let Some(init_val) = model_params.get("init_val") {
                     for i in next_eid..(next_eid + num) {
-                        let mut eid = format!("{}_{}", self.eid_prefix, i);
+                        let mut eid = format!("{}{}", self.eid_prefix, i);
                         Simulator::add_model(&mut self.simulator, init_val.as_f64());
                         self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), Value::from(eid));
@@ -83,10 +84,11 @@ impl MosaikAPI for ExampleSim {
             }
             None => {}
         }
-        return out_entities;
+        out_vector.push(Value::from(out_entities));
+        return out_vector;
     }
 
-    fn step(&mut self, mut time: usize, inputs: HashMap<Eid, Map<Attribute_Id, Value>>) -> usize {
+    fn step(&mut self, mut time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
         let mut deltas: Vec<(u64, f64)> = Vec::new();
         let mut new_delta: f64;
         for (eid, attrs) in inputs.iter() {
@@ -112,7 +114,7 @@ impl MosaikAPI for ExampleSim {
         return time;
     }
 
-    fn get_data(&mut self, output: HashMap<Eid, Vec<Attribute_Id>>) -> Map<String, Value> {
+    fn get_data(&mut self, output: HashMap<Eid, Vec<AttributeId>>) -> Map<String, Value> {
         let meta = meta();
         let models = &self.simulator.models;
         let mut data: Map<String, Value> = Map::new();
