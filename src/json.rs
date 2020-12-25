@@ -87,13 +87,19 @@ pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T) -> Optio
 
     let response: Value = Value::Array(vec![json!(1), json!(request.id), content]);
 
-    let vect = to_vec(&response); // Make a u8 vector with the data
-    let mut vect_unwrapped = vect.expect("Vector unwrapped.");
-    let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
-    big_endian.append(&mut vect_unwrapped);
-    debug!("{:?}", big_endian);
-    //let mut string_endian = big_endian.to_string();
-    Some(big_endian) //return the final response to the main for stream.write()
+    match to_vec(&response) {
+        // Make a u8 vector with the data
+        Ok(mut vect_unwrapped) => {
+            let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
+            big_endian.append(&mut vect_unwrapped);
+            debug!("{:?}", big_endian);
+            return Some(big_endian); //return the final response to the main for stream.write()
+        }
+        Err(e) => {
+            error!("Failed to make an Vector with the response: {}", e);
+            return None;
+        }
+    }
 }
 
 ///Transform the requested map to hashmap of Id to a mapping

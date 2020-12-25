@@ -72,7 +72,6 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
     let mut size_data = [0u8; 4]; // using 4 byte buffer
                                   //let mut full_package = [0u8; 10000];
     while let Ok(()) = stream.read_exact(&mut size_data).await {
-        //no check if Ok or not
         let size = u32::from_be_bytes(size_data) as usize;
         info!("Received {} Bytes Message", size);
         let mut full_package = vec![0; size];
@@ -152,15 +151,34 @@ async fn broker_loop(events: Receiver<Event>) {
         debug!("Received event: {:?}", event);
         match event {
             Event::Request { full_data, name } => {
-                let request = parse_request(full_data).unwrap();
-                println!("the request: {:?}", request);
-                let response = parse_response(request, init_sim()).unwrap();
-                let response_string = String::from_utf8(response).expect("bytes to string");
-                println!("the response: {}", response_string);
-                if let Some(peer) = peers.get_mut(&name) {
-                    if let Err(e) = peer.send(response_string).await {
-                        error!("error sending response to peer: {}", e);
-                    } //-> send the message to mosaik channel reciever
+                //parse the request
+                match parse_request(full_data) {
+                    Ok(request) => {
+                        println!("the request: {:?}", request);
+                        if let Some(response) = parse_response(request, init_sim()) {
+                            //parse the response with the request
+                            match String::from_utf8(response) {
+                                Ok(response_string) => {
+                                    println!("the response: {}", response_string);
+                                    if let Some(peer) = peers.get_mut(&name) {
+                                        if let Err(e) = peer.send(response_string).await {
+                                            //-> send the message to mosaik channel reciever
+                                            error!("error sending response to peer: {}", e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("failed to make string from utf8: {}", e);
+                                }
+                            }
+                        } else {
+                            // if it is none, how do I proceed without breaking the loop?
+                            todo!();
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error while parsing the request: {}", e);
+                    }
                 }
             }
             Event::NewPeer {
