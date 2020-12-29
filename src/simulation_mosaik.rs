@@ -67,24 +67,25 @@ impl MosaikAPI for ExampleSim {
         model: Value,
         model_params: Option<Map<String, Value>>,
     ) -> Vec<Value> {
-        let mut out_entities: Map<String, Value> = Map::new();
+        let mut out_entities: Map<String, Value>;
         let mut out_vector = Vec::new();
         let next_eid = self.entities.len();
         match model_params {
             Some(model_params) => {
                 if let Some(init_val) = model_params.get("init_val") {
                     for i in next_eid..(next_eid + num) {
+                        out_entities = Map::new();
                         let mut eid = format!("{}{}", self.eid_prefix, i);
                         Simulator::add_model(&mut self.simulator, init_val.as_f64());
                         self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), Value::from(eid));
                         out_entities.insert("type".to_string(), Value::from(model.clone()));
+                        out_vector.push(Value::from(out_entities));
                     }
                 }
             }
             None => {}
         }
-        out_vector.push(Value::from(out_entities));
         return out_vector;
     }
 
@@ -149,7 +150,7 @@ impl MosaikAPI for ExampleSim {
     fn stop() {}
 
     fn setup_done(&self) {
-        info!("Setup is done.");
+        println!("Setup is done.");
     }
 }
 #[test]

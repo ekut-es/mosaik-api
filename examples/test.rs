@@ -155,26 +155,35 @@ async fn broker_loop(events: Receiver<Event>) {
                 match parse_request(full_data) {
                     Ok(request) => {
                         println!("the request: {:?}", request);
-                        if let Some(response) = parse_response(request, init_sim()) {
-                            //parse the response with the request
-                            match String::from_utf8(response) {
-                                Ok(response_string) => {
-                                    println!("the response: {}", response_string);
-                                    if let Some(peer) = peers.get_mut(&name) {
-                                        if let Err(e) = peer.send(response_string).await {
-                                            //-> send the message to mosaik channel reciever
-                                            error!("error sending response to peer: {}", e);
+                        match parse_response(request, init_sim()) {
+                            Some(response) => {
+                                //parse the response with the request
+                                match String::from_utf8(response) {
+                                    Ok(response_string) => {
+                                        println!("the response: {}", response_string);
+                                        if let Some(peer) = peers.get_mut(&name) {
+                                            if let Err(e) = peer.send(response_string).await {
+                                                //-> send the message to mosaik channel reciever
+                                                error!("error sending response to peer: {}", e);
+                                            }
                                         }
                                     }
-                                }
-                                Err(e) => {
+                                    Err(e) => {
                                     error!("failed to make string from utf8: {}", e);
+                                    }
                                 }
                             }
-                        } else {
-                            // if it is none, how do I proceed without breaking the loop?
-                            todo!();
+                            None => {
+                                println!("Setup_done response: sending an empty string");
+                                if let Some(peer) = peers.get_mut(&name) {
+                                    if let Err(e) = peer.send("".to_string()).await {
+                                        //-> send the message to mosaik channel reciever
+                                        error!("error sending response to peer: {}", e);
+                                    }
+                                }
+                            }
                         }
+                            
                     }
                     Err(e) => {
                         error!("Error while parsing the request: {}", e);
@@ -186,6 +195,7 @@ async fn broker_loop(events: Receiver<Event>) {
                 stream,
                 shutdown,
             } => {
+                println!("New peer -> creating channels");
                 match peers.entry(name.clone()) {
                     Entry::Occupied(..) => (),
                     Entry::Vacant(entry) => {
@@ -207,7 +217,9 @@ async fn broker_loop(events: Receiver<Event>) {
             }
         }
     }
+    println!("dropping peers");
     drop(peers); // 5
+    println!("closing channels");
     drop(disconnect_sender); // 6
     while let Some((_name, _pending_messages)) = disconnect_receiver.next().await {}
 }

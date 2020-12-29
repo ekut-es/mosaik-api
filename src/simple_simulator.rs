@@ -56,6 +56,7 @@ pub trait RunSimulator {
 
 impl RunSimulator for Simulator {
     fn init_simulator() -> Simulator {
+        println!("initiation of simulator.");
         Simulator {
             models: vec![],
             data: vec![],
