@@ -62,7 +62,7 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     }
 }
 
-pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T) -> Option<Vec<u8>> {
+pub fn handle_request<T: MosaikAPI>(request: Request, mut simulator: T) -> Option<Vec<u8>> {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(request.args[0].to_string(), Some(request.kwargs)),
         "create" => Value::Array(simulator.create(
@@ -79,8 +79,8 @@ pub fn parse_response<T: MosaikAPI>(request: Request, mut simulator: T) -> Optio
             simulator.setup_done();
             return None;
         }
-        _ => {
-            error!("A different method got requested");
+        e => {
+            error!("A different method {:?} got requested", e);
             return None;
         }
     };

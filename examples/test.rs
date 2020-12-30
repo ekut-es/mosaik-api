@@ -13,7 +13,7 @@ use std::{
     sync::Arc,
 };
 
-use mosaik_rust_api::json::{parse_request, parse_response};
+use mosaik_rust_api::json::{handle_request, parse_request};
 use mosaik_rust_api::simulation_mosaik::init_sim;
 
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -154,13 +154,13 @@ async fn broker_loop(events: Receiver<Event>) {
                 //parse the request
                 match parse_request(full_data) {
                     Ok(request) => {
-                        println!("the request: {:?}", request);
-                        match parse_response(request, init_sim()) {
+                        info!("Received Request: {:?}", request);
+                        match handle_request(request, init_sim()) {
                             Some(response) => {
                                 //parse the response with the request
                                 match String::from_utf8(response) {
                                     Ok(response_string) => {
-                                        println!("the response: {}", response_string);
+                                        info!("Responding with: {}", response_string);
                                         if let Some(peer) = peers.get_mut(&name) {
                                             if let Err(e) = peer.send(response_string).await {
                                                 //-> send the message to mosaik channel reciever
@@ -169,21 +169,23 @@ async fn broker_loop(events: Receiver<Event>) {
                                         }
                                     }
                                     Err(e) => {
-                                    error!("failed to make string from utf8: {}", e);
+                                        error!("failed to make string from utf8: {}", e);
                                     }
                                 }
                             }
                             None => {
-                                println!("Setup_done response: sending an empty string");
-                                if let Some(peer) = peers.get_mut(&name) {
-                                    if let Err(e) = peer.send("".to_string()).await {
-                                        //-> send the message to mosaik channel reciever
-                                        error!("error sending response to peer: {}", e);
-                                    }
-                                }
+                                info!("Nothing to respond (e.g Setup_Done received)");
+                                /*: sending an empty string");*/
+                                // if let Some(peer) = peers.get_mut(&name) {
+                                //     if let Err(e) = peer.send("".to_string()).await {
+                                //         //-> send the message to mosaik channel reciever
+                                //         error!("error sending response to peer: {}", e);
+                                //     }
+                                // }
+
+                                
                             }
                         }
-                            
                     }
                     Err(e) => {
                         error!("Error while parsing the request: {}", e);

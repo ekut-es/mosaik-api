@@ -153,18 +153,24 @@ impl MosaikAPI for ExampleSim {
         println!("Setup is done.");
     }
 }
-#[test]
-fn test() {
-    let meta = json!({
-    "api_version": "2.2",
-    "models":{
-        "ExampleModel":{
-            "public": true,
-            "params": ["init_val"],
-            "attrs": ["val", "delta"]
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    #[test]
+    fn test_meta() {
+        let meta = json!({
+        "api_version": "2.2",
+        "models":{
+            "ExampleModel":{
+                "public": true,
+                "params": ["init_val"],
+                "attrs": ["val", "delta"]
+                }
             }
-        }
-    });
-    let attr = "val";
-    assert_eq!(meta["models"]["ExampleModel"]["attrs"][0], json!(attr));
+        });
+        let attr = "val";
+        assert_eq!(meta["models"]["ExampleModel"]["attrs"][0], json!(attr));
+    }
 }

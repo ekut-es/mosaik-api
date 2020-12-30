@@ -5,31 +5,36 @@ from sys import platform
 
 
 sim_config = {
-    'rust_sim':{
-        #'cmd': 'cargo run %(addr)s', #cd ../../mosaik-rust-api && 
-        #'env': '../../mosaik-rust-api',
+    'rust_sim': {
+        # 'cmd': 'cargo run %(addr)s', #cd ../../mosaik-rust-api &&
+        # 'env': '../../mosaik-rust-api',
         'connect': '127.0.0.1:3456',
     },
+    # 'ExampleSim': {
+    #     'python': 'simulator_mosaik:ExampleSim',
+    # },
     'Collector': {
         'cmd': 'python collector.py %(addr)s',
     },
 }
 
-END = 3 * 60 #3 Min.
+END = 3 * 60  # 3 Min.
 
 print("call Sim_Manager")
 world = mosaik.World(sim_config)
-#create_scenario(world)
+# create_scenario(world)
+#examplesim = world.start('ExampleSim', eid_prefix='Model_')
 rustAPI = world.start('rust_sim', eid_prefix='Model_')
-#collector = world.start('Collector', step_size=60)
+collector = world.start('Collector', step_size=60)
 
 # Instantiate models
-model = rustAPI.ExampleModel(init_val = 2)
-#monitor = collector.Monitor()
+#model = examplesim.ExampleModel(init_val=2)
+model = rustAPI.ExampleModel(init_val=2)
+monitor = collector.Monitor()
 # Create one instance of of our example model and one database instance
 
 # Connect entities
-#world.connect(model, monitor, 'val', 'delta')
+world.connect(model, monitor, 'val', 'delta')
 # through the connection we tell mosaik to send the outputs of the example to the monitor
 
 # Create more entities (you usually work with larger sets of entities)
@@ -40,5 +45,7 @@ model = rustAPI.ExampleModel(init_val = 2)
 # Connects all entities to the database
 # mosaik.util.connect_many_to_one(world, more_models, monitor, 'val', 'delta')
 
+print('world run starting')
+
 # Run simulation
-world.run(until = END) # to start the simulation
+world.run(rt_factor=0.1, until=END)  # to start the simulation
