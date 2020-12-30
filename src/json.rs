@@ -77,7 +77,7 @@ pub fn handle_request<T: MosaikAPI>(request: Request, mut simulator: T) -> Optio
         "get_data" => Value::Object(simulator.get_data(outputs_to_hashmap(request.args))),
         "setup_done" => {
             simulator.setup_done();
-            return None;
+            json!(null)
         }
         e => {
             error!("A different method {:?} got requested", e);

@@ -174,7 +174,7 @@ async fn broker_loop(events: Receiver<Event>) {
                                 }
                             }
                             None => {
-                                info!("Nothing to respond (e.g Setup_Done received)");
+                                info!("Nothing to respond");
                                 /*: sending an empty string");*/
                                 // if let Some(peer) = peers.get_mut(&name) {
                                 //     if let Err(e) = peer.send("".to_string()).await {
