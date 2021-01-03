@@ -41,7 +41,7 @@ pub struct ExampleSim {
 pub fn init_sim() -> ExampleSim {
     ExampleSim {
         simulator: Simulator::init_simulator(),
-        eid_prefix: String::from("model_"),
+        eid_prefix: String::from("Model_"),
         entities: Map::new(),
         meta: meta(), //sollte eigentlich die richtige meta sein und keine funktion
     }
@@ -76,10 +76,11 @@ impl MosaikAPI for ExampleSim {
                     for i in next_eid..(next_eid + num) {
                         out_entities = Map::new();
                         let mut eid = format!("{}{}", self.eid_prefix, i);
+                        println!("The model entitie in create: {}", eid);
                         Simulator::add_model(&mut self.simulator, init_val.as_f64());
                         self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-                        out_entities.insert(String::from("eid"), Value::from(eid));
-                        out_entities.insert("type".to_string(), Value::from(model.clone()));
+                        out_entities.insert(String::from("eid"), json!(eid));
+                        out_entities.insert(String::from("type"), model.clone());
                         out_vector.push(Value::from(out_entities));
                     }
                 }
@@ -122,22 +123,36 @@ impl MosaikAPI for ExampleSim {
         for (eid, attrs) in output.into_iter() {
             let mut model_idx = match self.entities.get(&eid) {
                 Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
-                _ => panic!("No correct model eid available.",),
+                _ => panic!("No correct model eid available."),
             };
             let mut attribute_values = Map::new();
             match models.get(model_idx as usize) {
                 Some(model) => {
                     for attr in attrs.into_iter() {
-                        assert!(
-                            meta["models"]["ExampleModel"]
+                        //println!("attribute: {}", attr);
+                        /*println!(
+                            "the attributes in meta: {}",
+                            meta["models"]["ExampleModel"]["attrs"]
+                        );*/
+                        /*assert!(
+                            meta["models"]["ExampleModel"]["attrs"]
                                 .as_array()
                                 .map_or(false, |x| x.contains(&json!(attr))),
                             "Unknown output attribute: {}",
-                            attr
-                        );
-                        //Get model.val or model.delta:
-                        if let Some(value) = model.get_value(&attr) {
-                            attribute_values.insert(attr, value);
+                            json!(attr)
+                        );*/
+                        if meta["models"]["ExampleModel"]["attrs"][0].to_string() == attr
+                            || meta["models"]["ExampleModel"]["attrs"][1].to_string() == attr
+                        {
+                            //Get model.val or model.delta:
+                            if let Some(value) = model.get_value(attr.clone()) {
+                                attribute_values.insert(attr, value);
+                            }
+                        } else {
+                            error!(
+                                "Requested attribute isn't in the meta configuration: {}",
+                                attr
+                            );
                         }
                     }
                     data.insert(eid, Value::from(attribute_values));
@@ -145,9 +160,12 @@ impl MosaikAPI for ExampleSim {
                 None => error!("No model_idx in models: {}", model_idx),
             }
         }
+        println!("The return data: {:?}", data);
         return data;
     }
-    fn stop() {}
+    fn stop() {
+        println!("Stop the simulation.");
+    }
 
     fn setup_done(&self) {
         println!("Setup is done.");

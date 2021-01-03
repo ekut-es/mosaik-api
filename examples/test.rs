@@ -106,7 +106,11 @@ async fn connection_writer_loop(
     loop {
         select! {
             msg = messages.next().fuse() => match msg {
-                Some(msg) => stream.write_all(msg.as_bytes()).await?, //write the message
+                Some(msg) => {
+                    let mut big_endian = (msg.len() as u32).to_be_bytes().to_vec();
+                    big_endian.append(&mut msg.as_bytes().to_vec());
+                    stream.write_all(&big_endian).await?
+                }, //write the message
                 None => break,
             },
             void = shutdown.next().fuse() => match void {
@@ -136,6 +140,8 @@ async fn broker_loop(events: Receiver<Event>) {
          mpsc::unbounded::<(String, Receiver<String>)>();
     let mut peers: HashMap<String /*std::net::SocketAddr*/, Sender<String>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
     let mut events = events.fuse();
+    let mut simulator = init_sim();
+
     loop {
         let event = select! {
             event = events.next().fuse() => match event {
@@ -154,13 +160,13 @@ async fn broker_loop(events: Receiver<Event>) {
                 //parse the request
                 match parse_request(full_data) {
                     Ok(request) => {
-                        info!("Received Request: {:?}", request);
-                        match handle_request(request, init_sim()) {
+                        println!("Received Request: {:?}", request);
+                        match handle_request(request, &mut simulator) {
                             Some(response) => {
                                 //parse the response with the request
-                                match String::from_utf8(response) {
+                                match String::from(response) {
                                     Ok(response_string) => {
-                                        info!("Responding with: {}", response_string);
+                                        println!("Responding with: {}", response_string);
                                         if let Some(peer) = peers.get_mut(&name) {
                                             if let Err(e) = peer.send(response_string).await {
                                                 //-> send the message to mosaik channel reciever
@@ -175,15 +181,6 @@ async fn broker_loop(events: Receiver<Event>) {
                             }
                             None => {
                                 info!("Nothing to respond");
-                                /*: sending an empty string");*/
-                                // if let Some(peer) = peers.get_mut(&name) {
-                                //     if let Err(e) = peer.send("".to_string()).await {
-                                //         //-> send the message to mosaik channel reciever
-                                //         error!("error sending response to peer: {}", e);
-                                //     }
-                                // }
-
-                                
                             }
                         }
                     }
