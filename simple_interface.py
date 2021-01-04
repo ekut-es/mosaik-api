@@ -40,10 +40,10 @@ world.connect(model, monitor, 'val', 'delta')
 # Create more entities (you usually work with larger sets of entities)
 # instead of instantiating the example model directly, we called its static method
 # create() and passed the number of instances to it
-#more_models = rustAPI.ExampleModel.create(2, init_val=3)
+more_models = rustAPI.ExampleModel.create(2, init_val=3)
 
 # Connects all entities to the database
-#mosaik.util.connect_many_to_one(world, more_models, monitor, 'val', 'delta')
+mosaik.util.connect_many_to_one(world, more_models, monitor, 'val', 'delta')
 
 print('world run starting')
 

@@ -96,7 +96,7 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
 }
 
 async fn connection_writer_loop(
-    messages: &mut Receiver<String>,
+    messages: &mut Receiver<Vec<u8>>,
     stream: Arc<TcpStream>,
     shutdown: Receiver<Void>,
 ) -> Result<()> {
@@ -107,10 +107,8 @@ async fn connection_writer_loop(
         select! {
             msg = messages.next().fuse() => match msg {
                 Some(msg) => {
-                    let mut big_endian = (msg.as_bytes().len() as u32).to_be_bytes().to_vec();
-                    big_endian.append(&mut msg.as_bytes().to_vec());
-                    stream.write_all(&big_endian).await?
-                }, //write the message
+                    stream.write_all(&msg).await?//write the message
+                }, 
                 None => break,
             },
             void = shutdown.next().fuse() => match void {
@@ -137,8 +135,8 @@ enum Event {
 
 async fn broker_loop(events: Receiver<Event>) {
     let (disconnect_sender, mut disconnect_receiver) = // 1
-         mpsc::unbounded::<(String, Receiver<String>)>();
-    let mut peers: HashMap<String /*std::net::SocketAddr*/, Sender<String>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
+         mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
+    let mut peers: HashMap<String /*std::net::SocketAddr*/, Sender<Vec<u8>>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
     let mut events = events.fuse();
     let mut simulator = init_sim();
 
@@ -160,22 +158,12 @@ async fn broker_loop(events: Receiver<Event>) {
                 //parse the request
                 match parse_request(full_data) {
                     Ok(request) => {
-                        println!("Received Request: {:?}", request);
                         match handle_request(request, &mut simulator) {
                             Some(response) => {
-                                //parse the response with the request
-                                match String::from_utf8(response) {
-                                    Ok(response_string) => {
-                                        println!("Responding with: {}", response_string);
-                                        if let Some(peer) = peers.get_mut(&name) {
-                                            if let Err(e) = peer.send(response_string).await {
-                                                //-> send the message to mosaik channel reciever
-                                                error!("error sending response to peer: {}", e);
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("failed to make string from utf8: {}", e);
+                                if let Some(peer) = peers.get_mut(&name) {
+                                    if let Err(e) = peer.send(response).await {
+                                        //-> send the message to mosaik channel reciever
+                                        error!("error sending response to peer: {}", e);
                                     }
                                 }
                             }
@@ -235,83 +223,3 @@ where
         }
     })
 }
-/*
-fn tcp<T: std::net::ToSocketAddrs>(addr: T) {
-    match std::net::TcpListener::bind(addr) {
-        Ok(mut listener) => {
-            for stream in listener.incoming() {
-                match stream {
-                    Ok(mut stream) => {
-                        println!("New client from {:?}!", stream.peer_addr());
-                        //von hier übernehmen bis inkl. full_package
-                        let mut size_data = [0u8; 4]; // using 4 byte buffer
-                        let mut full_package = [0u8; 1000000];
-
-                        match stream.read_exact(&mut size_data) {
-                            Ok(()) => {
-                                let size = u32::from_be_bytes(size_data);
-                                println!("Received {} Bytes Message", size);
-                                match stream.read(&mut full_package) {
-                                    Ok(size) => {
-                                        match String::from_utf8(
-                                            full_package[0..(size as usize)].to_vec(), //dieses full_package dann über channel an broker senden.
-                                        ) {
-                                            Ok(json_data) => {
-                                                /* parse */
-                                                println!("JSON: {}", &json_data);
-                                                println!(
-                                                    "JSON: {:?}",
-                                                    parse_request(json_data.clone())
-                                                );
-
-                                                match parse_request(json_data) {
-                                                    Ok(request) => {
-                                                        /* call specific function */
-
-                                                        /* and reply */
-
-                                                        if let Some(value) =
-                                                            parse_response(request, init_sim())
-                                                        {
-                                                            if let Err(e) = stream.write(&value) {
-                                                                error!("{:?} ", e);
-                                                            }
-                                                            println!("Antwort wurde geschrieben!");
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        error!(
-                                                            "Error when parsing Request: {:?}",
-                                                            e
-                                                        );
-                                                        /* Reply to mosaik with an Error */
-
-                                                        // .to/as_bytes()
-                                                        // größe vorne anhängen
-                                                        // stream.write()
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                /* use log::err! instead of println */
-                                                println!("Parsing failed: {:?}", e);
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {}
-                                }
-                            }
-                            Err(e) => {
-                                println!("Failed to receive data: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => { /* connection failed */ }
-                }
-            }
-        }
-        Err(_) => {}
-    }
-
-    println!("Terminated.");
-}*/

@@ -1,35 +1,14 @@
 use log::{error, info};
-use serde_json::{json, Map, Value};
+use serde_json::{Value};
 pub struct Model {
     val: f64,
     delta: f64,
 }
 impl Model {
-    pub fn to_serde_values(&self) -> Map<String, Value> {
-        let mut map = Map::new();
-        map.insert("val".to_string(), Value::from(self.val));
-        map.insert("delta".to_string(), Value::from(self.delta));
 
-        map
-    }
-
-    pub fn get_value(&self, attr: String) -> Option<Value> {
-        let attribute_1 = json!("val");
-        let attribute_1_1 = attribute_1.to_string();
-        let attribute_2 = json!("delta");
-        let attribute_2_1 = attribute_2.to_string();
-        if attr == attribute_1_1 {
-            let result = Value::from(self.val);
-            return Some(result);
-        } else if attr == attribute_2_1 {
-            let result = Value::from(self.delta);
-            return Some(result);
-        } else {
-            println!("no known attr requested:");
-            return None;
-        };
-
-        /*let result = match attr {
+    pub fn get_value(&self, attr: &str) -> Option<Value> {
+        
+        let result = match attr {
             "val" => Value::from(self.val),
             "delta" => Value::from(self.delta),
             x => {
@@ -37,7 +16,7 @@ impl Model {
                 return None;
             }
         };
-        Some(result)*/
+        Some(result)
     }
 }
 
@@ -97,7 +76,7 @@ impl RunSimulator for Simulator {
                     self.models[*idx as usize].delta = *deltax;
                 }
             }
-            None => {println!("Got no deltas for the step.");}
+            None => {error!("Got no deltas for the step.");}
         }
 
         for (i, model) in self.models.iter_mut().enumerate() {
@@ -106,7 +85,7 @@ impl RunSimulator for Simulator {
         }
     }
 }
-
+/*
 pub fn run() {
     let mut sim: Simulator = Simulator::init_simulator(); //need an instance of Simulator, just like in init_model()
                                                           //sim = Simulator()
@@ -124,7 +103,7 @@ pub fn run() {
     for (i, inst) in sim.data.iter().enumerate() {
         info!("{}: {:?}", i, inst);
     }
-}
+}*/
 
 #[cfg(test)]
 mod tests {

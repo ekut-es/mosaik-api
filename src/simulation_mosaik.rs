@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::{error};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
@@ -53,7 +53,9 @@ impl MosaikAPI for ExampleSim {
         match sim_params {
             Some(sim_params) => {
                 if let Some(eid_prefix) = sim_params.get("eid_prefix") {
-                    self.eid_prefix = eid_prefix.to_string();
+                    if let Some(prefix) = eid_prefix.as_str() {
+                        self.eid_prefix = prefix.to_string();
+                    }
                 }
             }
             None => {}
@@ -75,8 +77,7 @@ impl MosaikAPI for ExampleSim {
                 if let Some(init_val) = model_params.get("init_val") {
                     for i in next_eid..(next_eid + num) {
                         out_entities = Map::new();
-                        let mut eid = format!("{}{}", self.eid_prefix, i.to_string());
-                        println!("The model entity in create: {}", eid);
+                        let eid = format!("{}{}", self.eid_prefix, i);
                         Simulator::add_model(&mut self.simulator, init_val.as_f64());
                         self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), json!(eid));
@@ -95,7 +96,7 @@ impl MosaikAPI for ExampleSim {
         let mut new_delta: f64;
         for (eid, attrs) in inputs.iter() {
             for (attr, attr_values) in attrs.iter() {
-                let mut model_idx = match self.entities.get(eid) {
+                let model_idx = match self.entities.get(eid) {
                     Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
                     _ => panic!(
                         "No correct model eid available. Input: {:?}, Entities: {:?}",
@@ -121,7 +122,7 @@ impl MosaikAPI for ExampleSim {
         let models = &self.simulator.models;
         let mut data: Map<String, Value> = Map::new();
         for (eid, attrs) in output.into_iter() {
-            let mut model_idx = match self.entities.get(&eid) {
+            let model_idx = match self.entities.get(&eid) {
                 Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
                 _ => panic!("No correct model eid available."),
             };
@@ -129,31 +130,18 @@ impl MosaikAPI for ExampleSim {
             match models.get(model_idx as usize) {
                 Some(model) => {
                     for attr in attrs.into_iter() {
-                        //println!("attribute: {}", attr);
-                        /*println!(
-                            "the attributes in meta: {}",
-                            meta["models"]["ExampleModel"]["attrs"]
-                        );*/
-                        /*
+                        
+                        //Wir müssen überprüfen, ob das Attribut sich überhaupt in unserer META data befindet.
                         assert!(
                             meta["models"]["ExampleModel"]["attrs"]
                                 .as_array()
                                 .map_or(false, |x| x.contains(&json!(attr))),
                             "Unknown output attribute: {}",
                             json!(attr)
-                        );*/
-                        if meta["models"]["ExampleModel"]["attrs"][0].to_string() == attr
-                            || meta["models"]["ExampleModel"]["attrs"][1].to_string() == attr
-                        {
-                            //Get model.val or model.delta:
-                            if let Some(value) = model.get_value(attr.clone()) {
-                                attribute_values.insert(attr, value);
-                            }
-                        } else {
-                            error!(
-                                "Requested attribute isn't in the meta configuration: {}",
-                                attr
-                            );
+                        );
+                        //Get model.val or model.delta:
+                        if let Some(value) = model.get_value(&attr) {
+                            attribute_values.insert(attr, value);
                         }
                     }
                     data.insert(eid, Value::from(attribute_values));
@@ -161,7 +149,6 @@ impl MosaikAPI for ExampleSim {
                 None => error!("No model_idx in models: {}", model_idx),
             }
         }
-        println!("The return data: {:?}", data);
         return data;
     }
     fn stop() {

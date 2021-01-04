@@ -64,7 +64,7 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
 
 pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Option<Vec<u8>> {
     let content: Value = match request.method.as_ref() {
-        "init" => simulator.init(request.args[0].to_string(), Some(request.kwargs)),
+        "init" => simulator.init(request.args[0].as_str().unwrap_or("No Simulation ID from the request.").to_string(), Some(request.kwargs)),
         "create" => Value::from(simulator.create(
             request.args[0].as_u64().unwrap_or_default() as usize,
             request.args[1].clone(),
@@ -87,32 +87,13 @@ pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Opti
     };
 
     let response: Value = Value::Array(vec![json!(1), json!(request.id), content]);
-
-
-    
-    /*
-    match response.as_str() {
-        Some(response_str) => {
-            println!("returning some response.");
-            return Some(response_str.to_string())
-        }
-        None => {
-            println!("there was an error somewhere.");
-            return None
-        }
-    };
-    */
-    //make a str response of the value and return the option of it.
-
     
     match to_vec(&response) {
         // Make a u8 vector with the data
-        Ok(vect_unwrapped) => {
-            /*let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
+        Ok(mut vect_unwrapped) => {
+            let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
             big_endian.append(&mut vect_unwrapped);
-            println!("{:?}", big_endian);*/
-            return Some(vect_unwrapped)
-            //Some(big_endian); //return the final response to the main for stream.write()
+            Some(big_endian) //return the final response
         }
         Err(e) => {
             error!("Failed to make an Vector with the response: {}", e);
@@ -138,12 +119,10 @@ fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<AttributeId, Value>> {
 fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
     let mut hashmap = HashMap::new();
     for output in outputs {
-        println!("Values in vec before hashmap: {}", output);
         if let Value::Object(eid_map) = output {
             for (eid, attr_id_array) in eid_map.into_iter() {
                 if let Value::Array(attr_id) = attr_id_array {
-                    hashmap.insert(eid, attr_id.iter().map(|x| x.to_string()).collect());
-                    println!("the hashmap for get_data: {:?}", hashmap);
+                    hashmap.insert(eid, attr_id.iter().filter_map(|x| x.as_str().map(|x| x.to_string())).collect());
                 }
             }
         }
