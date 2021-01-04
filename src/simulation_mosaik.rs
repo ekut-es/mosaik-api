@@ -14,7 +14,7 @@ pub fn meta() -> serde_json::Value {
         "ExampleModel":{
             "public": true,
             "params": ["init_val"],
-            "attrs": ["val", "delta"]
+            "attrs": ["delta", "val"]
             }
         }
     }); /*
@@ -66,7 +66,7 @@ impl MosaikAPI for ExampleSim {
         num: usize,
         model: Value,
         model_params: Option<Map<String, Value>>,
-    ) -> Vec<Value> {
+    ) -> Vec<Map<String, Value>> {
         let mut out_entities: Map<String, Value>;
         let mut out_vector = Vec::new();
         let next_eid = self.entities.len();
@@ -75,13 +75,13 @@ impl MosaikAPI for ExampleSim {
                 if let Some(init_val) = model_params.get("init_val") {
                     for i in next_eid..(next_eid + num) {
                         out_entities = Map::new();
-                        let mut eid = format!("{}{}", self.eid_prefix, i);
-                        println!("The model entitie in create: {}", eid);
+                        let mut eid = format!("{}{}", self.eid_prefix, i.to_string());
+                        println!("The model entity in create: {}", eid);
                         Simulator::add_model(&mut self.simulator, init_val.as_f64());
                         self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), json!(eid));
                         out_entities.insert(String::from("type"), model.clone());
-                        out_vector.push(Value::from(out_entities));
+                        out_vector.push(out_entities);
                     }
                 }
             }
@@ -134,7 +134,8 @@ impl MosaikAPI for ExampleSim {
                             "the attributes in meta: {}",
                             meta["models"]["ExampleModel"]["attrs"]
                         );*/
-                        /*assert!(
+                        /*
+                        assert!(
                             meta["models"]["ExampleModel"]["attrs"]
                                 .as_array()
                                 .map_or(false, |x| x.contains(&json!(attr))),

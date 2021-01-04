@@ -18,7 +18,7 @@ sim_config = {
     },
 }
 
-END = 10 * 60  # 3 Min.
+END = 10 * 60  # 10 Min.
 
 print("call Sim_Manager")
 world = mosaik.World(sim_config)
@@ -40,12 +40,12 @@ world.connect(model, monitor, 'val', 'delta')
 # Create more entities (you usually work with larger sets of entities)
 # instead of instantiating the example model directly, we called its static method
 # create() and passed the number of instances to it
-more_models = rustAPI.ExampleModel.create(2, init_val=3)
+#more_models = rustAPI.ExampleModel.create(2, init_val=3)
 
 # Connects all entities to the database
-mosaik.util.connect_many_to_one(world, more_models, monitor, 'val', 'delta')
+#mosaik.util.connect_many_to_one(world, more_models, monitor, 'val', 'delta')
 
 print('world run starting')
 
 # Run simulation
-world.run(rt_factor=0.1, until=END)  # to start the simulation
+world.run(until=END)  # to start the simulation .... rt_factor=0.1,

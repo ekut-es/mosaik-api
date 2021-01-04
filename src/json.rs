@@ -62,10 +62,10 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     }
 }
 
-pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Option<&str> {
+pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Option<Vec<u8>> {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(request.args[0].to_string(), Some(request.kwargs)),
-        "create" => Value::Array(simulator.create(
+        "create" => Value::from(simulator.create(
             request.args[0].as_u64().unwrap_or_default() as usize,
             request.args[1].clone(),
             Some(request.kwargs),
@@ -74,7 +74,7 @@ pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Opti
             request.args[0].as_u64().unwrap_or_default() as usize,
             inputs_to_hashmap(request.args[1].clone()),
         )),
-        "get_data" => Value::Object(simulator.get_data(outputs_to_hashmap(request.args))),
+        "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
         "setup_done" => {
             simulator.setup_done();
             json!(null)
@@ -88,22 +88,37 @@ pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Opti
 
     let response: Value = Value::Array(vec![json!(1), json!(request.id), content]);
 
+
+    
+    /*
+    match response.as_str() {
+        Some(response_str) => {
+            println!("returning some response.");
+            return Some(response_str.to_string())
+        }
+        None => {
+            println!("there was an error somewhere.");
+            return None
+        }
+    };
+    */
     //make a str response of the value and return the option of it.
 
-    /*
+    
     match to_vec(&response) {
         // Make a u8 vector with the data
-        Ok(mut vect_unwrapped) => {
-            let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
+        Ok(vect_unwrapped) => {
+            /*let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
             big_endian.append(&mut vect_unwrapped);
-            println!("{:?}", big_endian);
-            return Some(big_endian); //return the final response to the main for stream.write()
+            println!("{:?}", big_endian);*/
+            return Some(vect_unwrapped)
+            //Some(big_endian); //return the final response to the main for stream.write()
         }
         Err(e) => {
             error!("Failed to make an Vector with the response: {}", e);
             return None;
         }
-    }*/
+    }
 }
 
 ///Transform the requested map to hashmap of Id to a mapping

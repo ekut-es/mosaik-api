@@ -40,7 +40,7 @@ pub trait MosaikAPI {
         num: usize,
         model: Model,
         model_params: Option<Map<String, Value>>,
-    ) -> Vec<Value>;
+    ) -> Vec<Map<String, Value>>;
 
     fn setup_done(&self);
 

@@ -97,7 +97,7 @@ impl RunSimulator for Simulator {
                     self.models[*idx as usize].delta = *deltax;
                 }
             }
-            None => {}
+            None => {println!("Got no deltas for the step.");}
         }
 
         for (i, model) in self.models.iter_mut().enumerate() {

@@ -107,7 +107,7 @@ async fn connection_writer_loop(
         select! {
             msg = messages.next().fuse() => match msg {
                 Some(msg) => {
-                    let mut big_endian = (msg.len() as u32).to_be_bytes().to_vec();
+                    let mut big_endian = (msg.as_bytes().len() as u32).to_be_bytes().to_vec();
                     big_endian.append(&mut msg.as_bytes().to_vec());
                     stream.write_all(&big_endian).await?
                 }, //write the message
@@ -164,7 +164,7 @@ async fn broker_loop(events: Receiver<Event>) {
                         match handle_request(request, &mut simulator) {
                             Some(response) => {
                                 //parse the response with the request
-                                match String::from(response) {
+                                match String::from_utf8(response) {
                                     Ok(response_string) => {
                                         println!("Responding with: {}", response_string);
                                         if let Some(peer) = peers.get_mut(&name) {
