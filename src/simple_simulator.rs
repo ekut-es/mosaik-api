@@ -125,3 +125,25 @@ pub fn run() {
         info!("{}: {:?}", i, inst);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    use super::Model;
+
+    #[test]
+    fn test_get_value() {
+        let model = Model {
+            val: 0.0,
+            delta: 1.0,
+        };
+
+        let val_val = Some(Value::from(model.val));
+        let val_delta = Some(Value::from(model.delta));
+
+        assert_eq!(val_val, model.get_value("val"));
+        assert_eq!(val_delta, model.get_value("delta"));
+        assert_eq!(None, model.get_value("different"));
+    }
+}
