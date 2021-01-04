@@ -1,5 +1,5 @@
 use log::{error, info};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 pub struct Model {
     val: f64,
     delta: f64,
@@ -13,15 +13,31 @@ impl Model {
         map
     }
 
-    pub fn get_value(&self, attr: &str) -> Option<Value> {
-        Some(match attr {
+    pub fn get_value(&self, attr: String) -> Option<Value> {
+        let attribute_1 = json!("val");
+        let attribute_1_1 = attribute_1.to_string();
+        let attribute_2 = json!("delta");
+        let attribute_2_1 = attribute_2.to_string();
+        if attr == attribute_1_1 {
+            let result = Value::from(self.val);
+            return Some(result);
+        } else if attr == attribute_2_1 {
+            let result = Value::from(self.delta);
+            return Some(result);
+        } else {
+            println!("no known attr requested:");
+            return None;
+        };
+
+        /*let result = match attr {
             "val" => Value::from(self.val),
             "delta" => Value::from(self.delta),
             x => {
                 error!("no known attr requested: {}", x);
                 return None;
             }
-        })
+        };
+        Some(result)*/
     }
 }
 
