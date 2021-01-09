@@ -17,17 +17,7 @@ pub fn meta() -> serde_json::Value {
             "attrs": ["delta", "val"]
             }
         }
-    }); /*
-        let meta = r#"{
-            "api_version": "2.2",
-            "models":{
-                "ExampleModel":{
-                    "public": true,
-                    "params": ["init_val"],
-                    "attrs": ["val", "delta"]
-                    }
-                }
-            }"#;*/
+    });
     return meta;
 }
 

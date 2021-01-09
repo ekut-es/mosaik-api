@@ -1,7 +1,7 @@
-use std::{collections::HashMap, todo};
+use std::{collections::HashMap};
 
 use log::*;
-use serde_json::{json, map::Map, to_string, to_vec, Value};
+use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
 
@@ -23,7 +23,7 @@ pub enum APIerror {
 
 pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
-    let mut payload = match serde_json::from_str(&data)? {
+    let payload = match serde_json::from_str(&data)? {
         Value::Array(vecs) if vecs.len() == 3 => vecs,
         e => {
             return Err(MosaikError::ParseError(format!("Invalid Payload: {:?}", e)));
@@ -39,7 +39,6 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
 
     let id: u64 = payload[1].as_u64().unwrap();
 
-    use std::iter::FromIterator;
     match payload[2].clone() {
         Value::Array(call) if call.len() == 3 => {
             match (call[0].as_str(), call[1].clone(), call[2].clone()) {

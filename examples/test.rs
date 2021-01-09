@@ -20,16 +20,13 @@ type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync
 
 pub fn main() -> AResult<()> {
     env_logger::init();
-    let addr = "127.0.0.1:3456";
-    // tcp ersetzen mit async tcp:
-    // https://book.async.rs/tutorial/all_together.html
+    let addr = "127.0.0.1:3456"; //The local addres mosaik connects to.
     debug!("main debug");
     task::block_on(accept_loop(addr))
-    //run();
 }
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
-//channels?
+//channels needed for the communication in the async tcp
 type Sender<T> = mpsc::UnboundedSender<T>;
 type Receiver<T> = mpsc::UnboundedReceiver<T>;
 
@@ -57,7 +54,6 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
 
     let mut stream = stream;
     let name = String::from("Mosaik");
-    //let addr = stream.peer_addr().unwrap();
 
     let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
     broker
@@ -69,8 +65,9 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
         .await
         .unwrap();
 
-    let mut size_data = [0u8; 4]; // using 4 byte buffer
-                                  //let mut full_package = [0u8; 10000];
+    let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number infront the request.
+
+    //Read the rest of the data and send it to the broker_loop
     while let Ok(()) = stream.read_exact(&mut size_data).await {
         let size = u32::from_be_bytes(size_data) as usize;
         info!("Received {} Bytes Message", size);
@@ -95,6 +92,7 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
     Ok(())
 }
 
+//The loop to actually write the message to mosaik as [u8].
 async fn connection_writer_loop(
     messages: &mut Receiver<Vec<u8>>,
     stream: Arc<TcpStream>,
@@ -133,36 +131,40 @@ enum Event {
     },
 }
 
+//The loop that does the actual work.
 async fn broker_loop(events: Receiver<Event>) {
-    let (disconnect_sender, mut disconnect_receiver) = // 1
+    let (disconnect_sender, mut disconnect_receiver) =
          mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
     let mut peers: HashMap<String /*std::net::SocketAddr*/, Sender<Vec<u8>>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
     let mut events = events.fuse();
     let mut simulator = init_sim();
 
+    //loop for the different events.
     loop {
         let event = select! {
             event = events.next().fuse() => match event {
-                None => break, // 2
+                None => break,
                 Some(event) => event,
             },
             disconnect = disconnect_receiver.next().fuse() => {
-                let (name, _pending_messages) = disconnect.unwrap(); // 3
+                let (name, _pending_messages) = disconnect.unwrap();
                 assert!(peers.remove(&name).is_some());
                 continue;
             },
         };
         debug!("Received event: {:?}", event);
         match event {
+            //The event that will happen the rest of the time, because the only connector is mosaik.
             Event::Request { full_data, name } => {
                 //parse the request
                 match parse_request(full_data) {
                     Ok(request) => {
+                        //Handle the request -> simulations calls etc.
                         match handle_request(request, &mut simulator) {
                             Some(response) => {
                                 if let Some(peer) = peers.get_mut(&name) {
+                                    //-> send the message to mosaik channel reciever
                                     if let Err(e) = peer.send(response).await {
-                                        //-> send the message to mosaik channel reciever
                                         error!("error sending response to peer: {}", e);
                                     }
                                 }
@@ -177,6 +179,7 @@ async fn broker_loop(events: Receiver<Event>) {
                     }
                 }
             }
+            //The event for a new connector.
             Event::NewPeer {
                 name,
                 stream,
@@ -192,10 +195,10 @@ async fn broker_loop(events: Receiver<Event>) {
                         spawn_and_log_error(async move {
                             let res =
                                 connection_writer_loop(&mut client_receiver, stream, shutdown)
-                                    .await; //spawn a connection writer with the message recieved over the channel?
+                                    .await; //spawn a connection writer with the message recieved over the channel
                             disconnect_sender
                                 .send((String::from("Mosaik"), client_receiver))
-                                .await // 4
+                                .await
                                 .unwrap();
                             res
                         });
@@ -205,9 +208,9 @@ async fn broker_loop(events: Receiver<Event>) {
         }
     }
     println!("dropping peers");
-    drop(peers); // 5
+    drop(peers);
     println!("closing channels");
-    drop(disconnect_sender); // 6
+    drop(disconnect_sender);
     while let Some((_name, _pending_messages)) = disconnect_receiver.next().await {}
 }
 

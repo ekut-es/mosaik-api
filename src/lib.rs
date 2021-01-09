@@ -42,11 +42,11 @@ pub trait MosaikAPI {
         model_params: Option<Map<String, Value>>,
     ) -> Vec<Map<String, Value>>;
 
+    ///The function mosaik calls, if the init() and create() calls are done. Return Null
     fn setup_done(&self);
 
     ///perform a simulatino step and return the new time
     fn step(
-        //AddAssign is a quickfix for the addition of two values -> needed for delta
         &mut self,
         time: usize,
         inputs: HashMap<Eid, Map<AttributeId, Value>>,
@@ -55,6 +55,7 @@ pub trait MosaikAPI {
     //collect data from the simulation and return a nested Vector containing the information
     fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
 
+    ///The function mosaik calls, if the simulation finished. Return Null
     fn stop();
 }
 

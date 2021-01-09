@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::{error};
 use serde_json::{Value};
 pub struct Model {
     val: f64,
@@ -6,6 +6,7 @@ pub struct Model {
 }
 impl Model {
 
+    ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
         
         let result = match attr {
@@ -40,7 +41,7 @@ impl RunModel for Model {
 
 pub struct Simulator {
     pub models: Vec<Model>,
-    data: Vec<Vec<f64>>, //brauch ich 2d Array?
+    data: Vec<Vec<f64>>
 }
 
 pub trait RunSimulator {
@@ -50,14 +51,16 @@ pub trait RunSimulator {
 }
 
 impl RunSimulator for Simulator {
+    /// Initiate the the vectors for the models and the data
     fn init_simulator() -> Simulator {
-        println!("initiation of simulator.");
+        println!("Initiation of simulator.");
         Simulator {
             models: vec![],
             data: vec![],
         }
     }
 
+    ///Add a model instance to the list.
     fn add_model(&mut self, init_value: Option<f64>) {
         match init_value {
             Some(init_value) => {
@@ -69,6 +72,7 @@ impl RunSimulator for Simulator {
         }
     }
 
+    ///Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
     fn step(&mut self, deltas: Option<Vec<(u64, f64)>>) {
         match deltas {
             Some(deltas) => {
@@ -85,6 +89,8 @@ impl RunSimulator for Simulator {
         }
     }
 }
+
+//For a local run, without mosaik in the background
 /*
 pub fn run() {
     let mut sim: Simulator = Simulator::init_simulator(); //need an instance of Simulator, just like in init_model()

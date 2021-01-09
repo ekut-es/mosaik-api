@@ -6,13 +6,8 @@ from sys import platform
 
 sim_config = {
     'rust_sim': {
-        # 'cmd': 'cargo run %(addr)s', #cd ../../mosaik-rust-api &&
-        # 'env': '../../mosaik-rust-api',
         'connect': '127.0.0.1:3456',
     },
-    # 'ExampleSim': {
-    #     'python': 'simulator_mosaik:ExampleSim',
-    # },
     'Collector': {
         'cmd': 'python collector.py %(addr)s',
     },
@@ -22,13 +17,12 @@ END = 10 * 60  # 10 Min.
 
 print("call Sim_Manager")
 world = mosaik.World(sim_config)
+
 # create_scenario(world)
-#examplesim = world.start('ExampleSim', eid_prefix='Model_')
 rustAPI = world.start('rust_sim', eid_prefix='Model_')
 collector = world.start('Collector', step_size=60)
 
 # Instantiate models
-#model = examplesim.ExampleModel(init_val=2)
 model = rustAPI.ExampleModel(init_val=2)
 monitor = collector.Monitor()
 # Create one instance of of our example model and one database instance
