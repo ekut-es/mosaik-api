@@ -46,11 +46,7 @@ pub trait MosaikAPI {
     fn setup_done(&self);
 
     ///perform a simulatino step and return the new time
-    fn step(
-        &mut self,
-        time: usize,
-        inputs: HashMap<Eid, Map<AttributeId, Value>>,
-    ) -> usize;
+    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize;
 
     //collect data from the simulation and return a nested Vector containing the information
     fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;

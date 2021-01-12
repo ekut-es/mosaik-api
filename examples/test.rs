@@ -106,7 +106,7 @@ async fn connection_writer_loop(
             msg = messages.next().fuse() => match msg {
                 Some(msg) => {
                     stream.write_all(&msg).await?//write the message
-                }, 
+                },
                 None => break,
             },
             void = shutdown.next().fuse() => match void {
@@ -134,10 +134,38 @@ enum Event {
 //The loop that does the actual work.
 async fn broker_loop(events: Receiver<Event>) {
     let (disconnect_sender, mut disconnect_receiver) =
-         mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
-    let mut peers: HashMap<String /*std::net::SocketAddr*/, Sender<Vec<u8>>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
+        mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
+    let mut peer: (std::net::SocketAddr, Sender<Vec<u8>>);
+    //: HashMap<String /*std::net::SocketAddr*/, Sender<Vec<u8>>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
     let mut events = events.fuse();
     let mut simulator = init_sim();
+
+    println!("New peer -> creating channels");
+    if let Some(Event::NewPeer {
+        name,
+        stream,
+        shutdown,
+    }) = events.next().await
+    {
+        let (client_sender, mut client_receiver) = mpsc::unbounded();
+        peer = (
+            stream
+                .peer_addr()
+                .expect("unaible to read remote peer address"),
+            client_sender,
+        ); //expect ist ok, da es zum verbinden benötigt wird, und falls nicht erfolgreich das Programm beendet werden soll.
+        let mut disconnect_sender = disconnect_sender.clone();
+        spawn_and_log_error(async move {
+            let res = connection_writer_loop(&mut client_receiver, stream, shutdown).await; //spawn a connection writer with the message recieved over the channel
+            disconnect_sender
+                .send((String::from("Mosaik"), client_receiver))
+                .await
+                .unwrap();
+            res
+        });
+    } else {
+        panic!("Didn't recieve new peer as first event.");
+    }
 
     //loop for the different events.
     loop {
@@ -148,7 +176,7 @@ async fn broker_loop(events: Receiver<Event>) {
             },
             disconnect = disconnect_receiver.next().fuse() => {
                 let (name, _pending_messages) = disconnect.unwrap();
-                assert!(peers.remove(&name).is_some());
+                //assert!(peer.remove(&name).is_some());
                 continue;
             },
         };
@@ -160,13 +188,13 @@ async fn broker_loop(events: Receiver<Event>) {
                 match parse_request(full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
+                        println!("The request: {:?}", request);
                         match handle_request(request, &mut simulator) {
                             Some(response) => {
-                                if let Some(peer) = peers.get_mut(&name) {
-                                    //-> send the message to mosaik channel reciever
-                                    if let Err(e) = peer.send(response).await {
-                                        error!("error sending response to peer: {}", e);
-                                    }
+                                //get the second argument in the tuple of peer
+                                //-> send the message to mosaik channel reciever
+                                if let Err(e) = peer.1.send(response).await {
+                                    error!("error sending response to peer: {}", e);
                                 }
                             }
                             None => {
@@ -185,30 +213,12 @@ async fn broker_loop(events: Receiver<Event>) {
                 stream,
                 shutdown,
             } => {
-                println!("New peer -> creating channels");
-                match peers.entry(name.clone()) {
-                    Entry::Occupied(..) => (),
-                    Entry::Vacant(entry) => {
-                        let (client_sender, mut client_receiver) = mpsc::unbounded();
-                        entry.insert(client_sender);
-                        let mut disconnect_sender = disconnect_sender.clone();
-                        spawn_and_log_error(async move {
-                            let res =
-                                connection_writer_loop(&mut client_receiver, stream, shutdown)
-                                    .await; //spawn a connection writer with the message recieved over the channel
-                            disconnect_sender
-                                .send((String::from("Mosaik"), client_receiver))
-                                .await
-                                .unwrap();
-                            res
-                        });
-                    }
-                }
+                error!("There is a peer already. No new peer needed.");
             }
         }
     }
-    println!("dropping peers");
-    drop(peers);
+    println!("dropping peer");
+    drop(peer);
     println!("closing channels");
     drop(disconnect_sender);
     while let Some((_name, _pending_messages)) = disconnect_receiver.next().await {}

@@ -1,17 +1,15 @@
-use log::{error};
-use serde_json::{Value};
+use log::error;
+use serde_json::Value;
 pub struct Model {
-    val: f64,
-    delta: f64,
+    p_mw_pv: f64,
+    p_mw_load: f64,
 }
 impl Model {
-
     ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
-        
         let result = match attr {
-            "val" => Value::from(self.val),
-            "delta" => Value::from(self.delta),
+            "p_mw_pv" => Value::from(self.p_mw_pv),
+            "p_mw_load" => Value::from(self.p_mw_load),
             x => {
                 error!("no known attr requested: {}", x);
                 return None;
@@ -29,19 +27,19 @@ pub trait RunModel {
 impl RunModel for Model {
     fn initmodel(init_value: f64) -> Model {
         Model {
-            val: init_value,
-            delta: 1.0,
+            p_mw_pv: init_value,
+            p_mw_load: 1.0, //ersetze mit Funktion die Werte von smart-meter alle 15 minuten aus gibt
         }
     }
 
     fn step(&mut self) {
-        self.val += self.delta;
+        self.p_mw_pv += self.p_mw_load;
     }
 }
 
 pub struct Simulator {
     pub models: Vec<Model>,
-    data: Vec<Vec<f64>>
+    data: Vec<Vec<f64>>,
 }
 
 pub trait RunSimulator {
@@ -77,15 +75,17 @@ impl RunSimulator for Simulator {
         match deltas {
             Some(deltas) => {
                 for (idx, deltax) in deltas.iter() {
-                    self.models[*idx as usize].delta = *deltax;
+                    self.models[*idx as usize].p_mw_load = *deltax;
                 }
             }
-            None => {error!("Got no deltas for the step.");}
+            None => {
+                error!("Got no deltas for the step.");
+            }
         }
 
         for (i, model) in self.models.iter_mut().enumerate() {
             model.step();
-            self.data[i].push(model.val);
+            self.data[i].push(model.p_mw_pv);
         }
     }
 }
@@ -110,7 +110,7 @@ pub fn run() {
         info!("{}: {:?}", i, inst);
     }
 }*/
-
+/*
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
@@ -119,16 +119,14 @@ mod tests {
 
     #[test]
     fn test_get_value() {
-        let model = Model {
-            val: 0.0,
-            delta: 1.0,
-        };
+        let model = Model { val: 0.0, p_mw_load: 1.0 };
 
         let val_val = Some(Value::from(model.val));
-        let val_delta = Some(Value::from(model.delta));
+        let val_p_mw_load = Some(Value::from(model.p_mw_load));
 
         assert_eq!(val_val, model.get_value("val"));
-        assert_eq!(val_delta, model.get_value("delta"));
+        assert_eq!(val_p_mw_load, model.get_value("p_mw_load"));
         assert_eq!(None, model.get_value("different"));
     }
 }
+*/

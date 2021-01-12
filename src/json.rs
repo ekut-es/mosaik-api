@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use log::*;
 use serde_json::{json, map::Map, to_vec, Value};
@@ -63,7 +63,13 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
 
 pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Option<Vec<u8>> {
     let content: Value = match request.method.as_ref() {
-        "init" => simulator.init(request.args[0].as_str().unwrap_or("No Simulation ID from the request.").to_string(), Some(request.kwargs)),
+        "init" => simulator.init(
+            request.args[0]
+                .as_str()
+                .unwrap_or("No Simulation ID from the request.")
+                .to_string(),
+            Some(request.kwargs),
+        ),
         "create" => Value::from(simulator.create(
             request.args[0].as_u64().unwrap_or_default() as usize,
             request.args[1].clone(),
@@ -86,7 +92,7 @@ pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Opti
     };
 
     let response: Value = Value::Array(vec![json!(1), json!(request.id), content]);
-    
+
     match to_vec(&response) {
         // Make a u8 vector with the data
         Ok(mut vect_unwrapped) => {
@@ -121,7 +127,13 @@ fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
         if let Value::Object(eid_map) = output {
             for (eid, attr_id_array) in eid_map.into_iter() {
                 if let Value::Array(attr_id) = attr_id_array {
-                    hashmap.insert(eid, attr_id.iter().filter_map(|x| x.as_str().map(|x| x.to_string())).collect());
+                    hashmap.insert(
+                        eid,
+                        attr_id
+                            .iter()
+                            .filter_map(|x| x.as_str().map(|x| x.to_string()))
+                            .collect(),
+                    );
                 }
             }
         }
@@ -210,7 +222,7 @@ mod tests {
                 "ExampleModel":{
                     "public": true,
                     "params": ["init_val"],
-                    "attrs": ["val", "delta"]
+                    "attrs": ["val", "kw"]
                     }
                 }
             }]"#;

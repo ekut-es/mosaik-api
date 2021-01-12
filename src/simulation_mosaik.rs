@@ -1,4 +1,4 @@
-use log::{error};
+use log::error;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
@@ -13,8 +13,8 @@ pub fn meta() -> serde_json::Value {
     "models":{
         "ExampleModel":{
             "public": true,
-            "params": ["init_val"],
-            "attrs": ["delta", "val"]
+            "params": ["init_p_mw_pv"],
+            "attrs": ["p_mw_pv", "p_mw_load"]
             }
         }
     });
@@ -83,7 +83,7 @@ impl MosaikAPI for ExampleSim {
 
     fn step(&mut self, mut time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
         let mut deltas: Vec<(u64, f64)> = Vec::new();
-        let mut new_delta: f64;
+        let mut new_p_mw_load: f64;
         for (eid, attrs) in inputs.iter() {
             for (attr, attr_values) in attrs.iter() {
                 let model_idx = match self.entities.get(eid) {
@@ -94,11 +94,11 @@ impl MosaikAPI for ExampleSim {
                     ),
                 };
                 if let Value::Object(values) = attr_values {
-                    new_delta = values
+                    new_p_mw_load = values
                         .values()
                         .map(|x| x.as_f64().unwrap_or_default())
                         .sum(); //unwrap -> default = 0 falls kein f64
-                    deltas.push((model_idx, new_delta));
+                    deltas.push((model_idx, new_p_mw_load));
                 };
             }
         }
@@ -120,7 +120,6 @@ impl MosaikAPI for ExampleSim {
             match models.get(model_idx as usize) {
                 Some(model) => {
                     for attr in attrs.into_iter() {
-                        
                         //Wir müssen überprüfen, ob das Attribut sich überhaupt in unserer META data befindet.
                         assert!(
                             meta["models"]["ExampleModel"]["attrs"]
@@ -129,7 +128,7 @@ impl MosaikAPI for ExampleSim {
                             "Unknown output attribute: {}",
                             json!(attr)
                         );
-                        //Get model.val or model.delta:
+                        //Get model.val or model.p_mw_load:
                         if let Some(value) = model.get_value(&attr) {
                             attribute_values.insert(attr, value);
                         }
@@ -149,7 +148,7 @@ impl MosaikAPI for ExampleSim {
         println!("Setup is done.");
     }
 }
-
+/*
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -162,7 +161,7 @@ mod tests {
             "ExampleModel":{
                 "public": true,
                 "params": ["init_val"],
-                "attrs": ["val", "delta"]
+                "attrs": ["val", "p_mw_load"]
                 }
             }
         });
@@ -170,3 +169,4 @@ mod tests {
         assert_eq!(meta["models"]["ExampleModel"]["attrs"][0], json!(attr));
     }
 }
+*/

@@ -13,7 +13,7 @@ META = {
         'ExampleModel': {
             'public': True,
             'params': ['init_val'],
-            'attrs': ['delta', 'val'],
+            'attrs': ['delta', 'p_mw_pv'],
         },
     },
 }
@@ -67,7 +67,7 @@ class ExampleSim(mosaik_api.Simulator):
                 if attr not in self.meta['models']['ExampleModel']['attrs']:
                     raise ValueError('Unknown output attribute: %s' % attr)
 
-                # Get model.val or model.delta:
+                # Get model.p_mw_pv or model.delta:
                 data[eid][attr] = getattr(models[model_idx], attr)
 
         return data
