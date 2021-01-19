@@ -36,7 +36,7 @@ pub trait API_Helpers {
     fn set_eid_prefix(&mut self, eid_prefix: &str);
 }
 ///the class for the "empty" API calls
-pub trait MosaikAPI: API_Helpers {
+pub trait MosaikAPI: API_Helpers + Send + 'static {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
     fn init(&mut self, sid: Sid, sim_params: Option<Map<String, Value>>) -> META {
         match sim_params {

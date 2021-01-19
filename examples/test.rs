@@ -13,8 +13,11 @@ use std::{
     sync::Arc,
 };
 
-use mosaik_rust_api::json::{handle_request, parse_request};
-use mosaik_rust_api::simulation_mosaik::init_sim;
+use mosaik_rust_api::{
+    json::{handle_request, parse_request},
+    simulation_mosaik::ExampleSim,
+};
+use mosaik_rust_api::{simulation_mosaik::init_sim, MosaikAPI};
 
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -22,7 +25,8 @@ pub fn main() -> AResult<()> {
     env_logger::init();
     let addr = "127.0.0.1:3456"; //The local addres mosaik connects to.
     debug!("main debug");
-    task::block_on(accept_loop(addr))
+    let simulator = init_sim();
+    task::block_on(accept_loop(addr, simulator))
 }
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -33,7 +37,8 @@ type Receiver<T> = mpsc::UnboundedReceiver<T>;
 #[derive(Debug)]
 enum Void {}
 
-async fn accept_loop(addr: impl ToSocketAddrs) -> Result<()> {
+//todo: Consider splitting accept_loop into incoming stream and connecting to stream.
+async fn accept_loop<T: MosaikAPI>(addr: impl ToSocketAddrs, simulator: T) -> Result<()> {
     debug!("accept loop debug");
     let listener = TcpListener::bind(addr).await?;
     let (broker_sender, broker_receiver) = mpsc::unbounded();
@@ -42,6 +47,7 @@ async fn accept_loop(addr: impl ToSocketAddrs) -> Result<()> {
     let broker_handle = task::spawn(broker_loop(
         broker_receiver,
         shutdown_connection_loop_sender,
+        simulator,
     ));
     let mut incoming = listener.incoming();
     let connection_handle = if let Some(stream) = incoming.next().await {
@@ -162,13 +168,16 @@ enum Event {
 }
 
 //The loop that does the actual work.
-async fn broker_loop(events: Receiver<Event>, mut connection_shutdown_sender: Sender<bool>) {
+async fn broker_loop<T: MosaikAPI>(
+    events: Receiver<Event>,
+    mut connection_shutdown_sender: Sender<bool>,
+    mut simulator: T,
+) {
     let (disconnect_sender, mut disconnect_receiver) =
         mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
     let mut peer: (std::net::SocketAddr, Sender<Vec<u8>>);
     //: HashMap<String /*std::net::SocketAddr*/, Sender<Vec<u8>>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
     let mut events = events.fuse();
-    let mut simulator = init_sim();
 
     println!("New peer -> creating channels");
     if let Some(Event::NewPeer {
