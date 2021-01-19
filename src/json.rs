@@ -221,7 +221,7 @@ mod tests {
             "models":{
                 "ExampleModel":{
                     "public": true,
-                    "params": ["init_val"],
+                    "params": ["init_p_mw_pv"],
                     "attrs": ["val", "kw"]
                     }
                 }

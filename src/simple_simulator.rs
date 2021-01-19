@@ -20,14 +20,14 @@ impl Model {
 }
 
 pub trait RunModel {
-    fn initmodel(init_value: f64) -> Model;
+    fn initmodel(init_p_mw_pvue: f64) -> Model;
     fn step(&mut self);
 }
 
 impl RunModel for Model {
-    fn initmodel(init_value: f64) -> Model {
+    fn initmodel(init_p_mw_pvue: f64) -> Model {
         Model {
-            p_mw_pv: init_value,
+            p_mw_pv: init_p_mw_pvue,
             p_mw_load: 1.0, //ersetze mit Funktion die Werte von smart-meter alle 15 minuten aus gibt
         }
     }
@@ -44,7 +44,7 @@ pub struct Simulator {
 
 pub trait RunSimulator {
     fn init_simulator() -> Simulator;
-    fn add_model(&mut self, init_value: Option<f64>);
+    fn add_model(&mut self, init_p_mw_pvue: Option<f64>);
     fn step(&mut self, deltas: Option<Vec<(u64, f64)>>);
 }
 
@@ -59,14 +59,15 @@ impl RunSimulator for Simulator {
     }
 
     ///Add a model instance to the list.
-    fn add_model(&mut self, init_value: Option<f64>) {
-        match init_value {
-            Some(init_value) => {
-                let /*mut*/ model:Model = Model::initmodel(init_value);
+    fn add_model(&mut self, init_p_mw_pvue: Option<f64>) {
+        match init_p_mw_pvue {
+            Some(init_p_mw_pvue) => {
+                let /*mut*/ model:Model = Model::initmodel(init_p_mw_pvue);
                 self.models.push(model);
                 self.data.push(vec![]); //Add list for simulation data
             }
-            None => {}
+            None => {
+            }
         }
     }
 
@@ -75,7 +76,7 @@ impl RunSimulator for Simulator {
         match deltas {
             Some(deltas) => {
                 for (idx, deltax) in deltas.iter() {
-                    self.models[*idx as usize].p_mw_load = *deltax;
+                    self.models[*idx as usize].p_mw_load = *deltax; //wird einfach mit 0 überschrieben -> anpassen zu ...
                 }
             }
             None => {

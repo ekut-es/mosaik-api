@@ -64,11 +64,11 @@ impl MosaikAPI for ExampleSim {
         let next_eid = self.entities.len();
         match model_params {
             Some(model_params) => {
-                if let Some(init_val) = model_params.get("init_val") {
+                if let Some(init_p_mw_pv) = model_params.get("init_p_mw_pv") {
                     for i in next_eid..(next_eid + num) {
                         out_entities = Map::new();
                         let eid = format!("{}{}", self.eid_prefix, i);
-                        Simulator::add_model(&mut self.simulator, init_val.as_f64());
+                        Simulator::add_model(&mut self.simulator, init_p_mw_pv.as_f64());
                         self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), json!(eid));
                         out_entities.insert(String::from("type"), model.clone());
@@ -78,10 +78,12 @@ impl MosaikAPI for ExampleSim {
             }
             None => {}
         }
+        println!("the created model: {:?}", out_vector);
         return out_vector;
     }
 
     fn step(&mut self, mut time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
+        println!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(u64, f64)> = Vec::new();
         let mut new_p_mw_load: f64;
         for (eid, attrs) in inputs.iter() {
@@ -99,6 +101,7 @@ impl MosaikAPI for ExampleSim {
                         .map(|x| x.as_f64().unwrap_or_default())
                         .sum(); //unwrap -> default = 0 falls kein f64
                     deltas.push((model_idx, new_p_mw_load));
+                    println!("the deltas for sim step: {:?}", deltas);
                 };
             }
         }
@@ -160,7 +163,7 @@ mod tests {
         "models":{
             "ExampleModel":{
                 "public": true,
-                "params": ["init_val"],
+                "params": ["init_p_mw_pv"],
                 "attrs": ["val", "p_mw_load"]
                 }
             }
