@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use serde_json::{Map, Value};
+pub mod householdsim;
 pub mod json;
 mod simple_simulator;
 pub mod simulation_mosaik;
@@ -29,10 +30,27 @@ pub type Eid = String;
 pub type AttributeId = String;
 
 pub enum Object {}
+
+pub trait API_Helpers {
+    fn meta() -> serde_json::Value;
+    fn set_eid_prefix(&mut self, eid_prefix: &str);
+}
 ///the class for the "empty" API calls
-pub trait MosaikAPI {
+pub trait MosaikAPI: API_Helpers {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
-    fn init(&mut self, sid: Sid, sim_params: Option<Map<String, Value>>) -> META;
+    fn init(&mut self, sid: Sid, sim_params: Option<Map<String, Value>>) -> META {
+        match sim_params {
+            Some(sim_params) => {
+                if let Some(eid_prefix) = sim_params.get("eid_prefix") {
+                    if let Some(prefix) = eid_prefix.as_str() {
+                        self.set_eid_prefix(prefix);
+                    }
+                }
+            }
+            None => {}
+        }
+        Self::meta()
+    }
 
     ///Create *num* instances of *model* using the provided *model_params*.
     fn create(
@@ -52,7 +70,7 @@ pub trait MosaikAPI {
     fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
 
     ///The function mosaik calls, if the simulation finished. Return Null
-    fn stop();
+    fn stop(&self);
 }
 
 #[async_trait]

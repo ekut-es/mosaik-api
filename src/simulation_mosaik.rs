@@ -3,26 +3,12 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
 use crate::{
-    simple_simulator::{self, RunSimulator, Simulator},
-    AttributeId, Eid, MosaikAPI,
+    householdsim::{self, Householdsim},
+    API_Helpers, AttributeId, Eid, MosaikAPI,
 };
 
-pub fn meta() -> serde_json::Value {
-    let meta = json!({
-    "api_version": "2.2",
-    "models":{
-        "ExampleModel":{
-            "public": true,
-            "params": ["init_p_mw_pv"],
-            "attrs": ["p_mw_pv", "p_mw_load"]
-            }
-        }
-    });
-    return meta;
-}
-
 pub struct ExampleSim {
-    simulator: simple_simulator::Simulator,
+    simulator: householdsim::Householdsim,
     eid_prefix: String,
     entities: Map<String, Value>,
     meta: serde_json::Value,
@@ -30,29 +16,35 @@ pub struct ExampleSim {
 
 pub fn init_sim() -> ExampleSim {
     ExampleSim {
-        simulator: Simulator::init_simulator(),
+        simulator: Householdsim::init_simulator(),
         eid_prefix: String::from("Model_"),
         entities: Map::new(),
-        meta: meta(), //sollte eigentlich die richtige meta sein und keine funktion
+        meta: ExampleSim::meta(), //sollte eigentlich die richtige meta sein und keine funktion
+    }
+}
+
+impl API_Helpers for ExampleSim {
+    fn meta() -> Value {
+        let meta = json!({
+        "api_version": "2.2",
+        "models":{
+            "ExampleModel":{
+                "public": true,
+                "params": ["init_reading"],
+                "attrs": ["p_mw_pv", "p_mw_load", "reading"]
+                }
+            }
+        });
+        return meta;
+    }
+
+    fn set_eid_prefix(&mut self, eid_prefix: &str) {
+        self.eid_prefix = eid_prefix.to_string();
     }
 }
 
 ///implementation of the trait in mosaik_api.rs
 impl MosaikAPI for ExampleSim {
-    fn init(&mut self, sid: String, sim_params: Option<Map<String, Value>>) -> serde_json::Value {
-        match sim_params {
-            Some(sim_params) => {
-                if let Some(eid_prefix) = sim_params.get("eid_prefix") {
-                    if let Some(prefix) = eid_prefix.as_str() {
-                        self.eid_prefix = prefix.to_string();
-                    }
-                }
-            }
-            None => {}
-        }
-        meta()
-    }
-
     fn create(
         &mut self,
         num: usize,
@@ -64,11 +56,11 @@ impl MosaikAPI for ExampleSim {
         let next_eid = self.entities.len();
         match model_params {
             Some(model_params) => {
-                if let Some(init_p_mw_pv) = model_params.get("init_p_mw_pv") {
+                if let Some(init_p_mw_pv) = model_params.get("init_reading") {
                     for i in next_eid..(next_eid + num) {
                         out_entities = Map::new();
                         let eid = format!("{}{}", self.eid_prefix, i);
-                        Simulator::add_model(&mut self.simulator, init_p_mw_pv.as_f64());
+                        Householdsim::add_model(&mut self.simulator, init_p_mw_pv.as_f64());
                         self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), json!(eid));
                         out_entities.insert(String::from("type"), model.clone());
@@ -84,8 +76,8 @@ impl MosaikAPI for ExampleSim {
 
     fn step(&mut self, mut time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
         println!("the inputs in step: {:?}", inputs);
-        let mut deltas: Vec<(u64, f64)> = Vec::new();
-        let mut new_p_mw_load: f64;
+        let mut deltas: Vec<(&str, u64, f64)> = Vec::new();
+        let mut delta: f64;
         for (eid, attrs) in inputs.iter() {
             for (attr, attr_values) in attrs.iter() {
                 let model_idx = match self.entities.get(eid) {
@@ -96,22 +88,22 @@ impl MosaikAPI for ExampleSim {
                     ),
                 };
                 if let Value::Object(values) = attr_values {
-                    new_p_mw_load = values
+                    delta = values
                         .values()
                         .map(|x| x.as_f64().unwrap_or_default())
                         .sum(); //unwrap -> default = 0 falls kein f64
-                    deltas.push((model_idx, new_p_mw_load));
+                    deltas.push((attr, model_idx, delta));
                     println!("the deltas for sim step: {:?}", deltas);
                 };
             }
         }
-        Simulator::step(&mut self.simulator, Some(deltas));
+        Householdsim::step(&mut self.simulator, Some(deltas));
         time = time + 60;
         return time;
     }
 
     fn get_data(&mut self, output: HashMap<Eid, Vec<AttributeId>>) -> Map<String, Value> {
-        let meta = meta();
+        let meta = Self::meta();
         let models = &self.simulator.models;
         let mut data: Map<String, Value> = Map::new();
         for (eid, attrs) in output.into_iter() {
@@ -143,7 +135,7 @@ impl MosaikAPI for ExampleSim {
         }
         return data;
     }
-    fn stop() {
+    fn stop(&self) {
         println!("Stop the simulation.");
     }
 
