@@ -37,25 +37,41 @@ async fn accept_loop(addr: impl ToSocketAddrs) -> Result<()> {
     debug!("accept loop debug");
     let listener = TcpListener::bind(addr).await?;
     let (broker_sender, broker_receiver) = mpsc::unbounded();
-    let broker_handle = task::spawn(broker_loop(broker_receiver));
+    let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
+        mpsc::unbounded::<bool>();
+    let broker_handle = task::spawn(broker_loop(
+        broker_receiver,
+        shutdown_connection_loop_sender,
+    ));
     let mut incoming = listener.incoming();
-    while let Some(stream) = incoming.next().await {
+    let connection_handle = if let Some(stream) = incoming.next().await {
         let stream = stream?;
         info!("Accepting from: {}", stream.peer_addr()?);
-        spawn_and_log_error(connection_loop(broker_sender.clone(), stream));
-    }
-    drop(broker_sender);
+        spawn_and_log_error(connection_loop(
+            broker_sender,
+            shutdown_connection_loop_receiver,
+            stream,
+        ))
+    } else {
+        panic!("No stream available.")
+    };
+    connection_handle.await;
     broker_handle.await;
+
     Ok(())
 }
 
-async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result<()> {
+async fn connection_loop(
+    mut broker: Sender<Event>,
+    mut connection_shutdown_reciever: Receiver<bool>,
+    stream: TcpStream,
+) -> Result<()> {
     info!("Started connection loop");
 
     let mut stream = stream;
     let name = String::from("Mosaik");
 
-    let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
+    let (shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
     broker
         .send(Event::NewPeer {
             name: name.clone(),
@@ -68,27 +84,41 @@ async fn connection_loop(mut broker: Sender<Event>, stream: TcpStream) -> Result
     let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number infront the request.
 
     //Read the rest of the data and send it to the broker_loop
-    while let Ok(()) = stream.read_exact(&mut size_data).await {
-        let size = u32::from_be_bytes(size_data) as usize;
-        info!("Received {} Bytes Message", size);
-        let mut full_package = vec![0; size];
-        match stream.read_exact(&mut full_package).await {
-            Ok(()) => {
-                if let Err(e) = broker
-                    .send(Event::Request {
-                        full_data: String::from_utf8(full_package[0..(size as usize)].to_vec())
-                            .expect("string from utf 8 connction loops"),
-                        name: name.clone(),
-                    })
-                    .await
-                {
-                    error!("Error sending package to broker: {:?}", e);
-                }
+    loop {
+        select! {
+            msg = stream.read_exact(&mut size_data).fuse() => match msg {
+                Ok(()) => {
+                    let size = u32::from_be_bytes(size_data) as usize;
+                    info!("Received {} Bytes Message", size);
+                    let mut full_package = vec![0; size];
+                    match stream.read_exact(&mut full_package).await {
+                        Ok(()) => {
+                            if let Err(e) = broker
+                                .send(Event::Request {
+                                    full_data: String::from_utf8(full_package[0..(size as usize)].to_vec())
+                                        .expect("string from utf 8 connction loops"),
+                                    name: name.clone(),
+                                })
+                                .await
+                            {
+                                error!("Error sending package to broker: {:?}", e);
+                            }
+                        }
+                        Err(e) => error!("Error reading Full Package: {:?}", e),
+                    }
+
+                },
+                Err(_) => break,
+            },
+            void = connection_shutdown_reciever.next().fuse() => match void {
+                Some(_) => {
+                    println!("recieve connection_shutdown command");
+                    break;
+                },
+                None => break,
             }
-            Err(e) => error!("Error reading Full Package: {:?}", e),
         }
     }
-
     Ok(())
 }
 
@@ -132,7 +162,7 @@ enum Event {
 }
 
 //The loop that does the actual work.
-async fn broker_loop(events: Receiver<Event>) {
+async fn broker_loop(events: Receiver<Event>, mut connection_shutdown_sender: Sender<bool>) {
     let (disconnect_sender, mut disconnect_receiver) =
         mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
     let mut peer: (std::net::SocketAddr, Sender<Vec<u8>>);
@@ -168,7 +198,7 @@ async fn broker_loop(events: Receiver<Event>) {
     }
 
     //loop for the different events.
-    loop {
+    'event_loop: loop {
         let event = select! {
             event = events.next().fuse() => match event {
                 None => break,
@@ -189,13 +219,21 @@ async fn broker_loop(events: Receiver<Event>) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
                         println!("The request: {:?}", request);
+                        use mosaik_rust_api::json::Response::*;
                         match handle_request(request, &mut simulator) {
-                            Some(response) => {
+                            Successfull(response) => {
                                 //get the second argument in the tuple of peer
                                 //-> send the message to mosaik channel reciever
                                 if let Err(e) = peer.1.send(response).await {
                                     error!("error sending response to peer: {}", e);
                                 }
+                            }
+                            Stop(response) => {
+                                if let Err(e) = peer.1.send(response).await {
+                                    error!("error sending response to peer: {}", e);
+                                }
+                                connection_shutdown_sender.send(true);
+                                break 'event_loop;
                             }
                             None => {
                                 info!("Nothing to respond");
