@@ -15,6 +15,12 @@ pub enum MosaikError {
     Serde(#[from] serde_json::Error),
 }
 
+pub enum Response {
+    Successfull(Vec<u8>),
+    Stop(Vec<u8>),
+    None,
+}
+
 #[derive(Error, Debug)]
 pub enum APIerror {
     #[error("Failed getting the data")]
@@ -61,7 +67,7 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     }
 }
 
-pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Option<Vec<u8>> {
+pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Response {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(
             request.args[0]
@@ -84,14 +90,31 @@ pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Opti
             simulator.setup_done();
             json!(null)
         }
-        "stop" => json!(null),
+        "stop" => {
+            simulator.stop();
+            return match to_vec_helper(json!(null), request.id) {
+                Some(vec) => Response::Stop(vec),
+                None => Response::None,
+            };
+        }
         e => {
             error!("A different method {:?} got requested", e);
-            return None;
+            return Response::None;
         }
     };
 
-    let response: Value = Value::Array(vec![json!(1), json!(request.id), content]);
+    match to_vec_helper(content, request.id) {
+        Some(vec) => Response::Successfull(vec),
+        None => Response::None,
+    }
+}
+
+fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
+    //struct Response:
+    //msg_type: MsgType,
+    //id: usize,
+    //payload: String,
+    let response: Value = Value::Array(vec![json!(1), json!(id), content]);
 
     match to_vec(&response) {
         // Make a u8 vector with the data
@@ -152,12 +175,6 @@ pub struct Request {
     method: String,
     args: Vec<Value>,
     kwargs: Map<String, Value>,
-}
-
-struct Response {
-    msg_type: MsgType,
-    id: usize,
-    payload: String,
 }
 
 #[cfg(test)]
