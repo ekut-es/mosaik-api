@@ -1,5 +1,5 @@
 use log::error;
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::AttributeId;
 pub struct Model {
@@ -68,28 +68,27 @@ impl Householdsim {
     }
 
     ///Add a model instance to the list.
-    pub fn add_model(&mut self, init_reading: Option<f64>) {
-        match init_reading {
-            Some(init_reading) => {
-                let /*mut*/ model:Model = Model::initmodel(init_reading);
-                self.models.push(model);
-                self.data.push(vec![]); //Add list for simulation data
+    pub fn add_model(&mut self, init_values: Map<String, Value>) {
+        if let Some(init_reading) = init_values.get("init_reading") {
+            match init_reading.as_f64() {
+                Some(init_reading) => {
+                    let /*mut*/ model:Model = Model::initmodel(init_reading);
+                    self.models.push(model);
+                    self.data.push(vec![]); //Add list for simulation data
+                }
+                None => {}
             }
-            None => {}
         }
     }
 
     ///Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
-    pub fn step(&mut self, deltas: Option<Vec<(&str, u64, f64)>>) {
-        match deltas {
-            Some(deltas) => {
-                for (attr_id, idx, deltax) in deltas.iter() {
-                    self.models[*idx as usize].update_model(attr_id, *deltax); //wird einfach mit 0 überschrieben -> anpassen zu ...
-                }
-            }
-            None => {
-                error!("Got no deltas for the step.");
-            }
+    pub fn step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
+        for (attr_id, idx, deltax) in deltas.iter() {
+            let delta = deltax
+                .values()
+                .map(|x| x.as_f64().unwrap_or_default())
+                .sum(); //unwrap -> default = 0 falls kein f64
+            self.models[*idx as usize].update_model(attr_id, delta); //wird einfach mit 0 überschrieben -> anpassen zu ...
         }
 
         for (i, model) in self.models.iter_mut().enumerate() {
