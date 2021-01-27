@@ -1,6 +1,6 @@
-use log::error;
+//use log::error;
 use serde_json::{json, Map, Value};
-use std::collections::HashMap;
+//use std::collections::HashMap;
 
 use crate::{
     householdsim::{self, Householdsim},
@@ -11,7 +11,6 @@ pub struct ExampleSim {
     simulator: householdsim::Householdsim,
     eid_prefix: String,
     entities: Map<String, Value>,
-    meta: serde_json::Value,
 }
 
 pub fn init_sim() -> ExampleSim {
@@ -19,7 +18,6 @@ pub fn init_sim() -> ExampleSim {
         simulator: Householdsim::init_simulator(),
         eid_prefix: String::from("Model_"),
         entities: Map::new(),
-        meta: ExampleSim::meta(), //sollte eigentlich die richtige meta sein und keine funktion
     }
 }
 
@@ -41,10 +39,31 @@ impl API_Helpers for ExampleSim {
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
         self.eid_prefix = eid_prefix.to_string();
     }
+
+    fn get_eid_prefix(&self) -> &str {
+        &self.eid_prefix
+    }
+
+    fn get_mut_entities(&mut self) -> &mut Map<String, Value> {
+        &mut self.entities
+    }
+
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>) {
+        self.simulator.add_model(model_params);
+    }
+
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
+        self.simulator.models.get(model_idx as usize).and_then(|x| x.get_value(attr))
+    }
+
+    fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
+        self.simulator.step(deltas)
+    }
 }
 
 ///implementation of the trait in mosaik_api.rs
 impl MosaikAPI for ExampleSim {
+    /*
     fn create(
         &mut self,
         num: usize,
@@ -56,11 +75,11 @@ impl MosaikAPI for ExampleSim {
         let next_eid = self.entities.len();
         match model_params {
             Some(model_params) => {
-                if let Some(init_p_mw_pv) = model_params.get("init_reading") {
+                if let Some(init_reading) = model_params.get("init_reading") {
                     for i in next_eid..(next_eid + num) {
                         out_entities = Map::new();
                         let eid = format!("{}{}", self.eid_prefix, i);
-                        Householdsim::add_model(&mut self.simulator, init_p_mw_pv.as_f64());
+                        self.simulator.add_model(init_reading.as_f64());
                         self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                         out_entities.insert(String::from("eid"), json!(eid));
                         out_entities.insert(String::from("type"), model.clone());
@@ -72,36 +91,30 @@ impl MosaikAPI for ExampleSim {
         }
         println!("the created model: {:?}", out_vector);
         return out_vector;
-    }
-
-    fn step(&mut self, mut time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
+    }*/
+    /*
+    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
         println!("the inputs in step: {:?}", inputs);
-        let mut deltas: Vec<(&str, u64, f64)> = Vec::new();
-        let mut delta: f64;
-        for (eid, attrs) in inputs.iter() {
-            for (attr, attr_values) in attrs.iter() {
-                let model_idx = match self.entities.get(eid) {
+        let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
+        for (eid, attrs) in inputs.into_iter() {
+            for (attr, attr_values) in attrs.into_iter() {
+                let model_idx = match self.entities.get(&eid) {
                     Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
                     _ => panic!(
                         "No correct model eid available. Input: {:?}, Entities: {:?}",
-                        inputs, self.entities
+                        eid, self.entities
                     ),
                 };
                 if let Value::Object(values) = attr_values {
-                    delta = values
-                        .values()
-                        .map(|x| x.as_f64().unwrap_or_default())
-                        .sum(); //unwrap -> default = 0 falls kein f64
-                    deltas.push((attr, model_idx, delta));
+                    deltas.push((attr, model_idx, values));
                     println!("the deltas for sim step: {:?}", deltas);
                 };
             }
         }
-        Householdsim::step(&mut self.simulator, Some(deltas));
-        time = time + 60;
-        return time;
-    }
-
+        self.simulator.step(deltas);
+        return time + 60;
+    }*/
+    /*
     fn get_data(&mut self, output: HashMap<Eid, Vec<AttributeId>>) -> Map<String, Value> {
         let meta = Self::meta();
         let models = &self.simulator.models;
@@ -134,7 +147,7 @@ impl MosaikAPI for ExampleSim {
             }
         }
         return data;
-    }
+    }*/
     fn stop(&self) {
         println!("Stop the simulation.");
     }
