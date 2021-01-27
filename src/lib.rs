@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 pub mod householdsim;
 pub mod json;
 mod simple_simulator;
@@ -19,7 +19,7 @@ use log::{debug, error, info, trace};
 use std::{future::Future, sync::Arc};
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-///Main calls this function with the simulator that should run.
+///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
 pub fn run_simulation<T: MosaikAPI>(addr: &str, simulator: T) -> AResult<()> {
     task::block_on(accept_loop(addr, simulator))
 }
@@ -49,6 +49,13 @@ pub type AttributeId = String;
 pub trait API_Helpers {
     fn meta() -> serde_json::Value;
     fn set_eid_prefix(&mut self, eid_prefix: &str);
+    fn get_eid_prefix(&self) -> &str;
+    fn get_mut_entities(&mut self) -> &mut Map<String, Value>;
+    ///Add a model instance to the list.
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>);
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
+    ///Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
+    fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
 }
 ///the class for the "empty" API calls
 pub trait MosaikAPI: API_Helpers + Send + 'static {
@@ -72,19 +79,82 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
         &mut self,
         num: usize,
         model: Model,
-        model_params: Option<Map<String, Value>>,
-    ) -> Vec<Map<String, Value>>;
+        model_params: Option<Map<AttributeId, Value>>,
+    ) -> Vec<Map<String, Value>> {
+        let mut out_entities: Map<String, Value>;
+        let mut out_vector = Vec::new();
+        let next_eid = self.get_mut_entities().len();
+        match model_params {
+            Some(model_params) => {
+                for i in next_eid..(next_eid + num) {
+                    out_entities = Map::new();
+                    let eid = format!("{}{}", self.get_eid_prefix(), i);
+                    self.add_model(model_params.clone());
+                    self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+                    out_entities.insert(String::from("eid"), json!(eid));
+                    out_entities.insert(String::from("type"), model.clone());
+                    out_vector.push(out_entities);
+                }
+            }
+            None => {}
+        }
+        println!("the created model: {:?}", out_vector);
+        return out_vector;
+    }
 
     ///The function mosaik calls, if the init() and create() calls are done. Return Null
     fn setup_done(&self);
 
     ///perform a simulatino step and return the new time
-    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize;
+    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
+        println!("the inputs in step: {:?}", inputs);
+        let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
+        for (eid, attrs) in inputs.into_iter() {
+            for (attr, attr_values) in attrs.into_iter() {
+                let model_idx = match self.get_mut_entities().get(&eid) {
+                    Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
+                    _ => panic!(
+                        "No correct model eid available. Input: {:?}, Entities: {:?}",
+                        eid,
+                        self.get_mut_entities()
+                    ),
+                };
+                if let Value::Object(values) = attr_values {
+                    deltas.push((attr, model_idx, values));
+                    println!("the deltas for sim step: {:?}", deltas);
+                };
+            }
+        }
+        self.sim_step(deltas);
+        return time + 60;
+    }
 
     //collect data from the simulation and return a nested Vector containing the information
-    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
+    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value> {
+        let mut data: Map<String, Value> = Map::new();
+        for (eid, attrs) in outputs.into_iter() {
+            let model_idx = match self.get_mut_entities().get(&eid) {
+                Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
+                _ => panic!("No correct model eid available."),
+            };
+            let mut attribute_values = Map::new();
+            for attr in attrs.into_iter() {
+                //Get model.val or model.p_mw_load:
+                if let Some(value) = self.get_model_value(model_idx, &attr) {
+                    attribute_values.insert(attr, value);
+                } else {
+                    error!(
+                        "No attribute called {} available in model {}",
+                        &attr, model_idx
+                    );
+                }
+            }
+            data.insert(eid, Value::from(attribute_values));
+        }
+        return data;
+    }
 
-    ///The function mosaik calls, if the simulation finished. Return Null
+    ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon the function returns.
     fn stop(&self);
 }
 
