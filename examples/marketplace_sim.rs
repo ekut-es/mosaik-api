@@ -1,4 +1,5 @@
 use log::error;
+use std::collections::HashMap;
 use serde_json::{json, Map, Value};
 
 use mosaik_rust_api::{API_Helpers, AttributeId, MosaikAPI, run_simulation};
@@ -79,7 +80,7 @@ impl API_Helpers for MarketplaceSim {
                 .values()
                 .map(|x| x.as_f64().unwrap_or_default())
                 .sum(); //unwrap -> default = 0 falls kein f64
-            self.models[*idx as usize].update_model(attr_id, delta); //wird einfach mit 0 überschrieben -> anpassen zu ...
+            self.models[*idx as usize].update_model(attr_id, delta, ); //wird einfach mit 0 überschrieben -> anpassen zu ...
         }
 
         for (i, model) in self.models.iter_mut().enumerate() {
@@ -102,10 +103,17 @@ impl MarketplaceSim {
 }
 
 pub struct Model {
-    p_mw_pv: f64,
-    p_mw_load: f64,
-    reading: f64,
+    households: HashMap<String, Model_Household>,
+    init_reading: f64,
+
 }
+
+pub struct Model_Household{
+    pub p_mw_pv: f64,
+    pub p_mw_load: f64,
+    pub reading: f64,
+}
+
 impl Model {
     ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
@@ -121,7 +129,7 @@ impl Model {
         Some(result)
     }
 
-    pub fn update_model(&mut self, attr: &str, delta: f64) {
+    pub fn update_model(&mut self, attr: &str, delta: f64, houshold_id: String) {
         match attr {
             "p_mw_pv" => self.p_mw_pv = delta,
             "p_mw_load" => self.p_mw_load = delta,
@@ -130,25 +138,19 @@ impl Model {
             }
         };
     }
-}
 
-pub trait RunModel {
-    fn initmodel(init_reading: f64) -> Model;
-    fn step(&mut self);
-}
-
-impl RunModel for Model {
     fn initmodel(init_reading: f64) -> Model {
         Model {
-            p_mw_pv: 0.0,
-            p_mw_load: 0.0, //ersetze mit Funktion die Werte von smart-meter alle 15 minuten aus gibt
-            reading: init_reading,
+            households: HashMap::new(),
+            init_reading: init_reading,
+
         }
     }
 
     fn step(&mut self) {
         self.reading += self.p_mw_pv - self.p_mw_load;
     }
+
 }
 
 //For a local run, without mosaik in the background
