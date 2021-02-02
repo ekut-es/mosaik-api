@@ -8,6 +8,7 @@ edition = "2018"
 
 [dev-dependencies]
 enerdag-marketplace = {path = "../enerdag/enerdag-marketplace"}
+enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
 
 [dependencies]
 async-trait = "0.1.41"

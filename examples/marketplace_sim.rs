@@ -1,8 +1,9 @@
+use enerdag_marketplace::{bid::Bid, energybalance::EnergyBalance, market::Market, trade::Trade};
 use log::error;
-use std::collections::HashMap;
 use serde_json::{json, Map, Value};
+use std::collections::HashMap;
 
-use mosaik_rust_api::{API_Helpers, AttributeId, MosaikAPI, run_simulation};
+use mosaik_rust_api::{run_simulation, API_Helpers, AttributeId, MosaikAPI};
 
 pub fn main() /*-> Result<()>*/
 {
@@ -12,8 +13,7 @@ pub fn main() /*-> Result<()>*/
     run_simulation(addr, simulator);
 }
 
-
-impl MosaikAPI for MarketplaceSim{
+impl MosaikAPI for MarketplaceSim {
     fn setup_done(&self) {
         todo!()
     }
@@ -24,11 +24,10 @@ impl MosaikAPI for MarketplaceSim{
 }
 pub struct MarketplaceSim {
     pub models: Vec<Model>,
-    data: Vec<Vec<f64>>,
+    data: Vec<Vec<Vec<f64>>>,
     eid_prefix: String,
     entities: Map<String, Value>,
 }
-
 
 impl API_Helpers for MarketplaceSim {
     fn meta() -> Value {
@@ -56,7 +55,7 @@ impl API_Helpers for MarketplaceSim {
     fn get_mut_entities(&mut self) -> &mut Map<String, Value> {
         &mut self.entities
     }
-    
+
     fn add_model(&mut self, model_params: Map<AttributeId, Value>) {
         if let Some(init_reading) = model_params.get("init_reading") {
             match init_reading.as_f64() {
@@ -71,21 +70,27 @@ impl API_Helpers for MarketplaceSim {
     }
 
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
-        self.models.get(model_idx as usize).and_then(|x| x.get_value(attr))
+        self.models
+            .get(model_idx as usize)
+            .and_then(|x| x.get_value(attr))
     }
 
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
-        for (attr_id, idx, deltax) in deltas.iter() {
-            let delta = deltax
-                .values()
-                .map(|x| x.as_f64().unwrap_or_default())
-                .sum(); //unwrap -> default = 0 falls kein f64
-            self.models[*idx as usize].update_model(attr_id, delta, ); //wird einfach mit 0 überschrieben -> anpassen zu ...
+        for (attr_id, idx, deltax) in deltas.into_iter() {
+            self.models[idx as usize].reset_prosumption();
+            for (household_id, value) in deltax {
+                self.models[idx as usize].update_model(
+                    &attr_id,
+                    household_id,
+                    value.as_f64().unwrap_or_default(),
+                );
+            }
         }
 
         for (i, model) in self.models.iter_mut().enumerate() {
             model.step();
-            self.data[i].push(model.reading);
+            model.trade_step();
+            self.data[i].push(model.get_all_reading());
         }
     }
 }
@@ -103,24 +108,61 @@ impl MarketplaceSim {
 }
 
 pub struct Model {
-    households: HashMap<String, Model_Household>,
+    households: HashMap<String, ModelHousehold>,
+    /// An Vector of the trades at each simulationstep
+    trades: Vec<Vec<Trade>>,
     init_reading: f64,
-
 }
 
-pub struct Model_Household{
+#[derive(Debug, Default)]
+pub struct ModelHousehold {
     pub p_mw_pv: f64,
     pub p_mw_load: f64,
     pub reading: f64,
 }
 
+impl ModelHousehold {
+    fn new(init_reading: f64) -> Self {
+        ModelHousehold {
+            reading: init_reading,
+            ..Default::default()
+        }
+    }
+
+    fn reset_prosumption(&mut self) {
+        self.p_mw_load = 0.0;
+        self.p_mw_pv = 0.0;
+    }
+}
+
 impl Model {
     ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
+        let mut map = Map::new();
+
+        for (household_name, household) in &self.households {
+            let result = match attr {
+                "p_mw_pv" => Value::from(household.p_mw_pv),
+                "p_mw_load" => Value::from(household.p_mw_load),
+                "reading" => Value::from(household.reading),
+                x => {
+                    error!("no known attr requested: {}", x);
+                    return None;
+                }
+            };
+            map.insert(household_name.clone(), result);
+        }
+
+        Some(Value::Object(map))
+    }
+
+    ///Function gets called from get_model() to give the model values.
+    pub fn get_household_value(&self, household_id: &str, attr: &str) -> Option<Value> {
+        let household = self.households.get(household_id)?;
         let result = match attr {
-            "p_mw_pv" => Value::from(self.p_mw_pv),
-            "p_mw_load" => Value::from(self.p_mw_load),
-            "reading" => Value::from(self.reading),
+            "p_mw_pv" => Value::from(household.p_mw_pv),
+            "p_mw_load" => Value::from(household.p_mw_load),
+            "reading" => Value::from(household.reading),
             x => {
                 error!("no known attr requested: {}", x);
                 return None;
@@ -129,28 +171,78 @@ impl Model {
         Some(result)
     }
 
-    pub fn update_model(&mut self, attr: &str, delta: f64, houshold_id: String) {
+    /// Returns all current readings (step should be finished)
+    pub fn get_all_reading(&self) -> Vec<f64> {
+        self.households.values().map(|x| x.reading).collect()
+    }
+
+    pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
         match attr {
-            "p_mw_pv" => self.p_mw_pv = delta,
-            "p_mw_load" => self.p_mw_load = delta,
+            "p_mw_pv" => {
+                self.households
+                    .entry(household_id)
+                    .or_insert(ModelHousehold::new(self.init_reading))
+                    .p_mw_pv = delta
+            }
+            "p_mw_load" => {
+                self.households
+                    .entry(household_id)
+                    .or_insert(ModelHousehold::new(self.init_reading))
+                    .p_mw_load = delta
+            }
             x => {
                 error!("no known attr requested: {}", x);
             }
         };
     }
 
+    pub fn reset_prosumption(&mut self) {
+        for (_, household) in self.households.iter_mut() {
+            household.reset_prosumption();
+        }
+    }
+
     fn initmodel(init_reading: f64) -> Model {
         Model {
             households: HashMap::new(),
+            trades: Vec::new(),
             init_reading: init_reading,
-
         }
     }
 
     fn step(&mut self) {
-        self.reading += self.p_mw_pv - self.p_mw_load;
+        for (_, household) in self.households.iter_mut() {
+            household.reading += household.p_mw_pv - household.p_mw_load;
+        }
     }
 
+    fn trade_step(&mut self) {
+        let mut bids = Vec::new();
+
+        for (name, household) in &self.households {
+            let mut address_bytes = [0u8; enerdag_crypto::signature::ADDRESSBYTESLENGTH];
+            let name_bytes = name.as_bytes();
+            let length = if name_bytes.len() < enerdag_crypto::signature::ADDRESSBYTESLENGTH {
+                name_bytes.len()
+            } else {
+                enerdag_crypto::signature::ADDRESSBYTESLENGTH
+            };
+            address_bytes.copy_from_slice(&name_bytes[..length]);
+
+            let mut bid = Bid::default();
+            bid.energy_balance = EnergyBalance::new(
+                ((household.p_mw_pv - household.p_mw_load) * 1_000_000.0) as i64,
+            );
+            bid.price_buy_max = 30;
+            bid.price_sell_min = 12;
+            bids.push((address_bytes, bid));
+        }
+
+        let mut market = Market::new_from_bytes(&bids);
+        market.trade();
+
+        self.trades.push(market.get_trades().clone());
+    }
 }
 
 //For a local run, without mosaik in the background
