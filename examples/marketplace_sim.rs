@@ -138,6 +138,12 @@ impl ModelHousehold {
 impl Model {
     ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
+        // if attr = "trades" {
+
+        // } else {
+
+        // }
+
         let mut map = Map::new();
 
         for (household_name, household) in &self.households {
