@@ -42,7 +42,7 @@ impl API_Helpers for MarketplaceSim {
             "ExampleModel":{
                 "public": true,
                 "params": ["init_reading"],
-                "attrs": ["p_mw_pv", "p_mw_load", "reading"]
+                "attrs": ["p_mw_pv", "p_mw_load", "reading", "trades"]
                 }
             }
         });
@@ -149,28 +149,45 @@ impl ModelHousehold {
 impl Model {
     ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
-        // if attr = "trades" {
-
-        // } else {
-
-        // }
-
-        let mut map = Map::new();
-
-        for (household_name, household) in &self.households {
-            let result = match attr {
-                "p_mw_pv" => Value::from(household.p_mw_pv),
-                "p_mw_load" => Value::from(household.p_mw_load),
-                "reading" => Value::from(household.reading),
-                x => {
-                    error!("no known attr requested: {}", x);
+        if attr == "trades" {
+            match self.trades.last(){
+                Some(trade_vec) => {
+                    match serde_json::to_value(trade_vec){
+                        Ok(value_vec) => {
+                            return Some(value_vec);
+                        }
+                        Err(e) => {
+                            error!("failed to make a vector with values of the trade vector: {}", e);
+                            return None;
+                        }
+                    };
+                }
+                None => {
+                    error!("failed to get the last element from trade vector.");
                     return None;
                 }
-            };
-            map.insert(household_name.clone(), result);
+            };                 
+
+        } else {
+            let mut map = Map::new();
+
+            for (household_name, household) in &self.households {
+                let result = match attr {
+                    "p_mw_pv" => Value::from(household.p_mw_pv),
+                    "p_mw_load" => Value::from(household.p_mw_load),
+                    "reading" => Value::from(household.reading),
+                    x => {
+                        error!("no known attr requested: {}", x);
+                        return None;
+                    }
+                };
+                map.insert(household_name.clone(), result);
+            }
+
+            Some(Value::Object(map))
         }
 
-        Some(Value::Object(map))
+        
     }
 
     ///Function gets called from get_model() to give the model values.
@@ -264,6 +281,7 @@ impl Model {
         let mut market = Market::new_from_bytes(&bids);
         market.trade();
         debug!("{:?}", market.get_trades());
+        debug!("all the trades: {:?}", &self.trades);
         self.trades.push(market.get_trades().clone());
     }
 }

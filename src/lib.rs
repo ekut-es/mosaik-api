@@ -107,7 +107,7 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
 
     ///perform a simulatino step and return the new time
     fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
-        println!("the inputs in step: {:?}", inputs);
+        debug!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
         for (eid, attrs) in inputs.into_iter() {
             for (attr, attr_values) in attrs.into_iter() {
@@ -121,12 +121,12 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
                 };
                 if let Value::Object(values) = attr_values {
                     deltas.push((attr, model_idx, values));
-                    println!("the deltas for sim step: {:?}", deltas);
+                    debug!("the deltas for sim step: {:?}", deltas);
                 };
             }
         }
         self.sim_step(deltas);
-        return time + 60;
+        return time + 15 * 60;
     }
 
     //collect data from the simulation and return a nested Vector containing the information
@@ -139,7 +139,7 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
             };
             let mut attribute_values = Map::new();
             for attr in attrs.into_iter() {
-                //Get model.val or model.p_mw_load:
+                //Get the values of the model
                 if let Some(value) = self.get_model_value(model_idx, &attr) {
                     attribute_values.insert(attr, value);
                 } else {
