@@ -185,16 +185,18 @@ impl Model {
     pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
         match attr {
             "p_mw_pv" => {
-                self.households
+                let mut household = self
+                    .households
                     .entry(household_id)
-                    .or_insert(ModelHousehold::new(self.init_reading))
-                    .p_mw_pv = delta
+                    .or_insert(ModelHousehold::new(self.init_reading));
+                household.p_mw_pv = delta
             }
             "p_mw_load" => {
-                self.households
+                let mut household = self
+                    .households
                     .entry(household_id)
-                    .or_insert(ModelHousehold::new(self.init_reading))
-                    .p_mw_load = delta
+                    .or_insert(ModelHousehold::new(self.init_reading));
+                household.p_mw_load = delta
             }
             x => {
                 error!("no known attr requested: {}", x);
@@ -224,6 +226,8 @@ impl Model {
 
     fn trade_step(&mut self) {
         let mut bids = Vec::new();
+
+        println!("{:?}", &self.households);
 
         for (name, household) in &self.households {
             let mut address_bytes = [0u8; enerdag_crypto::signature::ADDRESSBYTESLENGTH];
