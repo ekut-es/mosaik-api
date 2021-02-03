@@ -49,7 +49,9 @@ pub type AttributeId = String;
 pub trait API_Helpers {
     fn meta() -> serde_json::Value;
     fn set_eid_prefix(&mut self, eid_prefix: &str);
+    fn set_step_size(&mut self, step_size: i64);
     fn get_eid_prefix(&self) -> &str;
+    fn get_step_size(&self) -> i64;
     fn get_mut_entities(&mut self) -> &mut Map<String, Value>;
     ///Add a model instance to the list.
     fn add_model(&mut self, model_params: Map<AttributeId, Value>);
@@ -66,6 +68,10 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
                 if let Some(eid_prefix) = sim_params.get("eid_prefix") {
                     if let Some(prefix) = eid_prefix.as_str() {
                         self.set_eid_prefix(prefix);
+                    }
+                } else if let Some(step_size) = sim_params.get("step_size"){
+                    if let Some(step_size) = step_size.as_i64(){
+                        self.set_step_size(step_size)
                     }
                 }
             }
@@ -126,7 +132,8 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
             }
         }
         self.sim_step(deltas);
-        return time + 15 * 60;
+
+        return time + (self.get_step_size() as usize);
     }
 
     //collect data from the simulation and return a nested Vector containing the information
