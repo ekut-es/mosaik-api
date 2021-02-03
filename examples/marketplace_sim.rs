@@ -31,6 +31,7 @@ pub struct MarketplaceSim {
     pub models: Vec<Model>,
     data: Vec<Vec<Vec<f64>>>,
     eid_prefix: String,
+    step_size: i64, 
     entities: Map<String, Value>,
 }
 
@@ -53,8 +54,17 @@ impl API_Helpers for MarketplaceSim {
         self.eid_prefix = eid_prefix.to_string();
     }
 
+    fn set_step_size(&mut self, step_size: i64) {
+        self.step_size = step_size;
+    }
+
     fn get_eid_prefix(&self) -> &str {
         &self.eid_prefix
+    }
+
+    fn get_step_size(&self) -> i64 {
+        self.step_size
+        
     }
 
     fn get_mut_entities(&mut self) -> &mut Map<String, Value> {
@@ -111,6 +121,7 @@ impl MarketplaceSim {
         println!("initiate marketplace simulation.");
         MarketplaceSim {
             eid_prefix: String::from("Model_"),
+            step_size: 15* 60,
             entities: Map::new(),
             models: vec![],
             data: vec![],
