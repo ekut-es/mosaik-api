@@ -1,5 +1,5 @@
 use enerdag_marketplace::{bid::Bid, energybalance::EnergyBalance, market::Market, trade::Trade};
-use log::error;
+use log::*;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
@@ -7,6 +7,7 @@ use mosaik_rust_api::{run_simulation, API_Helpers, AttributeId, MosaikAPI};
 
 pub fn main() /*-> Result<()>*/
 {
+    env_logger::init();
     //The local addres mosaik connects to.
     let addr = "127.0.0.1:3456"; //wenn wir uns eigenständig verbinden wollen -> addr als option. accept_loop angepasst werden!!!
     let simulator = MarketplaceSim::init_sim();
@@ -15,11 +16,13 @@ pub fn main() /*-> Result<()>*/
 
 impl MosaikAPI for MarketplaceSim {
     fn setup_done(&self) {
-        todo!()
+        info!("Setup done!")
+        //todo!()
     }
 
     fn stop(&self) {
-        todo!()
+        info!("Simulation has stopped!")
+        //todo!()
     }
 }
 pub struct MarketplaceSim {
@@ -235,7 +238,7 @@ impl Model {
     fn trade_step(&mut self) {
         let mut bids = Vec::new();
 
-        println!("{:?}", &self.households);
+        debug!("{:?}", &self.households);
 
         for (name, household) in &self.households {
             let mut address_bytes = [0u8; enerdag_crypto::signature::ADDRESSBYTESLENGTH];
@@ -258,7 +261,7 @@ impl Model {
 
         let mut market = Market::new_from_bytes(&bids);
         market.trade();
-
+        debug!("{:?}", market.get_trades());
         self.trades.push(market.get_trades().clone());
     }
 }
