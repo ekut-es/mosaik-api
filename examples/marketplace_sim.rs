@@ -76,8 +76,13 @@ impl API_Helpers for MarketplaceSim {
     }
 
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
+        // Resete die Prosumption (vom vorhergehenden step) bevor wir irgendetwas updaten
+        for model in self.models.iter_mut() {
+            model.reset_prosumption();
+        }
+
+        // Update die Models
         for (attr_id, idx, deltax) in deltas.into_iter() {
-            self.models[idx as usize].reset_prosumption();
             for (household_id, value) in deltax {
                 self.models[idx as usize].update_model(
                     &attr_id,
@@ -87,6 +92,7 @@ impl API_Helpers for MarketplaceSim {
             }
         }
 
+        // Stepe durch die Model und handle anschließend
         for (i, model) in self.models.iter_mut().enumerate() {
             model.step();
             model.trade_step();
@@ -183,6 +189,7 @@ impl Model {
     }
 
     pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
+        log::debug!("{}", &household_id);
         match attr {
             "p_mw_pv" => {
                 let mut household = self
@@ -202,6 +209,7 @@ impl Model {
                 error!("no known attr requested: {}", x);
             }
         };
+        log::debug!("{:?}, {} {}", self.households, attr, delta);
     }
 
     pub fn reset_prosumption(&mut self) {
