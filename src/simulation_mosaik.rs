@@ -10,6 +10,7 @@ use crate::{
 pub struct ExampleSim {
     simulator: householdsim::Householdsim,
     eid_prefix: String,
+    step_size: i64,
     entities: Map<String, Value>,
 }
 
@@ -17,6 +18,7 @@ pub fn init_sim() -> ExampleSim {
     ExampleSim {
         simulator: Householdsim::init_simulator(),
         eid_prefix: String::from("Model_"),
+        step_size: 15*60,
         entities: Map::new(),
     }
 }
@@ -58,6 +60,14 @@ impl API_Helpers for ExampleSim {
 
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
         self.simulator.step(deltas)
+    }
+
+    fn set_step_size(&mut self, step_size: i64) {
+        self.step_size = step_size;
+    }
+
+    fn get_step_size(&self) -> i64 {
+        self.step_size
     }
 }
 
