@@ -69,8 +69,8 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
                     if let Some(prefix) = eid_prefix.as_str() {
                         self.set_eid_prefix(prefix);
                     }
-                } else if let Some(step_size) = sim_params.get("step_size"){
-                    if let Some(step_size) = step_size.as_i64(){
+                } else if let Some(step_size) = sim_params.get("step_size") {
+                    if let Some(step_size) = step_size.as_i64() {
                         self.set_step_size(step_size)
                     }
                 }

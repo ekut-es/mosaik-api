@@ -31,7 +31,7 @@ pub struct MarketplaceSim {
     pub models: Vec<Model>,
     data: Vec<Vec<Vec<f64>>>,
     eid_prefix: String,
-    step_size: i64, 
+    step_size: i64,
     entities: Map<String, Value>,
 }
 
@@ -64,7 +64,6 @@ impl API_Helpers for MarketplaceSim {
 
     fn get_step_size(&self) -> i64 {
         self.step_size
-        
     }
 
     fn get_mut_entities(&mut self) -> &mut Map<String, Value> {
@@ -121,7 +120,7 @@ impl MarketplaceSim {
         println!("initiate marketplace simulation.");
         MarketplaceSim {
             eid_prefix: String::from("Model_"),
-            step_size: 15* 60,
+            step_size: 15 * 60,
             entities: Map::new(),
             models: vec![],
             data: vec![],
@@ -161,14 +160,17 @@ impl Model {
     ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
         if attr == "trades" {
-            match self.trades.last(){
+            match self.trades.last() {
                 Some(trade_vec) => {
-                    match serde_json::to_value(trade_vec){
+                    match serde_json::to_value(trade_vec) {
                         Ok(value_vec) => {
                             return Some(value_vec);
                         }
                         Err(e) => {
-                            error!("failed to make a vector with values of the trade vector: {}", e);
+                            error!(
+                                "failed to make a vector with values of the trade vector: {}",
+                                e
+                            );
                             return None;
                         }
                     };
@@ -177,8 +179,7 @@ impl Model {
                     error!("failed to get the last element from trade vector.");
                     return None;
                 }
-            };                 
-
+            };
         } else {
             let mut map = Map::new();
 
@@ -197,8 +198,6 @@ impl Model {
 
             Some(Value::Object(map))
         }
-
-        
     }
 
     ///Function gets called from get_model() to give the model values.

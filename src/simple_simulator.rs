@@ -66,8 +66,7 @@ impl RunSimulator for Simulator {
                 self.models.push(model);
                 self.data.push(vec![]); //Add list for simulation data
             }
-            None => {
-            }
+            None => {}
         }
     }
 
