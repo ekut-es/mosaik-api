@@ -18,7 +18,7 @@ pub fn init_sim() -> ExampleSim {
     ExampleSim {
         simulator: Householdsim::init_simulator(),
         eid_prefix: String::from("Model_"),
-        step_size: 15*60,
+        step_size: 15 * 60,
         entities: Map::new(),
     }
 }
@@ -55,7 +55,10 @@ impl API_Helpers for ExampleSim {
     }
 
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
-        self.simulator.models.get(model_idx as usize).and_then(|x| x.get_value(attr))
+        self.simulator
+            .models
+            .get(model_idx as usize)
+            .and_then(|x| x.get_value(attr))
     }
 
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
