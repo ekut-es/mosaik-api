@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 pub mod householdsim;
 pub mod json;
 mod simple_simulator;
@@ -19,9 +19,15 @@ use log::{debug, error, info, trace};
 use std::{future::Future, sync::Arc};
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-///Main calls this function with the simulator that should run.
-pub fn run_simulation<T: MosaikAPI>(addr: &str, simulator: T) -> AResult<()> {
-    task::block_on(accept_loop(addr, simulator))
+///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
+pub fn run_simulation<T: MosaikAPI>(addr: Option<&str>, simulator: T) -> AResult<()> {
+    match addr {
+        Some(own_addr) => task::block_on(accept_loop(own_addr, simulator, false)),
+        None => {
+            let connect_addr = "127.0.0.1:5555";
+            task::block_on(accept_loop(connect_addr, simulator, true))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -47,8 +53,24 @@ pub type Eid = String;
 pub type AttributeId = String;
 
 pub trait API_Helpers {
+    /// Gets the meta from the simulator, needs to be implemented on the simulator side.
     fn meta() -> serde_json::Value;
+    /// Set the eid\_prefix on the simulator, which we got from the interface.
     fn set_eid_prefix(&mut self, eid_prefix: &str);
+    /// Set the step_size on the simulator, which we got from the interface.
+    fn set_step_size(&mut self, step_size: i64);
+    /// Get the eid_prefix.
+    fn get_eid_prefix(&self) -> &str;
+    /// Get the step_size for the api call step().
+    fn get_step_size(&self) -> i64;
+    /// Get the list containing the created entities.
+    fn get_mut_entities(&mut self) -> &mut Map<String, Value>;
+    /// Create a model instance (= entity) with an initial value.
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>);
+    /// Get the value from a entity.
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
+    /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
+    fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
 }
 ///the class for the "empty" API calls
 pub trait MosaikAPI: API_Helpers + Send + 'static {
@@ -59,6 +81,10 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
                 if let Some(eid_prefix) = sim_params.get("eid_prefix") {
                     if let Some(prefix) = eid_prefix.as_str() {
                         self.set_eid_prefix(prefix);
+                    }
+                } else if let Some(step_size) = sim_params.get("step_size") {
+                    if let Some(step_size) = step_size.as_i64() {
+                        self.set_step_size(step_size)
                     }
                 }
             }
@@ -72,19 +98,83 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
         &mut self,
         num: usize,
         model: Model,
-        model_params: Option<Map<String, Value>>,
-    ) -> Vec<Map<String, Value>>;
+        model_params: Option<Map<AttributeId, Value>>,
+    ) -> Vec<Map<String, Value>> {
+        let mut out_entities: Map<String, Value>;
+        let mut out_vector = Vec::new();
+        let next_eid = self.get_mut_entities().len();
+        match model_params {
+            Some(model_params) => {
+                for i in next_eid..(next_eid + num) {
+                    out_entities = Map::new();
+                    let eid = format!("{}{}", self.get_eid_prefix(), i);
+                    self.add_model(model_params.clone());
+                    self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+                    out_entities.insert(String::from("eid"), json!(eid));
+                    out_entities.insert(String::from("type"), model.clone());
+                    out_vector.push(out_entities);
+                }
+            }
+            None => {}
+        }
+        println!("the created model: {:?}", out_vector);
+        return out_vector;
+    }
 
     ///The function mosaik calls, if the init() and create() calls are done. Return Null
     fn setup_done(&self);
 
     ///perform a simulatino step and return the new time
-    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize;
+    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
+        debug!("the inputs in step: {:?}", inputs);
+        let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
+        for (eid, attrs) in inputs.into_iter() {
+            for (attr, attr_values) in attrs.into_iter() {
+                let model_idx = match self.get_mut_entities().get(&eid) {
+                    Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
+                    _ => panic!(
+                        "No correct model eid available. Input: {:?}, Entities: {:?}",
+                        eid,
+                        self.get_mut_entities()
+                    ),
+                };
+                if let Value::Object(values) = attr_values {
+                    deltas.push((attr, model_idx, values));
+                    debug!("the deltas for sim step: {:?}", deltas);
+                };
+            }
+        }
+        self.sim_step(deltas);
+
+        return time + (self.get_step_size() as usize);
+    }
 
     //collect data from the simulation and return a nested Vector containing the information
-    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value>; //Map<Eid, Map<Attribute_Id, Value>>;
+    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value> {
+        let mut data: Map<String, Value> = Map::new();
+        for (eid, attrs) in outputs.into_iter() {
+            let model_idx = match self.get_mut_entities().get(&eid) {
+                Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
+                _ => panic!("No correct model eid available."),
+            };
+            let mut attribute_values = Map::new();
+            for attr in attrs.into_iter() {
+                //Get the values of the model
+                if let Some(value) = self.get_model_value(model_idx, &attr) {
+                    attribute_values.insert(attr, value);
+                } else {
+                    error!(
+                        "No attribute called {} available in model {}",
+                        &attr, model_idx
+                    );
+                }
+            }
+            data.insert(eid, Value::from(attribute_values));
+        }
+        return data;
+    }
 
-    ///The function mosaik calls, if the simulation finished. Return Null
+    ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon the function returns.
     fn stop(&self);
 }
 
@@ -105,33 +195,59 @@ type Receiver<T> = mpsc::UnboundedReceiver<T>;
 enum Void {}
 
 //todo: Consider splitting accept_loop into incoming stream and connecting to stream.
-async fn accept_loop<T: MosaikAPI>(addr: impl ToSocketAddrs, simulator: T) -> Result<()> {
+async fn accept_loop<T: MosaikAPI>(
+    addr: impl ToSocketAddrs,
+    simulator: T,
+    connect_to: bool,
+) -> Result<()> {
     debug!("accept loop debug");
-    let listener = TcpListener::bind(addr).await?;
-    let (broker_sender, broker_receiver) = mpsc::unbounded();
-    let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-        mpsc::unbounded::<bool>();
-    let broker_handle = task::spawn(broker_loop(
-        broker_receiver,
-        shutdown_connection_loop_sender,
-        simulator,
-    ));
-    let mut incoming = listener.incoming();
-    let connection_handle = if let Some(stream) = incoming.next().await {
-        let stream = stream?;
-        info!("Accepting from: {}", stream.peer_addr()?);
+    if connect_to == false {
+        let listener = TcpListener::bind(addr).await?;
+        let (broker_sender, broker_receiver) = mpsc::unbounded();
+        let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
+            mpsc::unbounded::<bool>();
+        let broker_handle = task::spawn(broker_loop(
+            broker_receiver,
+            shutdown_connection_loop_sender,
+            simulator,
+        ));
+
+        let mut incoming = listener.incoming();
+        let connection_handle = if let Some(stream) = incoming.next().await {
+            let stream = stream?;
+            info!("Accepting from: {}", stream.peer_addr()?);
+            spawn_and_log_error(connection_loop(
+                broker_sender,
+                shutdown_connection_loop_receiver,
+                stream,
+            ))
+        } else {
+            panic!("No stream available.")
+        };
+        connection_handle.await;
+        broker_handle.await;
+
+        Ok(())
+    } else {
+        let stream = TcpStream::connect(addr).await?;
+        let (broker_sender, broker_receiver) = mpsc::unbounded();
+        let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
+            mpsc::unbounded::<bool>();
+        let broker_handle = task::spawn(broker_loop(
+            broker_receiver,
+            shutdown_connection_loop_sender,
+            simulator,
+        ));
+
         spawn_and_log_error(connection_loop(
             broker_sender,
             shutdown_connection_loop_receiver,
             stream,
-        ))
-    } else {
-        panic!("No stream available.")
-    };
-    connection_handle.await;
-    broker_handle.await;
-
-    Ok(())
+        ));
+        //connection_handle.await;
+        broker_handle.await;
+        Ok(())
+    }
 }
 
 async fn connection_loop(
