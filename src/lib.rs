@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::SocketAddr};
 
 use async_trait::async_trait;
 use serde_json::{json, Map, Value};
@@ -8,7 +8,7 @@ mod simple_simulator;
 pub mod simulation_mosaik;
 
 use async_std::{
-    net::{TcpListener, TcpStream, ToSocketAddrs},
+    net::{TcpListener, TcpStream},
     prelude::*,
     task,
 };
@@ -20,14 +20,8 @@ use std::{future::Future, sync::Arc};
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 ///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
-pub fn run_simulation<T: MosaikAPI>(addr: Option<&str>, simulator: T) -> AResult<()> {
-    match addr {
-        Some(own_addr) => task::block_on(accept_loop(own_addr, simulator, false)),
-        None => {
-            let connect_addr = "127.0.0.1:5555";
-            task::block_on(accept_loop(connect_addr, simulator, true))
-        }
-    }
+pub fn run_simulation<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> AResult<()> {
+    task::block_on(accept_loop(addr, simulator))
 }
 
 #[cfg(test)]
@@ -193,60 +187,63 @@ type Receiver<T> = mpsc::UnboundedReceiver<T>;
 
 #[derive(Debug)]
 enum Void {}
+pub enum ConnectionDirection {
+    ConnectToAddress(SocketAddr),
+    ListenOnAddress(SocketAddr),
+}
 
 //todo: Consider splitting accept_loop into incoming stream and connecting to stream.
-async fn accept_loop<T: MosaikAPI>(
-    addr: impl ToSocketAddrs,
-    simulator: T,
-    connect_to: bool,
-) -> Result<()> {
+async fn accept_loop<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> Result<()> {
     debug!("accept loop debug");
-    if connect_to == false {
-        let listener = TcpListener::bind(addr).await?;
-        let (broker_sender, broker_receiver) = mpsc::unbounded();
-        let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-            mpsc::unbounded::<bool>();
-        let broker_handle = task::spawn(broker_loop(
-            broker_receiver,
-            shutdown_connection_loop_sender,
-            simulator,
-        ));
+    match addr {
+        ConnectionDirection::ListenOnAddress(addr) => {
+            let listener = TcpListener::bind(addr).await?;
+            let (broker_sender, broker_receiver) = mpsc::unbounded();
+            let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
+                mpsc::unbounded::<bool>();
+            let broker_handle = task::spawn(broker_loop(
+                broker_receiver,
+                shutdown_connection_loop_sender,
+                simulator,
+            ));
 
-        let mut incoming = listener.incoming();
-        let connection_handle = if let Some(stream) = incoming.next().await {
-            let stream = stream?;
-            info!("Accepting from: {}", stream.peer_addr()?);
+            let mut incoming = listener.incoming();
+            let connection_handle = if let Some(stream) = incoming.next().await {
+                let stream = stream?;
+                info!("Accepting from: {}", stream.peer_addr()?);
+                spawn_and_log_error(connection_loop(
+                    broker_sender,
+                    shutdown_connection_loop_receiver,
+                    stream,
+                ))
+            } else {
+                panic!("No stream available.")
+            };
+            connection_handle.await;
+            broker_handle.await;
+
+            Ok(())
+        }
+        ConnectionDirection::ConnectToAddress(addr) => {
+            let stream = TcpStream::connect(addr).await?;
+            let (broker_sender, broker_receiver) = mpsc::unbounded();
+            let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
+                mpsc::unbounded::<bool>();
+            let broker_handle = task::spawn(broker_loop(
+                broker_receiver,
+                shutdown_connection_loop_sender,
+                simulator,
+            ));
+
             spawn_and_log_error(connection_loop(
                 broker_sender,
                 shutdown_connection_loop_receiver,
                 stream,
-            ))
-        } else {
-            panic!("No stream available.")
-        };
-        connection_handle.await;
-        broker_handle.await;
-
-        Ok(())
-    } else {
-        let stream = TcpStream::connect(addr).await?;
-        let (broker_sender, broker_receiver) = mpsc::unbounded();
-        let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-            mpsc::unbounded::<bool>();
-        let broker_handle = task::spawn(broker_loop(
-            broker_receiver,
-            shutdown_connection_loop_sender,
-            simulator,
-        ));
-
-        spawn_and_log_error(connection_loop(
-            broker_sender,
-            shutdown_connection_loop_receiver,
-            stream,
-        ));
-        //connection_handle.await;
-        broker_handle.await;
-        Ok(())
+            ));
+            //connection_handle.await;
+            broker_handle.await;
+            Ok(())
+        }
     }
 }
 
