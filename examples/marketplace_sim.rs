@@ -3,15 +3,35 @@ use log::*;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
-use mosaik_rust_api::{run_simulation, API_Helpers, AttributeId, MosaikAPI};
+use mosaik_rust_api::{run_simulation, API_Helpers, AttributeId, ConnectionDirection, MosaikAPI};
 
+use std::path::PathBuf;
+use structopt::StructOpt;
+
+/// A basic example
+#[derive(StructOpt, Debug)]
+struct Opt {
+    //The local addres mosaik connects to or none, if we connect to them
+    #[structopt(short = "a", long)]
+    addr: Option<String>,
+}
 pub fn main() /*-> Result<()>*/
 {
+    let opt = Opt::from_args();
     env_logger::init();
-    //The local addres mosaik connects to.
-    let addr = "127.0.0.1:3456"; //wenn wir uns eigenständig verbinden wollen -> addr als option. accept_loop angepasst werden!!!
+
+    let address = match opt.addr {
+        Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
+            mosaik_addr.parse().expect("Address is not parseable."),
+        ),
+        None => {
+            let addr = "127.0.0.1:3456";
+            ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
+        }
+    };
+
     let simulator = MarketplaceSim::init_sim();
-    if let Err(e) = run_simulation(addr, simulator) {
+    if let Err(e) = run_simulation(address, simulator) {
         error!("{:?}", e);
     }
 }
