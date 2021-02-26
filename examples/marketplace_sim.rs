@@ -8,7 +8,7 @@ use mosaik_rust_api::{run_simulation, API_Helpers, AttributeId, ConnectionDirect
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-/// A basic example
+///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
 struct Opt {
     //The local addres mosaik connects to or none, if we connect to them
@@ -17,13 +17,16 @@ struct Opt {
 }
 pub fn main() /*-> Result<()>*/
 {
+    //get the address if there is one
     let opt = Opt::from_args();
     env_logger::init();
 
     let address = match opt.addr {
+        //case if we connect us to mosaik
         Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
             mosaik_addr.parse().expect("Address is not parseable."),
         ),
+        //case if mosaik connects to us
         None => {
             let addr = "127.0.0.1:3456";
             ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
@@ -136,6 +139,7 @@ impl API_Helpers for MarketplaceSim {
 }
 
 impl MarketplaceSim {
+    ///initialize the simulator
     pub fn init_sim() -> MarketplaceSim {
         println!("initiate marketplace simulation.");
         MarketplaceSim {
@@ -310,7 +314,7 @@ impl Model {
 
         let mut market = Market::new_from_bytes(&bids);
         market.trade();
-        debug!("{:?}", market.get_trades());
+        println!("{:?}", market.get_trades());
         debug!("all the trades: {:?}", &self.trades);
         self.trades.push(market.get_trades().clone());
     }
