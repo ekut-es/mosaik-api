@@ -21,7 +21,7 @@ type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync
 
 ///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
 pub fn run_simulation<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> AResult<()> {
-    task::block_on(accept_loop(addr, simulator))
+    task::block_on(build_connection(addr, simulator))
 }
 
 #[cfg(test)]
@@ -118,7 +118,7 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
     ///The function mosaik calls, if the init() and create() calls are done. Return Null
     fn setup_done(&self);
 
-    ///perform a simulatino step and return the new time
+    ///perform a simulation step and return the new time
     fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
         debug!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
@@ -168,10 +168,11 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
         return data;
     }
 
-    ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon the function returns.
+    ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon as the function returns.
     fn stop(&self);
 }
 
+///Async API calls, not implemented!
 #[async_trait]
 trait async_api {
     async fn get_progress();
@@ -192,10 +193,10 @@ pub enum ConnectionDirection {
     ListenOnAddress(SocketAddr),
 }
 
-//todo: Consider splitting accept_loop into incoming stream and connecting to stream.
-async fn accept_loop<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> Result<()> {
+async fn build_connection<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> Result<()> {
     debug!("accept loop debug");
     match addr {
+        //Case: we need to listen for a possible connector
         ConnectionDirection::ListenOnAddress(addr) => {
             let listener = TcpListener::bind(addr).await?;
             let (broker_sender, broker_receiver) = mpsc::unbounded();
@@ -224,6 +225,7 @@ async fn accept_loop<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> R
 
             Ok(())
         }
+        //case: We need to connect to a stream
         ConnectionDirection::ConnectToAddress(addr) => {
             let stream = TcpStream::connect(addr).await?;
             let (broker_sender, broker_receiver) = mpsc::unbounded();
@@ -234,7 +236,6 @@ async fn accept_loop<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> R
                 shutdown_connection_loop_sender,
                 simulator,
             ));
-
             spawn_and_log_error(connection_loop(
                 broker_sender,
                 shutdown_connection_loop_receiver,
