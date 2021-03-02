@@ -66,7 +66,7 @@ impl API_Helpers for MarketplaceSim {
             "ExampleModel":{
                 "public": true,
                 "params": ["init_reading"],
-                "attrs": ["p_mw_pv", "p_mw_load", "reading", "trades"]
+                "attrs": ["p_mw_pv", "p_mw_load", "reading", "trades", "total"]
                 }
             }
         });
@@ -155,8 +155,9 @@ impl MarketplaceSim {
 pub struct Model {
     households: HashMap<String, ModelHousehold>,
     /// An Vector of the trades at each simulationstep
-    trades: Vec<Vec<Trade>>,
+    trades: usize,
     init_reading: f64,
+    total: i64,
 }
 
 #[derive(Debug, Default)]
@@ -184,26 +185,25 @@ impl Model {
     ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
         if attr == "trades" {
-            match self.trades.last() {
-                Some(trade_vec) => {
-                    match serde_json::to_value(trade_vec) {
-                        Ok(value_vec) => {
-                            return Some(value_vec);
-                        }
-                        Err(e) => {
-                            error!(
-                                "failed to make a vector with values of the trade vector: {}",
-                                e
-                            );
-                            return None;
-                        }
-                    };
+            match serde_json::to_value(self.trades) {
+                Ok(value_trades) => {
+                    return Some(value_trades);
                 }
-                None => {
-                    error!("failed to get the last element from trade vector.");
+                Err(e) => {
+                    error!("failed to make a value of the number of trades: {}", e);
                     return None;
                 }
             };
+        } else if attr == "total" {
+            match serde_json::to_value(self.total) {
+                Ok(value_total) => {
+                    return Some(value_total);
+                }
+                Err(e) => {
+                    error!("failed to make a value of the total number: {}", e);
+                    return None;
+                }
+            }
         } else {
             let mut map = Map::new();
 
@@ -277,8 +277,9 @@ impl Model {
     fn initmodel(init_reading: f64) -> Model {
         Model {
             households: HashMap::new(),
-            trades: Vec::new(),
+            trades: 0,
             init_reading: init_reading,
+            total: 0,
         }
     }
 
@@ -288,6 +289,7 @@ impl Model {
         }
     }
 
+    ///perform a market auction with the models in households
     fn trade_step(&mut self) {
         let mut bids = Vec::new();
 
@@ -314,49 +316,11 @@ impl Model {
 
         let mut market = Market::new_from_bytes(&bids);
         market.trade();
+        let total = market.get_total_leftover_energy();
+        self.total = total.0 + total.1;
         println!("{:?}", market.get_trades());
         debug!("all the trades: {:?}", &self.trades);
-        self.trades.push(market.get_trades().clone());
+        let trades = market.get_trades();
+        self.trades = trades.len();
     }
 }
-
-//For a local run, without mosaik in the background
-/*
-pub fn run() {
-    let mut sim: Simulator = Simulator::init_simulator(); //need an instance of Simulator, just like in init_model()
-                                                          //sim = Simulator()
-
-    for i in 0..3 {
-        sim.add_model(Some(0.0));
-    }
-
-    sim.step(None); //values = 1.0 , 1.0
-    sim.step(Some(vec![(0, 8.0), (1, 13.0), (2, 19.0)]));
-    sim.step(Some(vec![(0, 23.0), (1, 42.0), (2, 68.0)])); //values = 24.0 , 43.0
-
-    info!("Simulation finished with data:");
-
-    for (i, inst) in sim.data.iter().enumerate() {
-        info!("{}: {:?}", i, inst);
-    }
-}*/
-/*
-#[cfg(test)]
-mod tests {
-    use serde_json::Value;
-
-    use super::Model;
-
-    #[test]
-    fn test_get_value() {
-        let model = Model { val: 0.0, p_mw_load: 1.0 };
-
-        let val_val = Some(Value::from(model.val));
-        let val_p_mw_load = Some(Value::from(model.p_mw_load));
-
-        assert_eq!(val_val, model.get_value("val"));
-        assert_eq!(val_p_mw_load, model.get_value("p_mw_load"));
-        assert_eq!(None, model.get_value("different"));
-    }
-}
-*/
