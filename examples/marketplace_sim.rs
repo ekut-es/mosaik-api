@@ -1,3 +1,4 @@
+use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{bid::Bid, energybalance::EnergyBalance, market::Market, trade::Trade};
 use log::*;
 use serde_json::{json, Map, Value};
@@ -296,22 +297,13 @@ impl Model {
         debug!("{:?}", &self.households);
 
         for (name, household) in &self.households {
-            let mut address_bytes = [0u8; enerdag_crypto::signature::ADDRESSBYTESLENGTH];
-            let name_bytes = name.as_bytes();
-            let length = if name_bytes.len() < enerdag_crypto::signature::ADDRESSBYTESLENGTH {
-                name_bytes.len()
-            } else {
-                enerdag_crypto::signature::ADDRESSBYTESLENGTH
-            };
-            address_bytes.copy_from_slice(&name_bytes[..length]);
-
             let mut bid = Bid::default();
             bid.energy_balance = EnergyBalance::new(
                 ((household.p_mw_pv - household.p_mw_load) * 1_000_000.0) as i64,
             );
             bid.price_buy_max = 30;
             bid.price_sell_min = 12;
-            bids.push((address_bytes, bid));
+            bids.push((name.hash(), bid));
         }
 
         let mut market = Market::new_from_bytes(&bids);
