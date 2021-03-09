@@ -9,6 +9,7 @@ edition = "2018"
 [dev-dependencies]
 enerdag-marketplace = {path = "../enerdag/enerdag-marketplace"}
 enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
+rand = "0.8.3"
 
 [dependencies]
 structopt = "0.3"
@@ -19,3 +20,9 @@ async-std = "1"
 log = "0.4.11"
 env_logger = "0.8.2"
 thiserror = "1.0.22"
+
+
+[features]
+default = []
+# To use price ranges instead of fixed prices for trading
+random_prices = []

@@ -153,14 +153,6 @@ impl MarketplaceSim {
     }
 }
 
-pub struct Model {
-    households: HashMap<String, ModelHousehold>,
-    /// An Vector of the trades at each simulationstep
-    trades: usize,
-    init_reading: f64,
-    total: i64,
-}
-
 #[derive(Debug, Default)]
 pub struct ModelHousehold {
     pub p_mw_pv: f64,
@@ -182,7 +174,24 @@ impl ModelHousehold {
     }
 }
 
+pub struct Model {
+    households: HashMap<String, ModelHousehold>,
+    /// An Vector of the trades at each simulationstep
+    trades: usize,
+    init_reading: f64,
+    total: i64,
+}
+
 impl Model {
+    fn initmodel(init_reading: f64) -> Model {
+        Model {
+            households: HashMap::new(),
+            trades: 0,
+            init_reading: init_reading,
+            total: 0,
+        }
+    }
+
     ///Function gets called from get_model() to give the model values.
     pub fn get_value(&self, attr: &str) -> Option<Value> {
         if attr == "trades" {
@@ -275,15 +284,6 @@ impl Model {
         }
     }
 
-    fn initmodel(init_reading: f64) -> Model {
-        Model {
-            households: HashMap::new(),
-            trades: 0,
-            init_reading: init_reading,
-            total: 0,
-        }
-    }
-
     fn step(&mut self) {
         for (_, household) in self.households.iter_mut() {
             household.reading += household.p_mw_pv - household.p_mw_load;
@@ -296,13 +296,27 @@ impl Model {
 
         debug!("{:?}", &self.households);
 
+        #[cfg(feature = "random_prices")]
+        use rand::{thread_rng, Rng};
+        #[cfg(feature = "random_prices")]
+        let mut rng = thread_rng();
+
         for (name, household) in &self.households {
             let mut bid = Bid::default();
             bid.energy_balance = EnergyBalance::new(
                 ((household.p_mw_pv - household.p_mw_load) * 1_000_000.0) as i64,
             );
-            bid.price_buy_max = 30;
-            bid.price_sell_min = 12;
+
+            #[cfg(feature = "random_prices")]
+            {
+                bid.price_buy_max = rng.gen_range(25..32);
+                bid.price_sell_min = rng.gen_range(8..15);
+            }
+            #[cfg(not(feature = "random_prices"))]
+            {
+                bid.price_buy_max = 30;
+                bid.price_sell_min = 12;
+            }
             bids.push((name.hash(), bid));
         }
 
