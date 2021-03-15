@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{bid::Bid, energybalance::EnergyBalance, market::Market, trade::Trade};
 use mosaik_rust_api::{run_simulation, API_Helpers, AttributeId, ConnectionDirection, MosaikAPI};
 
