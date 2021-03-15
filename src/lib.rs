@@ -1,22 +1,17 @@
-use std::{collections::HashMap, net::SocketAddr};
-
-use async_trait::async_trait;
-use serde_json::{json, Map, Value};
-pub mod householdsim;
-pub mod json;
-mod simple_simulator;
-pub mod simulation_mosaik;
+pub mod json; //the tcp manager
 
 use async_std::{
     net::{TcpListener, TcpStream},
     prelude::*,
     task,
 };
+use async_trait::async_trait;
 use futures::sink::SinkExt;
 use futures::FutureExt;
 use futures::{channel::mpsc, select};
 use log::{debug, error, info, trace};
-use std::{future::Future, sync::Arc};
+use serde_json::{json, Map, Value};
+use std::{collections::HashMap, future::Future, net::SocketAddr, sync::Arc};
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 ///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
