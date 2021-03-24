@@ -63,7 +63,7 @@ impl API_Helpers for MarketplaceSim {
         let meta = json!({
         "api_version": "2.2",
         "models":{
-            "ExampleModel":{
+            "MarktplatzModel":{
                 "public": true,
                 "params": ["init_reading"],
                 "attrs": ["p_mw_pv", "p_mw_load", "reading", "trades", "total"]
