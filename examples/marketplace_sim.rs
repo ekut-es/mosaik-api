@@ -33,7 +33,9 @@ pub fn main() /*-> Result<()>*/
         }
     };
 
+    //initialize the simulator.
     let simulator = MarketplaceSim::init_sim();
+    //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
         error!("{:?}", e);
     }
@@ -58,6 +60,7 @@ pub struct MarketplaceSim {
     entities: Map<String, Value>,
 }
 
+//Implementation of the helpers defined in the library
 impl API_Helpers for MarketplaceSim {
     fn meta() -> Value {
         let meta = json!({
@@ -112,6 +115,7 @@ impl API_Helpers for MarketplaceSim {
             .and_then(|x| x.get_value(attr))
     }
 
+    //perform a simulation step and a auction of the marketplace
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
         // Resete die Prosumption (vom vorhergehenden step) bevor wir irgendetwas updaten
         for model in self.models.iter_mut() {
@@ -129,7 +133,7 @@ impl API_Helpers for MarketplaceSim {
             }
         }
 
-        // Stepe durch die Model und handle anschließend
+        // iterate through the models and step each model
         for (i, model) in self.models.iter_mut().enumerate() {
             model.step();
             model.trade_step();
@@ -152,6 +156,7 @@ impl MarketplaceSim {
     }
 }
 
+//The household model with three attributes.
 #[derive(Debug, Default)]
 pub struct ModelHousehold {
     pub p_mw_pv: f64,
@@ -173,6 +178,7 @@ impl ModelHousehold {
     }
 }
 
+//The simulator model containing the household models and the attributes for the collector.
 pub struct Model {
     households: HashMap<String, ModelHousehold>,
     /// An Vector of the trades at each simulationstep
@@ -233,26 +239,12 @@ impl Model {
         }
     }
 
-    ///Function gets called from get_model() to give the model values.
-    pub fn get_household_value(&self, household_id: &str, attr: &str) -> Option<Value> {
-        let household = self.households.get(household_id)?;
-        let result = match attr {
-            "p_mw_pv" => Value::from(household.p_mw_pv),
-            "p_mw_load" => Value::from(household.p_mw_load),
-            "reading" => Value::from(household.reading),
-            x => {
-                error!("no known attr requested: {}", x);
-                return None;
-            }
-        };
-        Some(result)
-    }
-
-    /// Returns all current readings (step should be finished)
+    /// Returns all current readings (step should be finished).
     pub fn get_all_reading(&self) -> Vec<f64> {
         self.households.values().map(|x| x.reading).collect()
     }
 
+    /// Update the models that get new values from the household simulation.
     pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
         log::debug!("{}", &household_id);
         match attr {
@@ -283,13 +275,14 @@ impl Model {
         }
     }
 
+    ///perform a normal simulation step.
     fn step(&mut self) {
         for (_, household) in self.households.iter_mut() {
             household.reading += household.p_mw_pv - household.p_mw_load;
         }
     }
 
-    ///perform a market auction with the models in households
+    ///perform a market auction with the models in households.
     fn trade_step(&mut self) {
         let mut bids = Vec::new();
 
