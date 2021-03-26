@@ -106,7 +106,7 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
             }
             None => {}
         }
-        println!("the created model: {:?}", out_vector);
+        debug!("the created model: {:?}", out_vector);
         return out_vector;
     }
 
@@ -176,6 +176,10 @@ trait async_api {
     async fn set_data();
 }
 
+//------------------------------------------------------------------
+// Here begins the async TCP-Manager
+//------------------------------------------------------------------
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 //channels needed for the communication in the async tcp
 type Sender<T> = mpsc::UnboundedSender<T>;
@@ -188,6 +192,7 @@ pub enum ConnectionDirection {
     ListenOnAddress(SocketAddr),
 }
 
+///Build the connection between Mosaik and us. 2 cases, we connect to them or they connect to us.
 async fn build_connection<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> Result<()> {
     debug!("accept loop debug");
     match addr {
@@ -243,6 +248,7 @@ async fn build_connection<T: MosaikAPI>(addr: ConnectionDirection, simulator: T)
     }
 }
 
+///Recieve the Requests, send them to the broker_loop.
 async fn connection_loop(
     mut broker: Sender<Event>,
     mut connection_shutdown_reciever: Receiver<bool>,
@@ -304,7 +310,7 @@ async fn connection_loop(
     Ok(())
 }
 
-//The loop to actually write the message to mosaik as [u8].
+///Recieve the Response from the broker_loop and write it in the stream.
 async fn connection_writer_loop(
     messages: &mut Receiver<Vec<u8>>,
     stream: Arc<TcpStream>,
@@ -333,7 +339,7 @@ async fn connection_writer_loop(
 #[derive(Debug)]
 enum Event {
     NewPeer {
-        name: String, //std::net::SocketAddr,
+        name: String, //here Mosaik
         stream: Arc<TcpStream>,
         shutdown: Receiver<Void>,
     },
@@ -343,7 +349,7 @@ enum Event {
     },
 }
 
-//The loop that does the actual work.
+///Recieve requests from the connection_loop, parse them, get the values from the API and send the finished response to the connection_writer_loop
 async fn broker_loop<T: MosaikAPI>(
     events: Receiver<Event>,
     mut connection_shutdown_sender: Sender<bool>,
@@ -352,7 +358,6 @@ async fn broker_loop<T: MosaikAPI>(
     let (disconnect_sender, mut disconnect_receiver) =
         mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
     let mut peer: (std::net::SocketAddr, Sender<Vec<u8>>);
-    //: HashMap<String /*std::net::SocketAddr*/, Sender<Vec<u8>>> = HashMap::new(); //brauchen wir nicht wirklich, wir haben nur mosaik (sender) der sich connected.
     let mut events = events.fuse();
 
     println!("New peer -> creating channels");
@@ -368,7 +373,7 @@ async fn broker_loop<T: MosaikAPI>(
                 .peer_addr()
                 .expect("unaible to read remote peer address"),
             client_sender,
-        ); //expect ist ok, da es zum verbinden benötigt wird, und falls nicht erfolgreich das Programm beendet werden soll.
+        );
         let mut disconnect_sender = disconnect_sender.clone();
         spawn_and_log_error(async move {
             let res = connection_writer_loop(&mut client_receiver, stream, shutdown).await; //spawn a connection writer with the message recieved over the channel
@@ -447,6 +452,7 @@ async fn broker_loop<T: MosaikAPI>(
     while let Some((_name, _pending_messages)) = disconnect_receiver.next().await {}
 }
 
+///spawns the tasks and handles errors.
 fn spawn_and_log_error<F>(fut: F) -> task::JoinHandle<()>
 where
     F: Future<Output = Result<()>> + Send + 'static,
