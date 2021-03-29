@@ -1,7 +1,7 @@
 # mosaik-rust-api
 Repo for the marketplace simulation.
 The `src` folder contains the API and the TCP manager in `lib.rs` with a parser in `json.rs`. These two are the main components for the communication with mosaik.
-The `main` folder contains `marketplace_sim.rs` which is the `main` file in rust terms, holds the simulator for the marketplace of enerDAG. 
+The `examples` folder contains `marketplace_sim.rs` which is the `main` file in rust terms, it holds the simulator for the marketplace of enerDAG. 
 
 ## Requirements
 Rust and the requirements of the simulation repo.
