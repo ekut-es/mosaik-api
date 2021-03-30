@@ -1,26 +1,25 @@
 [package]
-name = "mosaik-rust-api"
-version = "0.1.0"
 authors = ["Jakob Pohl", "Christoph Gross"]
 edition = "2018"
+name = "mosaik-rust-api"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-enerdag-marketplace = {path = "../enerdag/enerdag-marketplace"}
-enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
+enerdag-crypto = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
+enerdag-marketplace = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
 rand = "0.8.3"
 
 [dependencies]
-structopt = "0.3"
-async-trait = "0.1.41"
-serde_json = "1.0.59"
-futures = "0.3.8"
 async-std = "1"
-log = "0.4.11"
+async-trait = "0.1.41"
 env_logger = "0.8.2"
+futures = "0.3.8"
+log = "0.4.11"
+serde_json = "1.0.59"
+structopt = "0.3"
 thiserror = "1.0.22"
-
 
 [features]
 default = []
