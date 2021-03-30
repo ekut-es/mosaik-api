@@ -41,7 +41,7 @@ pub type Eid = String;
 ///Id of an attribute of a Model
 pub type AttributeId = String;
 
-pub trait API_Helpers {
+pub trait APIHelpers {
     /// Gets the meta from the simulator, needs to be implemented on the simulator side.
     fn meta() -> serde_json::Value;
     /// Set the eid\_prefix on the simulator, which we got from the interface.
@@ -62,9 +62,9 @@ pub trait API_Helpers {
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
 }
 ///the class for the "empty" API calls
-pub trait MosaikAPI: API_Helpers + Send + 'static {
+pub trait MosaikAPI: APIHelpers + Send + 'static {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
-    fn init(&mut self, sid: Sid, sim_params: Option<Map<String, Value>>) -> META {
+    fn init(&mut self, _sid: Sid, sim_params: Option<Map<String, Value>>) -> META {
         match sim_params {
             Some(sim_params) => {
                 if let Some(eid_prefix) = sim_params.get("eid_prefix") {
@@ -169,7 +169,7 @@ pub trait MosaikAPI: API_Helpers + Send + 'static {
 
 ///Async API calls, not implemented!
 #[async_trait]
-trait async_api {
+trait AsyncApi {
     async fn get_progress();
     async fn get_related_entities();
     async fn get_data();
@@ -259,7 +259,7 @@ async fn connection_loop(
     let mut stream = stream;
     let name = String::from("Mosaik");
 
-    let (shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
+    let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
     broker
         .send(Event::NewPeer {
             name: name.clone(),
@@ -362,7 +362,7 @@ async fn broker_loop<T: MosaikAPI>(
 
     println!("New peer -> creating channels");
     if let Some(Event::NewPeer {
-        name,
+        name: _,
         stream,
         shutdown,
     }) = events.next().await
@@ -395,7 +395,7 @@ async fn broker_loop<T: MosaikAPI>(
                 Some(event) => event,
             },
             disconnect = disconnect_receiver.next().fuse() => {
-                let (name, _pending_messages) = disconnect.unwrap();
+                let (_name, _pending_messages) = disconnect.unwrap();
                 //assert!(peer.remove(&name).is_some());
                 continue;
             },
@@ -403,7 +403,7 @@ async fn broker_loop<T: MosaikAPI>(
         debug!("Received event: {:?}", event);
         match event {
             //The event that will happen the rest of the time, because the only connector is mosaik.
-            Event::Request { full_data, name } => {
+            Event::Request { full_data, name: _ } => {
                 //parse the request
                 match json::parse_request(full_data) {
                     Ok(request) => {
@@ -422,7 +422,9 @@ async fn broker_loop<T: MosaikAPI>(
                                 if let Err(e) = peer.1.send(response).await {
                                     error!("error sending response to peer: {}", e);
                                 }
-                                connection_shutdown_sender.send(true);
+                                if let Err(e) = connection_shutdown_sender.send(true).await {
+                                    error!("error sending to the shutdown channel: {}", e);
+                                }
                                 break 'event_loop;
                             }
                             None => {
@@ -435,11 +437,11 @@ async fn broker_loop<T: MosaikAPI>(
                     }
                 }
             }
-            //The event for a new connector.
+            //The event for a new connector. //TODO: Check if new peer is even needed
             Event::NewPeer {
-                name,
-                stream,
-                shutdown,
+                name: _,
+                stream: _,
+                shutdown: _,
             } => {
                 error!("There is a peer already. No new peer needed.");
             }

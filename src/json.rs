@@ -98,8 +98,11 @@ pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Resp
             };
         }
         e => {
-            error!("A different method {:?} got requested", e);
-            return Response::None;
+            error!(
+                "A different not yet implemented method {:?} got requested. Therefore the simulation should most likely stop now",
+                e
+            );
+            return Response::None; //TODO: see issue #2 but most likely it should stay as it is instead of return json!(null)
         }
     };
 
@@ -163,11 +166,12 @@ fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
     }
     hashmap
 }
-enum MsgType {
-    REQ,
-    SUCCESS,
-    ERROR,
-}
+//TODO: Clean this up and remove it?
+// enum MsgType {
+//     REQ,
+//     SUCCESS,
+//     ERROR,
+// }
 
 #[derive(Debug)]
 pub struct Request {
@@ -225,14 +229,9 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-
-    #[test]
     fn to_bytes() {
-        let v = json!(["an", "array"]);
-        let data1 = r#"[1, 1,
+        let _v = json!(["an", "array"]);
+        let _data1 = r#"[1, 1,
         {
             "api_version": "2.2",
             "models":{
@@ -250,7 +249,7 @@ mod tests {
         let vect_unwrapped = vect.unwrap();
         let vect_unwrapped_length = vect_unwrapped.len();
         let length_u32 = vect_unwrapped_length as u32;
-        let big_endian = length_u32.to_be_bytes();
+        let _big_endian = length_u32.to_be_bytes();
 
         debug!("the length of r#: {}", data.len());
         debug!("r# as string: {:?}", vect_unwrapped);
@@ -262,39 +261,38 @@ mod tests {
         //println!("The length of the array: {}", length);*/
     }
     #[test]
+    #[ignore]
     fn request_example() {
-        let data = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
-        let full_data = r#"\x00\x00\x00\x36[1, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
+        let _data = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
+        let _full_data =
+            r#"\x00\x00\x00\x36[1, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
 
         todo!();
-
-        assert_eq!(2 + 2, 4);
     }
 
     #[test]
+    #[ignore]
     fn return_success() {
-        let data = r#"[1, 1, "the return value"]"#;
-        let full_data = r#"\x00\x00\x00\x1a[1, 1, "the return value"]"#;
+        let _data = r#"[1, 1, "the return value"]"#;
+        let _full_data = r#"\x00\x00\x00\x1a[1, 1, "the return value"]"#;
 
         todo!();
-
-        assert_eq!(2 + 2, 4);
     }
 
     #[test]
+    #[ignore]
     fn return_error() {
-        let data = r#"[2, 1, "Error in your code line 23: ..."]"#;
-        let full_data = r#"\x00\x00\x00\x29[2, 1, "Error in your code line 23: ..."]"#;
-        assert_eq!(2 + 2, 4);
+        let _data = r#"[2, 1, "Error in your code line 23: ..."]"#;
+        let _full_data = r#"\x00\x00\x00\x29[2, 1, "Error in your code line 23: ..."]"#;
 
         todo!()
     }
 
     #[test]
+    #[ignore]
     fn init() {
-        let data = r#"[2, 1, "Error in your code line 23: ..."]"#;
-        let full_data = r#"\x00\x00\x00\x29[2, 1, "Error in your code line 23: ..."]"#;
-        assert_eq!(2 + 2, 4);
+        let _data = r#"[2, 1, "Error in your code line 23: ..."]"#;
+        let _full_data = r#"\x00\x00\x00\x29[2, 1, "Error in your code line 23: ..."]"#;
 
         todo!()
     }

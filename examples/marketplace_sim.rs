@@ -1,12 +1,11 @@
 use log::*;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use structopt::StructOpt;
 
 use enerdag_crypto::hashable::Hashable;
-use enerdag_marketplace::{bid::Bid, energybalance::EnergyBalance, market::Market, trade::Trade};
-use mosaik_rust_api::{run_simulation, API_Helpers, AttributeId, ConnectionDirection, MosaikAPI};
+use enerdag_marketplace::{bid::Bid, energybalance::EnergyBalance, market::Market};
+use mosaik_rust_api::{run_simulation, APIHelpers, AttributeId, ConnectionDirection, MosaikAPI};
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -61,7 +60,7 @@ pub struct MarketplaceSim {
 }
 
 //Implementation of the helpers defined in the library
-impl API_Helpers for MarketplaceSim {
+impl APIHelpers for MarketplaceSim {
     fn meta() -> Value {
         let meta = json!({
         "api_version": "2.2",
