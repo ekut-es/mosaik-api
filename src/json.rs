@@ -5,7 +5,7 @@ use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
 
-use crate::{AttributeId, Eid, MosaikAPI};
+use crate::{AttributeId, Eid, MosaikApi};
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
@@ -19,12 +19,6 @@ pub enum Response {
     Successfull(Vec<u8>),
     Stop(Vec<u8>),
     None,
-}
-
-#[derive(Error, Debug)]
-pub enum APIerror {
-    #[error("Failed getting the data")]
-    DataError(String),
 }
 
 pub fn parse_request(data: String) -> Result<Request, MosaikError> {
@@ -51,8 +45,8 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
                 (Some(method), Value::Array(args), Value::Object(kwargs)) => Ok(Request {
                     id,
                     method: method.to_string(),
-                    args: args,
-                    kwargs: kwargs.clone(),
+                    args,
+                    kwargs,
                 }),
                 (e1, e2, e3) => Err(MosaikError::ParseError(format!(
                     "Payload is not a valid request: {:?} | {:?} | {:?}",
@@ -67,7 +61,7 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     }
 }
 
-pub fn handle_request<T: MosaikAPI>(request: Request, simulator: &mut T) -> Response {
+pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Response {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(
             request.args[0]
@@ -128,7 +122,7 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
         }
         Err(e) => {
             error!("Failed to make an Vector with the response: {}", e);
-            return None;
+            None
         }
     }
 }
@@ -201,7 +195,6 @@ mod tests {
         assert_eq!(payload[0], 0);
         let id: u64 = payload[1].as_u64().unwrap();
         assert_eq!(id, 1);
-        use std::iter::FromIterator;
         if let Value::Array(call) = &payload[2] {
             let method: &str = call[0].as_str().unwrap();
             assert_eq!("my_func", method);
@@ -209,13 +202,9 @@ mod tests {
                 assert_eq!(args, &vec!["hello".to_string(), "world".to_string()]);
             }
             if let Value::Object(kwargs) = &call[2] {
-                assert_eq!(
-                    kwargs.get("times"),
-                    serde_json::map::Map::from_iter(
-                        vec![("times".to_string(), json!(23))].into_iter()
-                    )
-                    .get("times")
-                );
+                let map = json!({"times": 23});
+                println!("{:?}", map);
+                assert_eq!(*kwargs.get("times").unwrap(), map["times"]);
             }
         }
 

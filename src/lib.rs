@@ -15,20 +15,12 @@ use std::{collections::HashMap, future::Future, net::SocketAddr, sync::Arc};
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 ///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
-pub fn run_simulation<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> AResult<()> {
+pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> AResult<()> {
     task::block_on(build_connection(addr, simulator))
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
-
 ///information about the model(s) of the simulation
-pub type META = serde_json::Value;
+pub type Meta = serde_json::Value;
 
 ///Id of the simulation
 pub type Sid = String;
@@ -41,7 +33,7 @@ pub type Eid = String;
 ///Id of an attribute of a Model
 pub type AttributeId = String;
 
-pub trait APIHelpers {
+pub trait ApiHelpers {
     /// Gets the meta from the simulator, needs to be implemented on the simulator side.
     fn meta() -> serde_json::Value;
     /// Set the eid\_prefix on the simulator, which we got from the interface.
@@ -62,22 +54,19 @@ pub trait APIHelpers {
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
 }
 ///the class for the "empty" API calls
-pub trait MosaikAPI: APIHelpers + Send + 'static {
+pub trait MosaikApi: ApiHelpers + Send + 'static {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
-    fn init(&mut self, _sid: Sid, sim_params: Option<Map<String, Value>>) -> META {
-        match sim_params {
-            Some(sim_params) => {
-                if let Some(eid_prefix) = sim_params.get("eid_prefix") {
-                    if let Some(prefix) = eid_prefix.as_str() {
-                        self.set_eid_prefix(prefix);
-                    }
-                } else if let Some(step_size) = sim_params.get("step_size") {
-                    if let Some(step_size) = step_size.as_i64() {
-                        self.set_step_size(step_size)
-                    }
+    fn init(&mut self, _sid: Sid, sim_params: Option<Map<String, Value>>) -> Meta {
+        if let Some(sim_params) = sim_params {
+            if let Some(eid_prefix) = sim_params.get("eid_prefix") {
+                if let Some(prefix) = eid_prefix.as_str() {
+                    self.set_eid_prefix(prefix);
+                }
+            } else if let Some(step_size) = sim_params.get("step_size") {
+                if let Some(step_size) = step_size.as_i64() {
+                    self.set_step_size(step_size)
                 }
             }
-            None => {}
         }
         Self::meta()
     }
@@ -92,22 +81,19 @@ pub trait MosaikAPI: APIHelpers + Send + 'static {
         let mut out_entities: Map<String, Value>;
         let mut out_vector = Vec::new();
         let next_eid = self.get_mut_entities().len();
-        match model_params {
-            Some(model_params) => {
-                for i in next_eid..(next_eid + num) {
-                    out_entities = Map::new();
-                    let eid = format!("{}{}", self.get_eid_prefix(), i);
-                    self.add_model(model_params.clone());
-                    self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-                    out_entities.insert(String::from("eid"), json!(eid));
-                    out_entities.insert(String::from("type"), model.clone());
-                    out_vector.push(out_entities);
-                }
+        if let Some(model_params) = model_params {
+            for i in next_eid..(next_eid + num) {
+                out_entities = Map::new();
+                let eid = format!("{}{}", self.get_eid_prefix(), i);
+                self.add_model(model_params.clone());
+                self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+                out_entities.insert(String::from("eid"), json!(eid));
+                out_entities.insert(String::from("type"), model.clone());
+                out_vector.push(out_entities);
             }
-            None => {}
         }
         debug!("the created model: {:?}", out_vector);
-        return out_vector;
+        out_vector
     }
 
     ///The function mosaik calls, if the init() and create() calls are done. Return Null
@@ -135,7 +121,7 @@ pub trait MosaikAPI: APIHelpers + Send + 'static {
         }
         self.sim_step(deltas);
 
-        return time + (self.get_step_size() as usize);
+        time + (self.get_step_size() as usize)
     }
 
     //collect data from the simulation and return a nested Vector containing the information
@@ -160,7 +146,7 @@ pub trait MosaikAPI: APIHelpers + Send + 'static {
             }
             data.insert(eid, Value::from(attribute_values));
         }
-        return data;
+        data
     }
 
     ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon as the function returns.
@@ -193,7 +179,7 @@ pub enum ConnectionDirection {
 }
 
 ///Build the connection between Mosaik and us. 2 cases, we connect to them or they connect to us.
-async fn build_connection<T: MosaikAPI>(addr: ConnectionDirection, simulator: T) -> Result<()> {
+async fn build_connection<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> Result<()> {
     debug!("accept loop debug");
     match addr {
         //Case: we need to listen for a possible connector
@@ -350,7 +336,7 @@ enum Event {
 }
 
 ///Recieve requests from the connection_loop, parse them, get the values from the API and send the finished response to the connection_writer_loop
-async fn broker_loop<T: MosaikAPI>(
+async fn broker_loop<T: MosaikApi>(
     events: Receiver<Event>,
     mut connection_shutdown_sender: Sender<bool>,
     mut simulator: T,

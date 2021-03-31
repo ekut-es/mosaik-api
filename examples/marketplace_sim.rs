@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use structopt::StructOpt;
 
 use enerdag_crypto::hashable::Hashable;
-use enerdag_marketplace::{bid::Bid, energybalance::EnergyBalance, market::Market};
-use mosaik_rust_api::{run_simulation, APIHelpers, AttributeId, ConnectionDirection, MosaikAPI};
+use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
+use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, MosaikApi};
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -40,7 +40,7 @@ pub fn main() /*-> Result<()>*/
     }
 }
 
-impl MosaikAPI for MarketplaceSim {
+impl MosaikApi for MarketplaceSim {
     fn setup_done(&self) {
         info!("Setup done!")
         //todo!()
@@ -60,9 +60,9 @@ pub struct MarketplaceSim {
 }
 
 //Implementation of the helpers defined in the library
-impl APIHelpers for MarketplaceSim {
+impl ApiHelpers for MarketplaceSim {
     fn meta() -> Value {
-        let meta = json!({
+        json!({
         "api_version": "2.2",
         "models":{
             "MarktplatzModel":{
@@ -71,8 +71,7 @@ impl APIHelpers for MarketplaceSim {
                 "attrs": ["p_mw_pv", "p_mw_load", "reading", "trades", "total"]
                 }
             }
-        });
-        return meta;
+        })
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
@@ -96,15 +95,10 @@ impl APIHelpers for MarketplaceSim {
     }
 
     fn add_model(&mut self, model_params: Map<AttributeId, Value>) {
-        if let Some(init_reading) = model_params.get("init_reading") {
-            match init_reading.as_f64() {
-                Some(init_reading) => {
-                    let /*mut*/ model:Model = Model::initmodel(init_reading);
-                    self.models.push(model);
-                    self.data.push(vec![]); //Add list for simulation data
-                }
-                None => {}
-            }
+        if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
+            let /*mut*/ model:Model = Model::initmodel(init_reading);
+            self.models.push(model);
+            self.data.push(vec![]); //Add list for simulation data
         }
     }
 
@@ -191,7 +185,7 @@ impl Model {
         Model {
             households: HashMap::new(),
             trades: 0,
-            init_reading: init_reading,
+            init_reading,
             total: 0,
         }
     }
@@ -200,22 +194,18 @@ impl Model {
     pub fn get_value(&self, attr: &str) -> Option<Value> {
         if attr == "trades" {
             match serde_json::to_value(self.trades) {
-                Ok(value_trades) => {
-                    return Some(value_trades);
-                }
+                Ok(value_trades) => Some(value_trades),
                 Err(e) => {
                     error!("failed to make a value of the number of trades: {}", e);
-                    return None;
+                    None
                 }
-            };
+            }
         } else if attr == "total" {
             match serde_json::to_value(self.total) {
-                Ok(value_total) => {
-                    return Some(value_total);
-                }
+                Ok(value_total) => Some(value_total),
                 Err(e) => {
                     error!("failed to make a value of the total number: {}", e);
-                    return None;
+                    None
                 }
             }
         } else {
@@ -262,7 +252,7 @@ impl Model {
                 household.p_mw_load = delta
             }
             x => {
-                error!("no known attr requested: {}", x);
+                error!("unknown attr requested: {}", x);
             }
         };
         log::debug!("{:?}, {} {}", self.households, attr, delta);
@@ -293,10 +283,12 @@ impl Model {
         let mut rng = thread_rng();
 
         for (name, household) in &self.households {
-            let mut bid = Bid::default();
-            bid.energy_balance = EnergyBalance::new(
-                ((household.p_mw_pv - household.p_mw_load) * 1_000_000.0) as i64,
-            );
+            let mut bid = enerdag_marketplace::bid::Bid {
+                energy_balance: EnergyBalance::new(
+                    ((household.p_mw_pv - household.p_mw_load) * 1_000_000.0) as i64,
+                ),
+                ..Default::default()
+            };
 
             #[cfg(feature = "random_prices")]
             {
