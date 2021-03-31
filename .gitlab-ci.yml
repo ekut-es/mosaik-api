@@ -44,12 +44,12 @@ Cargo check:
   script:
   - cargo check
 
-Cargo build:
+Build lib:
   stage: build
   script:
   - cargo build
 
-Cargo testbuild examples:
+Build examples:
   stage: test
   # artifacts:
   #   paths:
