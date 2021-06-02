@@ -406,10 +406,36 @@ impl Neighborhood {
             .map(|(_, h)| h.get_disposable_energy(time))
             .collect();
         let total_disposable_energy = disposable_energy.iter().sum();
-        for (_, household) in self.households {
+        for (_, household) in self.households.iter_mut() {
             household.set_disposable_energy(total_disposable_energy, time);
         }
     }
+    fn insert_market_states(&self, bids: &Vec<enerdag_marketplace::bid::Bid>) {
+        let mut state = enerdag_core::model::message::State::new(
+            enerdag_crypto::smartcontract::SmartContractId::generate(5)
+                .expect("Generating ID Failed"),
+            self.time.clone(),
+        );
+        use enerdag_marketplace::bid::BidWAddr;
+        let b = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+        let mut bids_w_addr: Vec<BidWAddr> = vec![];
+        for bid in bids {
+            bids_w_addr.push(BidWAddr::new(
+                enerdag_crypto::signature::Address::from_bytes(&b).unwrap(),
+                bid.clone(),
+            ));
+        }
+        state.decrypted_bids = bids_w_addr;
+
+        use enerdag_core::db::state::_insert_state;
+        for (_, household) in self.households.iter() {
+            _insert_state(&household.db, &self.time, &state).expect("Could not insert state");
+        }
+    }
+
     ///perform a market auction with the models in households.
     fn trade_step(&mut self) {
         let mut bids = Vec::new();
