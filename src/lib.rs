@@ -47,7 +47,7 @@ pub trait ApiHelpers {
     /// Get the list containing the created entities.
     fn get_mut_entities(&mut self) -> &mut Map<String, Value>;
     /// Create a model instance (= entity) with an initial value.
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>);
+    fn add_neighborhood(&mut self, model_params: Map<AttributeId, Value>) -> Value;
     /// Get the value from a entity.
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
     /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
@@ -85,10 +85,11 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
             for i in next_eid..(next_eid + num) {
                 out_entities = Map::new();
                 let eid = format!("{}{}", self.get_eid_prefix(), i);
-                self.add_model(model_params.clone());
+                let children = self.add_neighborhood(model_params.clone());
                 self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                 out_entities.insert(String::from("eid"), json!(eid));
                 out_entities.insert(String::from("type"), model.clone());
+                out_entities.insert(String::from("children"), children);
                 out_vector.push(out_entities);
             }
         }

@@ -7,9 +7,18 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-enerdag-crypto = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
-enerdag-marketplace = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
+# enerdag-crypto = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "battery"}
+# enerdag-marketplace = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "battery"}
+# enerdag-core = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "battery"}
+# enerdag-time = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "battery"}
+
+enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
+enerdag-marketplace = {path = "../enerdag/enerdag-marketplace"}
+enerdag-core = {path = "../enerdag/enerdag-core"}
+enerdag-time = {path = "../enerdag/enerdag-time"}
+
 rand = "0.8.3"
+sled = {version = "0.34.6"}#, optional = true} # for debugging/measuring databse: , default-features = false  }
 
 [dependencies]
 async-std = "1"

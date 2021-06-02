@@ -94,12 +94,13 @@ impl ApiHelpers for MarketplaceSim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) {
+    fn add_neighborhood(&mut self, model_params: Map<AttributeId, Value>) -> Value {
         if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
             let /*mut*/ model:Model = Model::initmodel(init_reading);
             self.models.push(model);
             self.data.push(vec![]); //Add list for simulation data
         }
+        serde_json::Value::Array(vec![])
     }
 
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
