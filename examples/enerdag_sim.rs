@@ -43,6 +43,8 @@ pub fn main() /*-> Result<()>*/
         error!("{:?}", e);
     }
 }
+
+/// A Simulation can have multiple Neighborhoods with different eids.
 pub struct HouseholdBatterySim {
     pub neighborhoods: Vec<Neighborhood>,
     data: Vec<Vec<Vec<f64>>>,
@@ -124,7 +126,8 @@ impl ApiHelpers for HouseholdBatterySim {
             .and_then(|x| x.get_value(attr))
     }
 
-    //perform a simulation step and a auction of the marketplace
+    /// perform a simulation step and a auction of the marketplace for every neighborhood in
+    /// the simulation
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
         // Resete die Prosumption (vom vorhergehenden step) bevor wir irgendetwas updaten
         for neighborhood in self.neighborhoods.iter_mut() {
@@ -200,7 +203,6 @@ impl ModelHousehold {
     ) -> Self {
         let db = Self::setup_db();
         Self::setup_smart_battery(&db, battery_capacity, initial_charge as i64, &time);
-
         ModelHousehold {
             energy_balance: init_reading,
             db,
@@ -231,7 +233,6 @@ impl ModelHousehold {
         disposable_energy: i64,
         time: &enerdag_time::TimePeriod,
     ) {
-        use enerdag_core::db::add_disposable_energy;
         add_disposable_energy(&self.db, time, disposable_energy)
             .expect("Setting Disposable Energy Failed");
     }
@@ -254,14 +255,23 @@ impl ModelHousehold {
 
         insert_battery_charge(
             &db,
-            &EnergyBalance::new_with_period(charge, initial_period.previous()),
+            &EnergyBalance::new_with_period(charge, initial_period.clone()),
+        )
+        .expect("Could not set Charge");
+        insert_battery_charge(
+            &db,
+            &EnergyBalance::new_with_period(charge, initial_period.previous().clone()),
         )
         .expect("Could not set Charge");
     }
 
     pub(crate) fn get_battery_charge(&self, time: &TimePeriod) -> EnergyBalance {
         use enerdag_core::db::get_battery_charge;
-        get_battery_charge(&self.db, time).unwrap()
+        if let Ok(balance) = get_battery_charge(&self.db, time) {
+            balance
+        } else {
+            panic!("No Battery Charge found!");
+        }
     }
 
     fn reset_prosumption(&mut self) {
@@ -282,6 +292,7 @@ pub struct Neighborhood {
     initial_charge: Vec<u64>,
 }
 
+/// A Neighborhood with Prosumers and Consumers.
 impl Neighborhood {
     fn initmodel(
         init_reading: f64,
@@ -324,10 +335,12 @@ impl Neighborhood {
                 let result = match attr {
                     "p_mw_pv" => Value::from(household.p_mw_pv),
                     "p_mw_load" => Value::from(household.p_mw_load),
-                    "reading" => Value::from(household.energy_balance),
-                    "battery_charges" => {
-                        Value::from(household.get_battery_charge(&self.time).energy_balance)
-                    }
+                    "energy_balance" => Value::from(household.energy_balance),
+                    "battery_charges" => Value::from(
+                        household
+                            .get_battery_charge(&self.time.previous())
+                            .energy_balance,
+                    ),
                     x => {
                         error!("no known attr requested: {}", x);
                         return None;
@@ -349,6 +362,7 @@ impl Neighborhood {
     pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
         log::debug!("{}", &household_id);
         if !self.households.contains_key(&household_id) {
+            print!("Create Next Household:{}", &household_id);
             let next_household = self.create_next_household();
             self.households.insert(household_id.clone(), next_household);
         }
@@ -394,23 +408,31 @@ impl Neighborhood {
         for (_, household) in self.households.iter_mut() {
             household.energy_balance += household.p_mw_pv - household.p_mw_load;
         }
+        let bids = self.create_bids();
         self.calculate_disposable_energy();
-        self.trade_step();
+        self.insert_market_states(&bids);
+        self.trade_step(&bids);
+        self.time = self.time.following();
     }
 
     fn calculate_disposable_energy(&mut self) {
-        let time = &self.time;
+        let time = &self.time.previous();
         let disposable_energy: Vec<i64> = self
             .households
             .iter()
             .map(|(_, h)| h.get_disposable_energy(time))
             .collect();
         let total_disposable_energy = disposable_energy.iter().sum();
+        info!(
+            "\n\tTotal Disposable Energy {}\t\n",
+            total_disposable_energy
+        );
         for (_, household) in self.households.iter_mut() {
-            household.set_disposable_energy(total_disposable_energy, time);
+            household.set_disposable_energy(total_disposable_energy, &time);
+            household.set_disposable_energy(total_disposable_energy, &time.following());
         }
     }
-    fn insert_market_states(&self, bids: &Vec<enerdag_marketplace::bid::Bid>) {
+    fn insert_market_states(&self, bids: &Vec<([u8; 32], enerdag_marketplace::bid::Bid)>) {
         let mut state = enerdag_core::model::message::State::new(
             enerdag_crypto::smartcontract::SmartContractId::generate(5)
                 .expect("Generating ID Failed"),
@@ -422,7 +444,7 @@ impl Neighborhood {
             0, 0, 0,
         ];
         let mut bids_w_addr: Vec<BidWAddr> = vec![];
-        for bid in bids {
+        for (_, bid) in bids {
             bids_w_addr.push(BidWAddr::new(
                 enerdag_crypto::signature::Address::from_bytes(&b).unwrap(),
                 bid.clone(),
@@ -436,8 +458,7 @@ impl Neighborhood {
         }
     }
 
-    ///perform a market auction with the models in households.
-    fn trade_step(&mut self) {
+    fn create_bids(&mut self) -> Vec<([u8; 32], enerdag_marketplace::bid::Bid)> {
         let mut bids = Vec::new();
 
         debug!("{:?}", &self.households);
@@ -473,7 +494,11 @@ impl Neighborhood {
             }
             bids.push((name.hash(), bid));
         }
+        bids
+    }
 
+    ///perform a market auction with the models in households.
+    fn trade_step(&mut self, bids: &Vec<([u8; 32], enerdag_marketplace::bid::Bid)>) {
         let mut market = Market::new_from_bytes(&bids);
         market.trade();
         let total = market.get_total_leftover_energy();
