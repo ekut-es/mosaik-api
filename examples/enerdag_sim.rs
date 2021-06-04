@@ -18,6 +18,52 @@ struct Opt {
     #[structopt(short = "a", long)]
     addr: Option<String>,
 }
+
+type MW = f64;
+type kWh = f64;
+type Wh = f64;
+
+fn mw_to_k_wh(power_m_w: MW, time_in_s: f64) -> kWh {
+    let p_in_k_w = power_m_w * 1000.;
+    let e_in_k_wh = p_in_k_w * (time_in_s / 3600.);
+    return e_in_k_wh;
+}
+
+fn mw_to_wh(power_mw: MW, time_in_s: f64) -> Wh {
+    mw_to_k_wh(power_mw, time_in_s) * 1000.
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_mw_to_kwh() {
+        assert_eq!(mw_to_k_wh(0.1, 900.), 25.0);
+    }
+
+    #[test]
+    fn test_mw_to_kwh_realistic() {
+        assert_eq!(mw_to_k_wh(-0.000359375, 900.), -0.08984375);
+    }
+
+    #[test]
+    fn test_mw_to_wh() {
+        assert_eq!(mw_to_wh(0.1, 900.), 25000.0);
+    }
+
+    #[test]
+    fn test_mw_to_wh_realistic() {
+        assert_eq!(mw_to_wh(-0.000359375, 900.), -89.84375);
+    }
+}
+fn k_wh_to_mw(energy: MW, time_in_s: i64) -> kWh {
+    let hours = time_in_s as f64 / (3600.);
+    let p_in_k_w = energy / hours;
+    let p_in_w = p_in_k_w * 1000.;
+    let p_in_mw = p_in_w / (1000. * 1000.);
+    return p_in_mw;
+}
+
 pub fn main() /*-> Result<()>*/
 {
     //get the address if there is one
@@ -112,7 +158,9 @@ impl ApiHelpers for HouseholdBatterySim {
         let initial_charges =
             self.params_array_into_vec(&model_params, "initial_charges", |x| x.as_u64().unwrap());
 
-        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(init_reading, battery_capacities, initial_charges);
+        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(init_reading,
+                                                                  battery_capacities,
+                                                                  initial_charges, self.step_size.clone());
         self.neighborhoods.push(model);
 
         self.data.push(vec![]); //Add list for simulation data
@@ -290,6 +338,7 @@ pub struct Neighborhood {
     time: TimePeriod,
     battery_capacity: Vec<u64>,
     initial_charge: Vec<u64>,
+    step_size: i64,
 }
 
 /// A Neighborhood with Prosumers and Consumers.
@@ -298,6 +347,7 @@ impl Neighborhood {
         init_reading: f64,
         battery_capacity: Vec<u64>,
         initial_charge: Vec<u64>,
+        step_size: i64,
     ) -> Neighborhood {
         Neighborhood {
             households: HashMap::new(),
@@ -307,6 +357,7 @@ impl Neighborhood {
             time: TimePeriod::last(),
             battery_capacity,
             initial_charge,
+            step_size,
         }
     }
 
@@ -406,7 +457,12 @@ impl Neighborhood {
     ///perform a normal simulation step.
     fn step(&mut self) {
         for (_, household) in self.households.iter_mut() {
-            household.energy_balance += household.p_mw_pv - household.p_mw_load;
+            let energy_balance = household.p_mw_pv - household.p_mw_load;
+            household.energy_balance = mw_to_wh(energy_balance, self.step_size as f64);
+            debug!(
+                "Converting {} MW to  {} Wh, stepsize: {}",
+                energy_balance, household.energy_balance, self.step_size as f64
+            );
         }
         let bids = self.create_bids();
         self.calculate_disposable_energy();
@@ -461,8 +517,6 @@ impl Neighborhood {
     fn create_bids(&mut self) -> Vec<([u8; 32], enerdag_marketplace::bid::Bid)> {
         let mut bids = Vec::new();
 
-        debug!("{:?}", &self.households);
-
         #[cfg(feature = "random_prices")]
         use rand::{thread_rng, Rng};
         #[cfg(feature = "random_prices")]
@@ -470,7 +524,7 @@ impl Neighborhood {
 
         for (name, household) in &self.households {
             let energy_balance = EnergyBalance::new_with_period(
-                ((household.p_mw_pv - household.p_mw_load) * 1_000_000.0) as i64,
+                (household.energy_balance) as i64,
                 self.time.clone(),
             );
 
