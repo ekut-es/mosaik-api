@@ -304,7 +304,7 @@ impl Model {
             bids.push((name.hash(), bid));
         }
 
-        let mut market = Market::new_from_bytes(&bids);
+        let mut market = Market::new_from_bytes(&bids, enerdag_currency::Currency::from_cents(7));
         market.trade();
         let total = market.get_total_leftover_energy();
         self.total = total.0 + total.1;

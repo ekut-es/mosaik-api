@@ -3,13 +3,15 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
-use enerdag_core::db::add_disposable_energy;
+use enerdag_core::battery::forecast::DisposableEnergyCalcToml;
+use enerdag_core::config::BatteryConfigToml;
 use enerdag_core::HouseholdBatteries;
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
 use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, MosaikApi};
 use sled::Db;
+use std::convert::TryInto;
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -152,15 +154,27 @@ impl ApiHelpers for HouseholdBatterySim {
             .and_then(|x| x.as_f64())
             .unwrap();
         let battery_capacities =
-            self.params_array_into_vec(&model_params, "battery_capacities", |x| {
+            self.params_array_into_vec(&model_params, &"battery_capacities".to_string(), |x| {
                 x.as_u64().unwrap()
             });
         let initial_charges =
-            self.params_array_into_vec(&model_params, "initial_charges", |x| x.as_u64().unwrap());
+            self.params_array_into_vec(&model_params, &"initial_charges".to_string(), |x| {
+                x.as_u64().unwrap()
+            });
+        let battery_configs =
+            self.params_array_into_vec(&model_params, &"battery_configs".to_string(), |x| {
+                serde_json::from_value(x.clone()).unwrap()
+            });
+
+        let battery_types =
+            self.params_array_into_vec(&model_params, &"battery_types".to_string(), |x| {
+                serde_json::from_value(x.clone()).unwrap()
+            });
 
         let /*mut*/ model: Neighborhood = Neighborhood::initmodel(init_reading,
                                                                   battery_capacities,
-                                                                  initial_charges, self.step_size.clone());
+                                                                  initial_charges, battery_types, battery_configs,
+                                                                  self.step_size.clone());
         self.neighborhoods.push(model);
 
         self.data.push(vec![]); //Add list for simulation data
@@ -216,7 +230,7 @@ impl HouseholdBatterySim {
     fn params_array_into_vec<'a, B, F>(
         &self,
         model_params: &'a Map<AttributeId, Value>,
-        param: &str,
+        param: &AttributeId,
         f: F,
     ) -> Vec<B>
     where
@@ -239,82 +253,104 @@ pub struct ModelHousehold {
     pub p_mw_load: f64,
     pub energy_balance: f64,
     pub battery_capacity: u64,
+    pub battery_type: HouseholdBatteries,
+    pub battery_config: BatteryConfigToml,
     db: Db,
 }
 
 impl ModelHousehold {
     fn new(
         init_reading: f64,
+        battery_config: BatteryConfigToml,
+        battery_type: HouseholdBatteries,
         battery_capacity: u64,
         initial_charge: u64,
         time: enerdag_time::TimePeriod,
     ) -> Self {
-        let db = Self::setup_db();
-        Self::setup_smart_battery(&db, battery_capacity, initial_charge as i64, &time);
+        let db = test_utilities::setup_db();
+        match battery_type {
+            HouseholdBatteries::SmartBattery => {
+                Self::setup_smart_battery(
+                    &db,
+                    &battery_config,
+                    battery_capacity,
+                    initial_charge as i64,
+                    &time,
+                );
+            }
+            _ => {
+                warn!("Not implemented yet");
+            }
+        }
+
         ModelHousehold {
             energy_balance: init_reading,
             db,
             p_mw_load: 0.0,
             p_mw_pv: 0.0,
             battery_capacity,
+            battery_type,
+            battery_config,
         }
     }
 
-    pub(crate) fn calculate_published_energy_balance(
-        &self,
-        energy_balance: &EnergyBalance,
-        time: &enerdag_time::TimePeriod,
-    ) -> EnergyBalance {
-        enerdag_core::db::insert_energy_balance(&self.db, &energy_balance)
-            .expect("Insert Energy Balance failed");
-        let energy_balance_after_battery =
-            enerdag_core::contracts::publishenergybalance::calculate_energy_balance(&self.db, time)
-                .expect("Calculating Energy Balance failed");
-        energy_balance_after_battery
-    }
     pub(crate) fn get_disposable_energy(&self, time: &enerdag_time::TimePeriod) -> i64 {
         use enerdag_core::contracts::HouseholdBatteries::SmartBattery;
         HouseholdBatteries::get_disposable_energy(&SmartBattery, &self.db, time)
     }
-    pub(crate) fn set_disposable_energy(
+
+    pub fn get_power_load(&self, time: &enerdag_time::TimePeriod) -> i64 {
+        todo!("Calculate powerload");
+    }
+
+    pub fn dispatch_methods_battery_type<F, T>(
         &self,
-        disposable_energy: i64,
         time: &enerdag_time::TimePeriod,
+        f_smart: F,
+        f_simple: F,
+        f_no: F,
+    ) -> T
+    where
+        F: FnOnce(&Self, &enerdag_time::TimePeriod) -> T,
+    {
+        use enerdag_core::db::battery::get_battery_config;
+        use enerdag_core::db::config::_get_battery_type;
+        let bt = _get_battery_type(&self.db).unwrap();
+        match bt {
+            HouseholdBatteries::SmartBattery => f_smart(self, time),
+            HouseholdBatteries::SimpleBattery => f_simple(self, time),
+            HouseholdBatteries::NoBattery => f_no(self, time),
+        }
+    }
+
+    pub fn perform_trade_round(
+        &self,
+        energy_balance: EnergyBalance,
+        grid_power_load: i64,
+        total_disposable_energy: i64,
+    ) -> enerdag_utils::Result<EnergyBalance> {
+        use test_utilities::perform_trading_round;
+        perform_trading_round(
+            &self.db,
+            &energy_balance.period,
+            energy_balance.energy_balance,
+            grid_power_load,
+            total_disposable_energy,
+        )
+    }
+
+    fn setup_smart_battery(
+        db: &Db,
+        config: &BatteryConfigToml,
+        capacity: u64,
+        charge: i64,
+        initial_period: &TimePeriod,
     ) {
-        add_disposable_energy(&self.db, time, disposable_energy)
-            .expect("Setting Disposable Energy Failed");
-    }
-
-    fn setup_db() -> Db {
-        sled::Config::default()
-            .temporary(true)
-            .open()
-            .expect("unable to setup tmp database for db-txs tests")
-    }
-
-    fn setup_smart_battery(db: &Db, capacity: u64, charge: i64, initial_period: &TimePeriod) {
-        use enerdag_core::db::config::{_set_battery_capacity, _set_battery_type};
-        use enerdag_core::db::insert_battery_charge;
-
-        _set_battery_type(&db, &HouseholdBatteries::SmartBattery)
-            .expect("Could not Set Battery Type");
-
-        _set_battery_capacity(&db, &capacity).expect("Could not set Battery Capacity");
-
-        insert_battery_charge(
-            &db,
-            &EnergyBalance::new_with_period(charge, initial_period.clone()),
-        )
-        .expect("Could not set Charge");
-        insert_battery_charge(
-            &db,
-            &EnergyBalance::new_with_period(charge, initial_period.previous().clone()),
-        )
-        .expect("Could not set Charge");
+        todo!("")
     }
 
     pub(crate) fn get_battery_charge(&self, time: &TimePeriod) -> EnergyBalance {
-        use enerdag_core::db::get_battery_charge;
+        use enerdag_core::db::battery::get_battery_charge;
         if let Ok(balance) = get_battery_charge(&self.db, time) {
             balance
         } else {
@@ -338,6 +374,8 @@ pub struct Neighborhood {
     time: TimePeriod,
     battery_capacity: Vec<u64>,
     initial_charge: Vec<u64>,
+    battery_configs: Vec<BatteryConfigToml>,
+    battery_types: Vec<HouseholdBatteries>,
     step_size: i64,
 }
 
@@ -347,6 +385,8 @@ impl Neighborhood {
         init_reading: f64,
         battery_capacity: Vec<u64>,
         initial_charge: Vec<u64>,
+        battery_types: Vec<HouseholdBatteries>,
+        battery_configs: Vec<BatteryConfigToml>,
         step_size: i64,
     ) -> Neighborhood {
         Neighborhood {
@@ -356,7 +396,9 @@ impl Neighborhood {
             total: 0,
             time: TimePeriod::last(),
             battery_capacity,
+            battery_types,
             initial_charge,
+            battery_configs,
             step_size,
         }
     }
@@ -440,16 +482,13 @@ impl Neighborhood {
     }
 
     fn create_next_household(&self) -> ModelHousehold {
+        let idx = self.households.len();
         ModelHousehold::new(
             self.init_reading.clone(),
-            self.battery_capacity
-                .get(self.households.len())
-                .unwrap()
-                .clone(),
-            self.initial_charge
-                .get(self.households.len())
-                .unwrap()
-                .clone(),
+            self.battery_configs[idx].clone(),
+            self.battery_types[idx].clone(),
+            self.battery_capacity[idx].clone(),
+            self.initial_charge[idx].clone(),
             self.time.clone(),
         )
     }
@@ -464,57 +503,50 @@ impl Neighborhood {
                 energy_balance, household.energy_balance, self.step_size as f64
             );
         }
-        let bids = self.create_bids();
-        self.calculate_disposable_energy();
-        self.insert_market_states(&bids);
+        let total_disposable_energy = self.calculate_total_disposable_energy();
+        let grid_power_load = self.calculate_grid_power_load();
+        let bids = self.perform_trading_rounds(total_disposable_energy, grid_power_load);
+
         self.trade_step(&bids);
         self.time = self.time.following();
     }
 
-    fn calculate_disposable_energy(&mut self) {
-        let time = &self.time.previous();
+    fn calculate_grid_power_load(&self) -> i64 {
+        self.aggregate_household(
+            |_, x: &ModelHousehold| x.get_power_load(&self.time),
+            |x, y| x + y,
+        )
+    }
+
+    fn calculate_total_disposable_energy(&mut self) -> i64 {
         let disposable_energy: Vec<i64> = self
             .households
             .iter()
-            .map(|(_, h)| h.get_disposable_energy(time))
+            .map(|(_, h)| h.get_disposable_energy(&self.time))
             .collect();
         let total_disposable_energy = disposable_energy.iter().sum();
         info!(
             "\n\tTotal Disposable Energy {}\t\n",
             total_disposable_energy
         );
-        for (_, household) in self.households.iter_mut() {
-            household.set_disposable_energy(total_disposable_energy, &time);
-            household.set_disposable_energy(total_disposable_energy, &time.following());
-        }
-    }
-    fn insert_market_states(&self, bids: &Vec<([u8; 32], enerdag_marketplace::bid::Bid)>) {
-        let mut state = enerdag_core::model::message::State::new(
-            enerdag_crypto::smartcontract::SmartContractId::generate(5)
-                .expect("Generating ID Failed"),
-            self.time.clone(),
-        );
-        use enerdag_marketplace::bid::BidWAddr;
-        let b = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ];
-        let mut bids_w_addr: Vec<BidWAddr> = vec![];
-        for (_, bid) in bids {
-            bids_w_addr.push(BidWAddr::new(
-                enerdag_crypto::signature::Address::from_bytes(&b).unwrap(),
-                bid.clone(),
-            ));
-        }
-        state.decrypted_bids = bids_w_addr;
-
-        use enerdag_core::db::state::_insert_state;
-        for (_, household) in self.households.iter() {
-            _insert_state(&household.db, &self.time, &state).expect("Could not insert state");
-        }
+        total_disposable_energy
     }
 
-    fn create_bids(&mut self) -> Vec<([u8; 32], enerdag_marketplace::bid::Bid)> {
+    fn aggregate_household<T, F1, F2>(&self, mapping: F1, agg: F2) -> T
+    where
+        F1: Fn(&String, &ModelHousehold) -> T,
+        F2: Fn(T, T) -> T,
+    {
+        let m = self.households.iter().map(|x| mapping(x.0, x.1));
+        let r: T = m.reduce(|x, y| agg(x, y)).unwrap();
+        r
+    }
+
+    fn perform_trading_rounds(
+        &mut self,
+        total_disposable_energy: i64,
+        grid_power_load: i64,
+    ) -> Vec<([u8; 32], enerdag_marketplace::bid::Bid)> {
         let mut bids = Vec::new();
 
         #[cfg(feature = "random_prices")]
@@ -528,8 +560,9 @@ impl Neighborhood {
                 self.time.clone(),
             );
 
-            let published_energy_balance =
-                household.calculate_published_energy_balance(&energy_balance, &self.time);
+            let published_energy_balance = household
+                .perform_trade_round(energy_balance, grid_power_load, total_disposable_energy)
+                .unwrap();
 
             let mut bid = enerdag_marketplace::bid::Bid {
                 energy_balance: published_energy_balance,
@@ -553,7 +586,7 @@ impl Neighborhood {
 
     ///perform a market auction with the models in households.
     fn trade_step(&mut self, bids: &Vec<([u8; 32], enerdag_marketplace::bid::Bid)>) {
-        let mut market = Market::new_from_bytes(&bids);
+        let mut market = Market::new_from_bytes(&bids, enerdag_currency::Currency::from_cents(7));
         market.trade();
         let total = market.get_total_leftover_energy();
         self.total = total.0 + total.1;
