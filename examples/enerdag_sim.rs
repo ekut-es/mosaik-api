@@ -3,7 +3,6 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
-use enerdag_core::battery::forecast::DisposableEnergyCalcToml;
 use enerdag_core::config::BatteryConfigToml;
 use enerdag_core::HouseholdBatteries;
 use enerdag_crypto::hashable::Hashable;
@@ -11,7 +10,6 @@ use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
 use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, MosaikApi};
 use sled::Db;
-use std::convert::TryInto;
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -22,6 +20,7 @@ struct Opt {
 }
 
 type MW = f64;
+#[allow(non_camel_case_types)]
 type kWh = f64;
 type Wh = f64;
 
@@ -58,6 +57,7 @@ mod test {
         assert_eq!(mw_to_wh(-0.000359375, 900.), -89.84375);
     }
 }
+#[allow(dead_code)]
 fn k_wh_to_mw(energy: MW, time_in_s: i64) -> kWh {
     let hours = time_in_s as f64 / (3600.);
     let p_in_k_w = energy / hours;
@@ -246,124 +246,6 @@ impl HouseholdBatterySim {
     }
 }
 
-//The household model with three attributes.
-#[derive(Debug)]
-pub struct ModelHousehold {
-    pub p_mw_pv: f64,
-    pub p_mw_load: f64,
-    pub energy_balance: f64,
-    pub battery_capacity: u64,
-    pub battery_type: HouseholdBatteries,
-    pub battery_config: BatteryConfigToml,
-    db: Db,
-}
-
-impl ModelHousehold {
-    fn new(
-        init_reading: f64,
-        battery_config: BatteryConfigToml,
-        battery_type: HouseholdBatteries,
-        battery_capacity: u64,
-        initial_charge: u64,
-        time: enerdag_time::TimePeriod,
-    ) -> Self {
-        let db = test_utilities::setup_db();
-        match battery_type {
-            HouseholdBatteries::SmartBattery => {
-                Self::setup_smart_battery(
-                    &db,
-                    &battery_config,
-                    battery_capacity,
-                    initial_charge as i64,
-                    &time,
-                );
-            }
-            _ => {
-                warn!("Not implemented yet");
-            }
-        }
-
-        ModelHousehold {
-            energy_balance: init_reading,
-            db,
-            p_mw_load: 0.0,
-            p_mw_pv: 0.0,
-            battery_capacity,
-            battery_type,
-            battery_config,
-        }
-    }
-
-    pub(crate) fn get_disposable_energy(&self, time: &enerdag_time::TimePeriod) -> i64 {
-        use enerdag_core::contracts::HouseholdBatteries::SmartBattery;
-        HouseholdBatteries::get_disposable_energy(&SmartBattery, &self.db, time)
-    }
-
-    pub fn get_power_load(&self, time: &enerdag_time::TimePeriod) -> i64 {
-        todo!("Calculate powerload");
-    }
-
-    pub fn dispatch_methods_battery_type<F, T>(
-        &self,
-        time: &enerdag_time::TimePeriod,
-        f_smart: F,
-        f_simple: F,
-        f_no: F,
-    ) -> T
-    where
-        F: FnOnce(&Self, &enerdag_time::TimePeriod) -> T,
-    {
-        use enerdag_core::db::battery::get_battery_config;
-        use enerdag_core::db::config::_get_battery_type;
-        let bt = _get_battery_type(&self.db).unwrap();
-        match bt {
-            HouseholdBatteries::SmartBattery => f_smart(self, time),
-            HouseholdBatteries::SimpleBattery => f_simple(self, time),
-            HouseholdBatteries::NoBattery => f_no(self, time),
-        }
-    }
-
-    pub fn perform_trade_round(
-        &self,
-        energy_balance: EnergyBalance,
-        grid_power_load: i64,
-        total_disposable_energy: i64,
-    ) -> enerdag_utils::Result<EnergyBalance> {
-        use test_utilities::perform_trading_round;
-        perform_trading_round(
-            &self.db,
-            &energy_balance.period,
-            energy_balance.energy_balance,
-            grid_power_load,
-            total_disposable_energy,
-        )
-    }
-
-    fn setup_smart_battery(
-        db: &Db,
-        config: &BatteryConfigToml,
-        capacity: u64,
-        charge: i64,
-        initial_period: &TimePeriod,
-    ) {
-        todo!("")
-    }
-
-    pub(crate) fn get_battery_charge(&self, time: &TimePeriod) -> EnergyBalance {
-        use enerdag_core::db::battery::get_battery_charge;
-        if let Ok(balance) = get_battery_charge(&self.db, time) {
-            balance
-        } else {
-            panic!("No Battery Charge found!");
-        }
-    }
-
-    fn reset_prosumption(&mut self) {
-        self.p_mw_load = 0.0;
-        self.p_mw_pv = 0.0;
-    }
-}
-
 //The simulator model containing the household models and the attributes for the collector.
 pub struct Neighborhood {
     households: HashMap<String, ModelHousehold>,
@@ -485,7 +367,7 @@ impl Neighborhood {
         let idx = self.households.len();
         ModelHousehold::new(
             self.init_reading.clone(),
-            self.battery_configs[idx].clone(),
+            &self.battery_configs[idx],
             self.battery_types[idx].clone(),
             self.battery_capacity[idx].clone(),
             self.initial_charge[idx].clone(),
@@ -594,5 +476,164 @@ impl Neighborhood {
         debug!("all the trades: {:?}", &self.trades);
         let trades = market.get_trades();
         self.trades = trades.len();
+    }
+}
+
+/// Used to Dispatch Functions
+type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
+
+#[derive(Debug)]
+pub struct ModelHousehold {
+    pub p_mw_pv: f64,
+    pub p_mw_load: f64,
+    pub energy_balance: f64,
+    pub battery_capacity: u64,
+    pub battery_type: HouseholdBatteries,
+    db: Db,
+}
+
+impl ModelHousehold {
+    fn new(
+        init_reading: f64,
+        battery_config: &BatteryConfigToml,
+        battery_type: HouseholdBatteries,
+        battery_capacity: u64,
+        initial_charge: u64,
+        time: enerdag_time::TimePeriod,
+    ) -> Self {
+        let db = test_utilities::setup_db();
+
+        Self::setup_battery(
+            &battery_type,
+            &db,
+            battery_config,
+            battery_capacity as i64,
+            initial_charge as i64,
+            &time,
+        );
+        match battery_type {
+            HouseholdBatteries::SmartBattery => {
+                Self::setup_smart_battery(
+                    &db,
+                    battery_config,
+                    battery_capacity as i64,
+                    initial_charge as i64,
+                    &time,
+                );
+            }
+            _ => {
+                warn!("Not implemented yet");
+            }
+        }
+
+        ModelHousehold {
+            energy_balance: init_reading,
+            db,
+            p_mw_load: 0.0,
+            p_mw_pv: 0.0,
+            battery_capacity,
+            battery_type,
+        }
+    }
+    fn reset_prosumption(&mut self) {
+        self.p_mw_load = 0.0;
+        self.p_mw_pv = 0.0;
+    }
+
+    pub fn perform_trade_round(
+        &self,
+        energy_balance: EnergyBalance,
+        grid_power_load: i64,
+        total_disposable_energy: i64,
+    ) -> enerdag_utils::Result<EnergyBalance> {
+        use test_utilities::perform_trading_round;
+        perform_trading_round(
+            &self.db,
+            &energy_balance.period,
+            energy_balance.energy_balance,
+            grid_power_load,
+            total_disposable_energy,
+        )
+    }
+
+    pub(crate) fn get_disposable_energy(&self, time: &enerdag_time::TimePeriod) -> i64 {
+        use enerdag_core::contracts::HouseholdBatteries::SmartBattery;
+        HouseholdBatteries::get_disposable_energy(&SmartBattery, &self.db, time)
+    }
+
+    /// Calculate the load the household draws from / gives to the grid
+    pub fn get_power_load(&self, time: &enerdag_time::TimePeriod) -> i64 {
+        use enerdag_core::contracts::HousholdBatterySmartContract;
+        let energy_balance =
+            EnergyBalance::new_with_period(self.energy_balance as i64, time.clone());
+        HousholdBatterySmartContract::powerload_in_period(&self.db, energy_balance).unwrap()
+    }
+
+    pub fn setup_battery(
+        battery_type: &HouseholdBatteries,
+        db: &Db,
+        config: &BatteryConfigToml,
+        capacity: i64,
+        charge: i64,
+        initial_period: &TimePeriod,
+    ) {
+        match battery_type {
+            HouseholdBatteries::SmartBattery => {
+                Self::setup_smart_battery(db, config, capacity, charge, initial_period)
+            }
+            HouseholdBatteries::SimpleBattery => todo!(),
+            HouseholdBatteries::NoBattery => todo!(),
+        }
+    }
+    fn setup_smart_battery(
+        db: &Db,
+        config: &BatteryConfigToml,
+        capacity: i64,
+        charge: i64,
+        initial_period: &TimePeriod,
+    ) {
+        use enerdag_core::battery::forecast::DisposableEnergyCalcToml;
+        use test_utilities::config::insert_uema_battery_config;
+        use test_utilities::data::insert_initial_state;
+        use test_utilities::test_helper_re::setup_smart_battery;
+        setup_smart_battery(db, capacity);
+        insert_initial_state(db, initial_period, charge);
+
+        match config.disposable_energy_calc {
+            DisposableEnergyCalcToml::SARIMA => {
+                #[cfg(feature = "sarima")]
+                test_utilities::config::insert_sarima_battery_config(db, capacity);
+                #[cfg(not(feature = "sarima"))]
+                panic!("SARIMA is not activated as a feature but was selected in the config.")
+            }
+            DisposableEnergyCalcToml::UEMA => insert_uema_battery_config(db, capacity),
+            DisposableEnergyCalcToml::TwentyPercent => {}
+        }
+    }
+
+    /// Apply different methods based on the type of battery.
+    pub fn dispatch_methods_battery_type<T>(
+        &self,
+        time: &enerdag_time::TimePeriod,
+        f_smart: DispatchFunc<T>,
+        f_simple: DispatchFunc<T>,
+        f_no: DispatchFunc<T>,
+    ) -> T {
+        use enerdag_core::db::config::_get_battery_type;
+        let bt = _get_battery_type(&self.db).unwrap();
+        match bt {
+            HouseholdBatteries::SmartBattery => f_smart(self, time),
+            HouseholdBatteries::SimpleBattery => f_simple(self, time),
+            HouseholdBatteries::NoBattery => f_no(self, time),
+        }
+    }
+
+    pub(crate) fn get_battery_charge(&self, time: &TimePeriod) -> EnergyBalance {
+        use enerdag_core::db::battery::get_battery_charge;
+        if let Ok(balance) = get_battery_charge(&self.db, time) {
+            balance
+        } else {
+            panic!("No Battery Charge found!");
+        }
     }
 }
