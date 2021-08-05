@@ -7,21 +7,21 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-enerdag-crypto = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
-enerdag-marketplace = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
-enerdag-core = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
-enerdag-time = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
-enerdag-currency = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
-enerdag-utils =  {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
-test_utilities = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
-
-#test_utilities = {path = "../enerdag/enerdag-core/test-utilities"}
-#enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
-#enerdag-marketplace = {path = "../enerdag/enerdag-marketplace"}
-#enerdag-core = {path = "../enerdag/enerdag-core"}
-#enerdag-time = {path = "../enerdag/enerdag-time"}
-#enerdag-currency = {path = "../enerdag/enerdag-currency"}
-#enerdag-utils = {path = "../enerdag/enerdag-utils"}
+#enerdag-crypto = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
+#enerdag-marketplace = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
+#enerdag-core = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
+#enerdag-time = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
+#enerdag-currency = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
+#enerdag-utils =  {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
+#test_utilities = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "mosaik-connection"}
+chrono = {version = "0.4.11", features = ["serde"]}
+test_utilities = {path = "../enerdag/enerdag-core/test-utilities"}
+enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
+enerdag-marketplace = {path = "../enerdag/enerdag-marketplace"}
+enerdag-core = {path = "../enerdag/enerdag-core"}
+enerdag-time = {path = "../enerdag/enerdag-time"}
+enerdag-currency = {path = "../enerdag/enerdag-currency"}
+enerdag-utils = {path = "../enerdag/enerdag-utils"}
 
 
 

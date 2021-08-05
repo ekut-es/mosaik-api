@@ -395,7 +395,7 @@ async fn broker_loop<T: MosaikApi>(
                 match json::parse_request(full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
-                        println!("The request: {:?}", request);
+                        trace!("The request: {:?}", request);
                         use json::Response::*;
                         match json::handle_request(request, &mut simulator) {
                             Successfull(response) => {
@@ -420,7 +420,7 @@ async fn broker_loop<T: MosaikApi>(
                         }
                     }
                     Err(e) => {
-                        error!("Error while parsing the request: {}", e);
+                        error!("Error while parsing the request: {:?}", e);
                     }
                 }
             }

@@ -3,6 +3,9 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
+use enerdag_core::battery::forecast::DisposableEnergyCalcToml;
+use enerdag_core::battery::physical_model::PhysicalModelConfig;
+use enerdag_core::battery::smart_battery::wh_to_w;
 use enerdag_core::config::BatteryConfigToml;
 use enerdag_core::HouseholdBatteries;
 use enerdag_crypto::hashable::Hashable;
@@ -120,7 +123,7 @@ impl ApiHelpers for HouseholdBatterySim {
         "models":{
             "Neighborhood":{
                 "public": true,
-                "params": ["init_balance", "battery_capacities", "initial_charges"],
+                "params": ["init_balance", "battery_capacities", "initial_charges", "energy_predictors", "physical_models", "battery_types"],
                 "attrs": ["p_mw_pv", "p_mw_load", "energy_balance", "trades", "total",
                         "battery_charges"]
                 },
@@ -159,17 +162,12 @@ impl ApiHelpers for HouseholdBatterySim {
             });
         let initial_charges =
             self.params_array_into_vec(&model_params, &"initial_charges".to_string(), |x| {
-                x.as_u64().unwrap()
-            });
-        let battery_configs =
-            self.params_array_into_vec(&model_params, &"battery_configs".to_string(), |x| {
-                serde_json::from_value(x.clone()).unwrap()
+                x.as_f64().unwrap() as u64
             });
 
-        let battery_types =
-            self.params_array_into_vec(&model_params, &"battery_types".to_string(), |x| {
-                serde_json::from_value(x.clone()).unwrap()
-            });
+        let battery_types: Vec<HouseholdBatteries> = self.params_to_battery_type(&model_params);
+
+        let battery_configs = self.params_to_battery_config(&model_params);
 
         let /*mut*/ model: Neighborhood = Neighborhood::initmodel(init_reading,
                                                                   battery_capacities,
@@ -221,7 +219,7 @@ impl HouseholdBatterySim {
         println!("initiate marketplace simulation.");
         HouseholdBatterySim {
             eid_prefix: String::from("Model_"),
-            step_size: 15 * 60,
+            step_size: 5 * 60,
             entities: Map::new(),
             neighborhoods: vec![],
             data: vec![],
@@ -243,6 +241,71 @@ impl HouseholdBatterySim {
             .iter()
             .map(f)
             .collect()
+    }
+
+    fn params_to_battery_type(
+        &self,
+        model_params: &Map<AttributeId, Value>,
+    ) -> Vec<HouseholdBatteries> {
+        let battery_types: Vec<String> =
+            self.params_array_into_vec(&model_params, &"battery_types".to_string(), |x| {
+                serde_json::from_value(x.clone()).unwrap()
+            });
+        let battery_types = battery_types
+            .iter()
+            .map(|x| match &**x {
+                "SmartBattery" => HouseholdBatteries::SmartBattery,
+                "NoBattery" => HouseholdBatteries::NoBattery,
+                "SimpleBattery" => HouseholdBatteries::SimpleBattery,
+                _ => panic!("Unknown Battery type {}", x),
+            })
+            .collect();
+        battery_types
+    }
+
+    fn params_to_battery_config(
+        &self,
+        model_params: &Map<AttributeId, Value>,
+    ) -> Vec<BatteryConfigToml> {
+        let physical_models: Vec<String> =
+            self.params_array_into_vec(&model_params, &"physical_models".to_string(), |x| {
+                serde_json::from_value(x.clone()).unwrap()
+            });
+        let physical_models: Vec<PhysicalModelConfig> = physical_models
+            .iter()
+            .map(|x| match &**x {
+                "IdealBattery" => PhysicalModelConfig::IdealBattery,
+                _ => panic!("Unknown Physical Model {}", x),
+            })
+            .collect();
+
+        let energy_predictors: Vec<String> =
+            self.params_array_into_vec(&model_params, &"energy_predictors".to_string(), |x| {
+                serde_json::from_value(x.clone()).unwrap()
+            });
+
+        let energy_predictors: Vec<DisposableEnergyCalcToml> = energy_predictors
+            .iter()
+            .map(|x| match &*(*x) {
+                "SARIMA" => DisposableEnergyCalcToml::SARIMA,
+                "UEMA" => DisposableEnergyCalcToml::UEMA,
+                "TwentyPercent" => DisposableEnergyCalcToml::TwentyPercent,
+                _ => {
+                    error!("Unknown DisposableEnergyCalcToml  {}", x);
+                    DisposableEnergyCalcToml::TwentyPercent
+                }
+            })
+            .collect();
+
+        let mut battery_config: Vec<BatteryConfigToml> =
+            Vec::with_capacity(energy_predictors.len());
+        for (model, predict) in physical_models.iter().zip(energy_predictors) {
+            battery_config.push(BatteryConfigToml {
+                physical_model: *model,
+                disposable_energy_calc: predict,
+            });
+        }
+        battery_config
     }
 }
 
@@ -271,6 +334,7 @@ impl Neighborhood {
         battery_configs: Vec<BatteryConfigToml>,
         step_size: i64,
     ) -> Neighborhood {
+        assert_eq!(step_size, 300, "One Simulation step per TradePeriod");
         Neighborhood {
             households: HashMap::new(),
             trades: 0,
@@ -337,7 +401,6 @@ impl Neighborhood {
     pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
         log::debug!("{}", &household_id);
         if !self.households.contains_key(&household_id) {
-            print!("Create Next Household:{}", &household_id);
             let next_household = self.create_next_household();
             self.households.insert(household_id.clone(), next_household);
         }
@@ -354,7 +417,6 @@ impl Neighborhood {
                 error!("unknown attr requested: {}", x);
             }
         };
-        log::debug!("{:?}, {} {}", self.households, attr, delta);
     }
 
     pub fn reset_prosumption(&mut self) {
@@ -377,20 +439,29 @@ impl Neighborhood {
 
     ///perform a normal simulation step.
     fn step(&mut self) {
-        for (_, household) in self.households.iter_mut() {
-            let energy_balance = household.p_mw_pv - household.p_mw_load;
-            household.energy_balance = mw_to_wh(energy_balance, self.step_size as f64);
-            debug!(
-                "Converting {} MW to  {} Wh, stepsize: {}",
-                energy_balance, household.energy_balance, self.step_size as f64
-            );
-        }
+        self.calculate_household_energy_balances();
+
         let total_disposable_energy = self.calculate_total_disposable_energy();
         let grid_power_load = self.calculate_grid_power_load();
         let bids = self.perform_trading_rounds(total_disposable_energy, grid_power_load);
 
         self.trade_step(&bids);
         self.time = self.time.following();
+    }
+
+    fn calculate_household_energy_balances(&mut self) {
+        for (_, household) in self.households.iter_mut() {
+            let energy_balance = household.p_mw_pv - household.p_mw_load;
+            let energy_balance_wh = mw_to_wh(energy_balance, self.step_size as f64);
+            debug!(
+                "Converting {} MW to  {} Wh, stepsize: {}",
+                energy_balance, energy_balance_wh, self.step_size as f64
+            );
+            household.set_energy_balance(EnergyBalance::new_with_period(
+                energy_balance_wh as i64,
+                self.time.clone(),
+            ))
+        }
     }
 
     fn calculate_grid_power_load(&self) -> i64 {
@@ -472,7 +543,6 @@ impl Neighborhood {
         market.trade();
         let total = market.get_total_leftover_energy();
         self.total = total.0 + total.1;
-        println!("{:?}", market.get_trades());
         debug!("all the trades: {:?}", &self.trades);
         let trades = market.get_trades();
         self.trades = trades.len();
@@ -547,6 +617,7 @@ impl ModelHousehold {
         total_disposable_energy: i64,
     ) -> enerdag_utils::Result<EnergyBalance> {
         use test_utilities::perform_trading_round;
+        enerdag_core::db::insert_energy_balance(&self.db, &energy_balance).unwrap();
         perform_trading_round(
             &self.db,
             &energy_balance.period,
@@ -556,17 +627,32 @@ impl ModelHousehold {
         )
     }
 
+    pub(crate) fn set_energy_balance(&mut self, energy_balance: EnergyBalance) {
+        enerdag_core::db::insert_energy_balance(&self.db, &energy_balance)
+            .expect("Could not insert Energy Balance.");
+        enerdag_core::db::insert_household_energy_balance(&self.db, &energy_balance)
+            .expect("Could not insert Household Energy balance");
+        self.energy_balance = energy_balance.energy_balance as f64;
+    }
+
     pub(crate) fn get_disposable_energy(&self, time: &enerdag_time::TimePeriod) -> i64 {
         use enerdag_core::contracts::HouseholdBatteries::SmartBattery;
+
         HouseholdBatteries::get_disposable_energy(&SmartBattery, &self.db, time)
     }
 
     /// Calculate the load the household draws from / gives to the grid
     pub fn get_power_load(&self, time: &enerdag_time::TimePeriod) -> i64 {
         use enerdag_core::contracts::HousholdBatterySmartContract;
+        use enerdag_core::db::config::_get_battery_type;
         let energy_balance =
             EnergyBalance::new_with_period(self.energy_balance as i64, time.clone());
-        HousholdBatterySmartContract::powerload_in_period(&self.db, energy_balance).unwrap()
+        if let Ok(HouseholdBatteries::NoBattery) = _get_battery_type(&self.db) {
+            let l = chrono::Duration::seconds(enerdag_time::TIME_PERIOD_LENGTH_SECONDS as i64);
+            wh_to_w(energy_balance.energy_balance, l)
+        } else {
+            HousholdBatterySmartContract::powerload_in_period(&self.db, energy_balance).unwrap()
+        }
     }
 
     pub fn setup_battery(
@@ -582,7 +668,7 @@ impl ModelHousehold {
                 Self::setup_smart_battery(db, config, capacity, charge, initial_period)
             }
             HouseholdBatteries::SimpleBattery => todo!(),
-            HouseholdBatteries::NoBattery => todo!(),
+            HouseholdBatteries::NoBattery => Self::setup_no_battery(db),
         }
     }
     fn setup_smart_battery(
@@ -592,7 +678,6 @@ impl ModelHousehold {
         charge: i64,
         initial_period: &TimePeriod,
     ) {
-        use enerdag_core::battery::forecast::DisposableEnergyCalcToml;
         use test_utilities::config::insert_uema_battery_config;
         use test_utilities::data::insert_initial_state;
         use test_utilities::test_helper_re::setup_smart_battery;
@@ -609,6 +694,11 @@ impl ModelHousehold {
             DisposableEnergyCalcToml::UEMA => insert_uema_battery_config(db, capacity),
             DisposableEnergyCalcToml::TwentyPercent => {}
         }
+    }
+
+    fn setup_no_battery(db: &Db) {
+        use enerdag_core::db::config::set_battery_type;
+        set_battery_type(db, &HouseholdBatteries::NoBattery).expect("Couldn't set battery type");
     }
 
     /// Apply different methods based on the type of battery.
