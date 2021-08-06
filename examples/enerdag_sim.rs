@@ -91,6 +91,22 @@ impl ApiHelpers for HouseholdBatterySim {
                 "attrs": ["p_mw_pv", "p_mw_load", "energy_balance", "trades", "total",
                         "battery_charges"]
                 },
+                "Consumer": {
+                    "public": false,
+                    "params": [],
+                    "attrs": ["p_mw_load", "energy_balance", "trades"]
+                },
+                "Prosumer": {
+                    "public": false,
+                    "params": [],
+                    "attrs": ["p_mw_load", "energy_balance", "p_mw_pv", "battery_charge", "trades"]
+                },
+                "PV": {
+                    "public": false,
+                    "params": [],
+                    "attrs": ["p_mw_pv", "trades"]
+                }
+
             }
         })
     }
@@ -153,6 +169,7 @@ impl ApiHelpers for HouseholdBatterySim {
         // Update die Models
         for (attr_id, idx, deltax) in deltas.into_iter() {
             for (household_id, value) in deltax {
+                println!("{}", household_id);
                 self.neighborhoods[idx as usize].update_model(
                     &attr_id,
                     household_id,
