@@ -11,7 +11,9 @@ use enerdag_core::HouseholdBatteries;
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
-use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, MosaikApi};
+use mosaik_rust_api::{
+    run_simulation, ApiHelpers, AttributeId, ConnectionDirection, Model, MosaikApi,
+};
 use sled::Db;
 
 ///Read, if we get an address or not
@@ -26,48 +28,6 @@ type MW = f64;
 #[allow(non_camel_case_types)]
 type kWh = f64;
 type Wh = f64;
-
-fn mw_to_k_wh(power_m_w: MW, time_in_s: f64) -> kWh {
-    let p_in_k_w = power_m_w * 1000.;
-    let e_in_k_wh = p_in_k_w * (time_in_s / 3600.);
-    return e_in_k_wh;
-}
-
-fn mw_to_wh(power_mw: MW, time_in_s: f64) -> Wh {
-    mw_to_k_wh(power_mw, time_in_s) * 1000.
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn test_mw_to_kwh() {
-        assert_eq!(mw_to_k_wh(0.1, 900.), 25.0);
-    }
-
-    #[test]
-    fn test_mw_to_kwh_realistic() {
-        assert_eq!(mw_to_k_wh(-0.000359375, 900.), -0.08984375);
-    }
-
-    #[test]
-    fn test_mw_to_wh() {
-        assert_eq!(mw_to_wh(0.1, 900.), 25000.0);
-    }
-
-    #[test]
-    fn test_mw_to_wh_realistic() {
-        assert_eq!(mw_to_wh(-0.000359375, 900.), -89.84375);
-    }
-}
-#[allow(dead_code)]
-fn k_wh_to_mw(energy: MW, time_in_s: i64) -> kWh {
-    let hours = time_in_s as f64 / (3600.);
-    let p_in_k_w = energy / hours;
-    let p_in_w = p_in_k_w * 1000.;
-    let p_in_mw = p_in_w / (1000. * 1000.);
-    return p_in_mw;
-}
 
 pub fn main() /*-> Result<()>*/
 {
@@ -95,7 +55,11 @@ pub fn main() /*-> Result<()>*/
     }
 }
 
-/// A Simulation can have multiple Neighborhoods with different eids.
+const MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION: &str = "household_descriptions";
+const MOSAIK_PARAM_START_TIME: &str = "start_time";
+
+/// A Simulation can have multiple [Neighborhoods](Neighborhood) that communicate with MOSAIK.
+/// The Neighborhoods then contain an enerdag system.
 pub struct HouseholdBatterySim {
     pub neighborhoods: Vec<Neighborhood>,
     data: Vec<Vec<Vec<f64>>>,
@@ -123,7 +87,7 @@ impl ApiHelpers for HouseholdBatterySim {
         "models":{
             "Neighborhood":{
                 "public": true,
-                "params": ["init_balance", "battery_capacities", "initial_charges", "energy_predictors", "physical_models", "battery_types"],
+                "params": [MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
                 "attrs": ["p_mw_pv", "p_mw_load", "energy_balance", "trades", "total",
                         "battery_charges"]
                 },
@@ -152,32 +116,24 @@ impl ApiHelpers for HouseholdBatterySim {
     }
 
     fn add_neighborhood(&mut self, model_params: Map<AttributeId, Value>) -> Value {
-        let init_reading = model_params
-            .get("init_balance")
-            .and_then(|x| x.as_f64())
-            .unwrap();
-        let battery_capacities =
-            self.params_array_into_vec(&model_params, &"battery_capacities".to_string(), |x| {
-                x.as_u64().unwrap()
-            });
-        let initial_charges =
-            self.params_array_into_vec(&model_params, &"initial_charges".to_string(), |x| {
-                x.as_f64().unwrap() as u64
-            });
+        let household_configs = self.params_to_household_config(&model_params);
 
-        let battery_types: Vec<HouseholdBatteries> = self.params_to_battery_type(&model_params);
+        let start_time = if !model_params.contains_key(MOSAIK_PARAM_START_TIME) {
+            warn!("No Start Time in Parameters, using Fallback to actual time.");
+            TimePeriod::last()
+        } else {
+            serde_json::from_value(model_params.get(MOSAIK_PARAM_START_TIME).unwrap().clone())
+                .unwrap()
+        };
 
-        let battery_configs = self.params_to_battery_config(&model_params);
-
-        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(init_reading,
-                                                                  battery_capacities,
-                                                                  initial_charges, battery_types, battery_configs,
-                                                                  self.step_size.clone());
-        self.neighborhoods.push(model);
+        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(start_time,0., household_configs, self.step_size);
 
         self.data.push(vec![]); //Add list for simulation data
 
-        serde_json::Value::Array(vec![])
+        let mosaik_children = model.households_as_mosaik_children();
+        self.neighborhoods.push(model);
+
+        mosaik_children
     }
 
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
@@ -263,49 +219,18 @@ impl HouseholdBatterySim {
         battery_types
     }
 
-    fn params_to_battery_config(
+    fn params_to_household_config(
         &self,
         model_params: &Map<AttributeId, Value>,
-    ) -> Vec<BatteryConfigToml> {
-        let physical_models: Vec<String> =
-            self.params_array_into_vec(&model_params, &"physical_models".to_string(), |x| {
-                serde_json::from_value(x.clone()).unwrap()
-            });
-        let physical_models: Vec<PhysicalModelConfig> = physical_models
-            .iter()
-            .map(|x| match &**x {
-                "IdealBattery" => PhysicalModelConfig::IdealBattery,
-                _ => panic!("Unknown Physical Model {}", x),
-            })
-            .collect();
-
-        let energy_predictors: Vec<String> =
-            self.params_array_into_vec(&model_params, &"energy_predictors".to_string(), |x| {
-                serde_json::from_value(x.clone()).unwrap()
-            });
-
-        let energy_predictors: Vec<DisposableEnergyCalcToml> = energy_predictors
-            .iter()
-            .map(|x| match &*(*x) {
-                "SARIMA" => DisposableEnergyCalcToml::SARIMA,
-                "UEMA" => DisposableEnergyCalcToml::UEMA,
-                "TwentyPercent" => DisposableEnergyCalcToml::TwentyPercent,
-                _ => {
-                    error!("Unknown DisposableEnergyCalcToml  {}", x);
-                    DisposableEnergyCalcToml::TwentyPercent
-                }
-            })
-            .collect();
-
-        let mut battery_config: Vec<BatteryConfigToml> =
-            Vec::with_capacity(energy_predictors.len());
-        for (model, predict) in physical_models.iter().zip(energy_predictors) {
-            battery_config.push(BatteryConfigToml {
-                physical_model: *model,
-                disposable_energy_calc: predict,
-            });
-        }
-        battery_config
+    ) -> Vec<HouseholdDescription> {
+        self.params_array_into_vec(
+            model_params,
+            &MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION.to_string(),
+            |x| {
+                serde_json::from_value(x.clone())
+                    .expect("Could not parse household description from value")
+            },
+        )
     }
 }
 
@@ -317,36 +242,43 @@ pub struct Neighborhood {
     init_reading: f64,
     total: i64,
     time: TimePeriod,
-    battery_capacity: Vec<u64>,
-    initial_charge: Vec<u64>,
-    battery_configs: Vec<BatteryConfigToml>,
-    battery_types: Vec<HouseholdBatteries>,
+
     step_size: i64,
 }
 
 /// A Neighborhood with Prosumers and Consumers.
 impl Neighborhood {
     fn initmodel(
+        time: TimePeriod,
         init_reading: f64,
-        battery_capacity: Vec<u64>,
-        initial_charge: Vec<u64>,
-        battery_types: Vec<HouseholdBatteries>,
-        battery_configs: Vec<BatteryConfigToml>,
+        descriptions: Vec<HouseholdDescription>,
         step_size: i64,
     ) -> Neighborhood {
         assert_eq!(step_size, 300, "One Simulation step per TradePeriod");
+
+        let households = Self::create_households(descriptions, &time);
         Neighborhood {
-            households: HashMap::new(),
+            households,
             trades: 0,
             init_reading,
             total: 0,
             time: TimePeriod::last(),
-            battery_capacity,
-            battery_types,
-            initial_charge,
-            battery_configs,
+
             step_size,
         }
+    }
+
+    fn households_as_mosaik_children(&self) -> Value {
+        let mut child_descriptions: Vec<HashMap<String, String>> =
+            Vec::with_capacity(self.households.len());
+        for (eid, household) in self.households.iter() {
+            let mut hash_map = HashMap::with_capacity(2);
+            hash_map.insert("eid".to_string(), eid.clone());
+            hash_map.insert("type".to_string(), household.household_type.clone());
+            child_descriptions.push(hash_map);
+        }
+
+        serde_json::to_value(child_descriptions).unwrap()
     }
 
     ///Function gets called from get_model() to give the model values.
@@ -400,10 +332,7 @@ impl Neighborhood {
     /// Update the models that get new values from the household simulation.
     pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
         log::debug!("{}", &household_id);
-        if !self.households.contains_key(&household_id) {
-            let next_household = self.create_next_household();
-            self.households.insert(household_id.clone(), next_household);
-        }
+
         match attr {
             "p_mw_pv" => {
                 let mut household = self.households.get_mut(&*household_id).unwrap();
@@ -425,16 +354,28 @@ impl Neighborhood {
         }
     }
 
-    fn create_next_household(&self) -> ModelHousehold {
-        let idx = self.households.len();
-        ModelHousehold::new(
-            self.init_reading.clone(),
-            &self.battery_configs[idx],
-            self.battery_types[idx].clone(),
-            self.battery_capacity[idx].clone(),
-            self.initial_charge[idx].clone(),
-            self.time.clone(),
-        )
+    fn create_households(
+        descriptions: Vec<HouseholdDescription>,
+        time: &TimePeriod,
+    ) -> HashMap<String, ModelHousehold> {
+        let mut households: HashMap<String, ModelHousehold> =
+            HashMap::with_capacity(descriptions.len());
+        let mut types: HashMap<String, u32> = HashMap::new();
+
+        let mut descriptions = descriptions;
+        for (idx, household) in descriptions.into_iter().enumerate() {
+            let hh_type = &household.household_type;
+            let num_type = *types.get(hh_type).unwrap_or(&0);
+
+            let eid = format!("{}_{}", hh_type, num_type);
+            types.insert(hh_type.clone(), num_type + 1);
+
+            households.insert(
+                eid,
+                ModelHousehold::new_from_description(time.clone(), household),
+            );
+        }
+        households
     }
 
     ///perform a normal simulation step.
@@ -551,9 +492,27 @@ impl Neighborhood {
 
 /// Used to Dispatch Functions
 type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
+use serde_derive::{Deserialize, Serialize};
+/// Descriptor of a household to simulate. Used to be sent via JSON
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct HouseholdDescription {
+    /// Should be one of "Prosumer", "Consumer" or "PV", but does not have effect on internal calculations
+    pub household_type: String,
+    /// The Initial energy balance
+    pub initial_energy_balance: f64,
+    /// How a possible Smart Battery is set uo
+    pub battery_config: BatteryConfigToml,
+    /// Type of the Battery
+    pub battery_type: HouseholdBatteries,
+    /// Battery Capacity in WH (10 000 WH = 10 kWH)
+    pub battery_capacity: u64,
+    /// Initial Charge of the battery in WH
+    pub initial_charge: u64,
+}
 
 #[derive(Debug)]
 pub struct ModelHousehold {
+    pub household_type: String,
     pub p_mw_pv: f64,
     pub p_mw_load: f64,
     pub energy_balance: f64,
@@ -563,7 +522,19 @@ pub struct ModelHousehold {
 }
 
 impl ModelHousehold {
+    fn new_from_description(time: TimePeriod, description: HouseholdDescription) -> Self {
+        Self::new(
+            description.household_type,
+            description.initial_energy_balance,
+            &description.battery_config,
+            description.battery_type,
+            description.battery_capacity,
+            description.initial_charge,
+            time,
+        )
+    }
     fn new(
+        household_type: String,
         init_reading: f64,
         battery_config: &BatteryConfigToml,
         battery_type: HouseholdBatteries,
@@ -597,6 +568,7 @@ impl ModelHousehold {
         }
 
         ModelHousehold {
+            household_type,
             energy_balance: init_reading,
             db,
             p_mw_load: 0.0,
@@ -726,4 +698,46 @@ impl ModelHousehold {
             panic!("No Battery Charge found!");
         }
     }
+}
+
+fn mw_to_k_wh(power_m_w: MW, time_in_s: f64) -> kWh {
+    let p_in_k_w = power_m_w * 1000.;
+    let e_in_k_wh = p_in_k_w * (time_in_s / 3600.);
+    return e_in_k_wh;
+}
+
+fn mw_to_wh(power_mw: MW, time_in_s: f64) -> Wh {
+    mw_to_k_wh(power_mw, time_in_s) * 1000.
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_mw_to_kwh() {
+        assert_eq!(mw_to_k_wh(0.1, 900.), 25.0);
+    }
+
+    #[test]
+    fn test_mw_to_kwh_realistic() {
+        assert_eq!(mw_to_k_wh(-0.000359375, 900.), -0.08984375);
+    }
+
+    #[test]
+    fn test_mw_to_wh() {
+        assert_eq!(mw_to_wh(0.1, 900.), 25000.0);
+    }
+
+    #[test]
+    fn test_mw_to_wh_realistic() {
+        assert_eq!(mw_to_wh(-0.000359375, 900.), -89.84375);
+    }
+}
+#[allow(dead_code)]
+fn k_wh_to_mw(energy: MW, time_in_s: i64) -> kWh {
+    let hours = time_in_s as f64 / (3600.);
+    let p_in_k_w = energy / hours;
+    let p_in_w = p_in_k_w * 1000.;
+    let p_in_mw = p_in_w / (1000. * 1000.);
+    return p_in_mw;
 }
