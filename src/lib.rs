@@ -90,7 +90,9 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
                 out_entities.insert(String::from("eid"), json!(eid));
                 out_entities.insert(String::from("type"), model.clone());
                 out_entities.insert(String::from("children"), children);
+                println!("{:?}", out_entities);
                 out_vector.push(out_entities);
+
             }
         }
         debug!("the created model: {:?}", out_vector);
@@ -102,7 +104,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
 
     ///perform a simulation step and return the new time
     fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
-        debug!("the inputs in step: {:?}", inputs);
+        println!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
         for (eid, attrs) in inputs.into_iter() {
             for (attr, attr_values) in attrs.into_iter() {

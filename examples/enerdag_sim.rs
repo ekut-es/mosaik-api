@@ -11,9 +11,7 @@ use enerdag_core::HouseholdBatteries;
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
-use mosaik_rust_api::{
-    run_simulation, ApiHelpers, AttributeId, ConnectionDirection, Model, MosaikApi,
-};
+use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, Model, MosaikApi, Eid};
 use sled::Db;
 
 ///Read, if we get an address or not
@@ -78,7 +76,27 @@ impl MosaikApi for HouseholdBatterySim {
         info!("Simulation has stopped!")
         //todo!()
     }
+
+    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
+        println!("Inputs; {:?}", inputs);
+
+        for (eid, attrs) in inputs.into_iter() {
+            let model_index = self.get_mut_entities().get(&eid).unwrap().as_u64().unwrap();
+
+            let model: &Neighborhood = self.neighborhoods.get(model_index).unwrap();
+
+        }
+
+
+        time + self.step_size
+
+
+    }
 }
+
+
+
+
 
 impl ApiHelpers for HouseholdBatterySim {
     fn meta() -> Value {
@@ -271,7 +289,7 @@ impl Neighborhood {
         descriptions: Vec<HouseholdDescription>,
         step_size: i64,
     ) -> Neighborhood {
-        assert_eq!(step_size, 300, "One Simulation step per TradePeriod");
+        //assert_eq!(step_size, 300, "One Simulation step per TradePeriod");
 
         let households = Self::create_households(descriptions, &time);
         Neighborhood {
@@ -349,6 +367,7 @@ impl Neighborhood {
     /// Update the models that get new values from the household simulation.
     pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
         log::debug!("{}", &household_id);
+        println!("{}", household_id);
 
         match attr {
             "p_mw_pv" => {
@@ -388,7 +407,7 @@ impl Neighborhood {
             types.insert(hh_type.clone(), num_type + 1);
 
             households.insert(
-                eid,
+                eid.to_ascii_lowercase(),
                 ModelHousehold::new_from_description(time.clone(), household),
             );
         }
