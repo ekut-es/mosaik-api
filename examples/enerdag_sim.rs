@@ -147,12 +147,12 @@ impl ApiHelpers for HouseholdBatterySim {
                 "Consumer": {
                     "public": false,
                     "params": [],
-                    "attrs": ["p_mw_load", "energy_balance", "trades"]
+                    "attrs": ["p_mw_load", "published_energy_balance", "trades"]
                 },
                 "Prosumer": {
                     "public": false,
                     "params": [],
-                    "attrs": ["p_mw_load", "energy_balance", "p_mw_pv", "battery_charge", "trades"]
+                    "attrs": ["p_mw_load", "published_energy_balance", "p_mw_pv", "battery_charge", "trades"]
                 },
                 "PV": {
                     "public": false,
@@ -312,7 +312,7 @@ impl Neighborhood {
 
             for attr in attrs {
                 let value = if eid.eq(&self.eid) {
-                    self.get_value(attr).unwrap()
+                    self.get_neighborhood_attr(attr)
                 } else {
                     if let Some(household) = self.households.get(eid) {
                         household.get_value(attr, &self.time)
@@ -340,45 +340,13 @@ impl Neighborhood {
     }
 
     /// Returns  values for *Mosaik attrs* of the Mosaik *Neighborhood* object.
-    fn get_value(&self, attr: &str) -> Option<Value> {
-        if attr == "trades" {
-            match serde_json::to_value(self.trades) {
-                Ok(value_trades) => Some(value_trades),
-                Err(e) => {
-                    error!("failed to make a value of the number of trades: {}", e);
-                    None
-                }
+    fn get_neighborhood_attr(&self, attr: &str) -> Value {
+        match attr {
+            "trades" => serde_json::to_value(self.trades).unwrap(),
+            "total" => serde_json::to_value(self.total).unwrap(),
+            _ => {
+                panic!("Unknown Attribute requested for Neighborhood: {}", attr)
             }
-        } else if attr == "total" {
-            match serde_json::to_value(self.total) {
-                Ok(value_total) => Some(value_total),
-                Err(e) => {
-                    error!("failed to make a value of the total number: {}", e);
-                    None
-                }
-            }
-        } else {
-            let mut map = Map::new();
-
-            for (household_name, household) in &self.households {
-                let result = match attr {
-                    "p_mw_pv" => Value::from(household.p_mw_pv),
-                    "p_mw_load" => Value::from(household.p_mw_load),
-                    "energy_balance" => Value::from(household.energy_balance),
-                    "battery_charges" => Value::from(
-                        household
-                            .get_battery_charge(&self.time.previous())
-                            .energy_balance,
-                    ),
-                    x => {
-                        error!("no known attr requested: {}", x);
-                        return None;
-                    }
-                };
-                map.insert(household_name.clone(), result);
-            }
-
-            Some(Value::Object(map))
         }
     }
 
@@ -495,15 +463,17 @@ impl Neighborhood {
         #[cfg(feature = "random_prices")]
         let mut rng = thread_rng();
 
-        for (name, household) in &self.households {
+        for (name, household) in &mut self.households {
             let energy_balance = EnergyBalance::new_with_period(
                 (household.energy_balance) as i64,
                 self.time.clone(),
             );
 
-            let published_energy_balance = household
-                .perform_trade_round(energy_balance, grid_power_load, total_disposable_energy)
-                .unwrap();
+            let published_energy_balance = household.perform_trade_round(
+                energy_balance,
+                grid_power_load,
+                total_disposable_energy,
+            );
 
             let mut bid = enerdag_marketplace::bid::Bid {
                 energy_balance: published_energy_balance,
@@ -559,16 +529,27 @@ pub struct HouseholdDescription {
 
 #[derive(Debug)]
 pub struct ModelHousehold {
+    /// One of "Consumer", "Prosumer" or "PV".
     pub household_type: String,
+    /// Produced Energy
     pub p_mw_pv: f64,
+    /// Energy used in a given time
     pub p_mw_load: f64,
+    /// Difference of `p_mw_pv` and `p_mw_load`
     pub energy_balance: f64,
+    /// The energy balance published to the neighborhood
+    pub published_balance: i64,
+    /// If there is a battery, its capacity in WH
     pub battery_capacity: u64,
+    /// Which type of battery
     pub battery_type: HouseholdBatteries,
+    /// DB that holds all the information about this household
     db: Db,
 }
 
 impl ModelHousehold {
+    /// Creates an ModelHousehold instance from the given [HouseholdDescription] and a starting
+    /// time.
     fn new_from_description(time: TimePeriod, description: HouseholdDescription) -> Self {
         Self::new(
             description.household_type,
@@ -622,28 +603,35 @@ impl ModelHousehold {
             p_mw_pv: 0.0,
             battery_capacity,
             battery_type,
+            published_balance: 0,
         }
     }
+    /// Set input variables to zero.
     fn reset_prosumption(&mut self) {
         self.p_mw_load = 0.0;
         self.p_mw_pv = 0.0;
     }
 
+    /// Performs all the calculations of the PublishEnergyBalance Smart Contract and returns the
+    /// the EnergyBalance a "real" household would publish
     pub fn perform_trade_round(
-        &self,
+        &mut self,
         energy_balance: EnergyBalance,
         grid_power_load: i64,
         total_disposable_energy: i64,
-    ) -> enerdag_utils::Result<EnergyBalance> {
+    ) -> EnergyBalance {
         use test_utilities::perform_trading_round;
         enerdag_core::db::insert_energy_balance(&self.db, &energy_balance).unwrap();
-        perform_trading_round(
+        let eb = perform_trading_round(
             &self.db,
             &energy_balance.period,
             energy_balance.energy_balance,
             grid_power_load,
             total_disposable_energy,
         )
+        .unwrap();
+        self.published_balance = eb.energy_balance.clone();
+        eb
     }
 
     pub(crate) fn update_inputs(&mut self, inputs: Map<AttributeId, Value>) {
@@ -766,7 +754,7 @@ impl ModelHousehold {
     pub(crate) fn get_value(&self, attr: &AttributeId, time: &TimePeriod) -> Value {
         match attr as &str {
             "p_mw_load" => serde_json::to_value(self.p_mw_load).unwrap(),
-            "energy_balance" => serde_json::to_value(self.energy_balance).unwrap(),
+            "published_energy_balance" => serde_json::to_value(self.published_balance).unwrap(),
             "p_mw_pv" => serde_json::to_value(self.p_mw_pv).unwrap(),
             "battery_charge" => serde_json::to_value(self.get_battery_charge(time)).unwrap(),
             _ => {
