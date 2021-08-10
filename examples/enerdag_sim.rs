@@ -4,14 +4,15 @@ use std::collections::HashMap;
 use structopt::StructOpt;
 
 use enerdag_core::battery::forecast::DisposableEnergyCalcToml;
-use enerdag_core::battery::physical_model::PhysicalModelConfig;
 use enerdag_core::battery::smart_battery::wh_to_w;
 use enerdag_core::config::BatteryConfigToml;
 use enerdag_core::HouseholdBatteries;
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
-use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, Model, MosaikApi, Eid};
+use mosaik_rust_api::{
+    run_simulation, ApiHelpers, AttributeId, ConnectionDirection, Eid, Model, MosaikApi,
+};
 use sled::Db;
 
 ///Read, if we get an address or not
@@ -59,44 +60,78 @@ const MOSAIK_PARAM_START_TIME: &str = "start_time";
 /// A Simulation can have multiple [Neighborhoods](Neighborhood) that communicate with MOSAIK.
 /// The Neighborhoods then contain an enerdag system.
 pub struct HouseholdBatterySim {
-    pub neighborhoods: Vec<Neighborhood>,
-    data: Vec<Vec<Vec<f64>>>,
+    pub neighborhood: Option<Neighborhood>,
+
     eid_prefix: String,
     step_size: i64,
     entities: Map<String, Value>,
 }
 
 impl MosaikApi for HouseholdBatterySim {
+    ///Create *num* instances of *model* using the provided *model_params*.
+    /// *panics!* if more than one neighborhood is created.
+    fn create(
+        &mut self,
+        num: usize,
+        model: Model,
+        model_params: Option<Map<AttributeId, Value>>,
+    ) -> Vec<Map<String, Value>> {
+        if num > 1 || self.neighborhood.is_some() {
+            todo!("Create Support for more  than one Neighborhood");
+        }
+        let mut out_entities: Map<String, Value>;
+        let mut out_vector = Vec::with_capacity(1);
+        let next_eid = self.get_mut_entities().len();
+        if let Some(model_params) = model_params {
+            for i in next_eid..(next_eid + num) {
+                out_entities = Map::new();
+
+                let children = self.add_neighborhood(model_params.clone());
+                let nhdb = self.neighborhood.as_ref().unwrap();
+                let eid = nhdb.eid.clone();
+                self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+                out_entities.insert(String::from("eid"), json!(eid));
+                out_entities.insert(String::from("type"), model.clone());
+                out_entities.insert(String::from("children"), children);
+
+                println!("{:?}", out_entities);
+                out_vector.push(out_entities);
+            }
+        }
+        debug!("the created model: {:?}", out_vector);
+        out_vector
+    }
+
+    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value> {
+        let mut data: Map<String, Value> = Map::new();
+
+        if let Some(nbhd) = &mut self.neighborhood {
+            nbhd.add_output_values(&outputs, &mut data);
+        }
+
+        data
+    }
+
     fn setup_done(&self) {
         info!("Setup done!")
         //todo!()
+    }
+
+    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
+        // println!("Inputs; {:?}", inputs);
+
+        if let Some(nbhd) = &mut self.neighborhood {
+            nbhd.step(time, inputs);
+        }
+
+        time + self.step_size as usize
     }
 
     fn stop(&self) {
         info!("Simulation has stopped!")
         //todo!()
     }
-
-    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
-        println!("Inputs; {:?}", inputs);
-
-        for (eid, attrs) in inputs.into_iter() {
-            let model_index = self.get_mut_entities().get(&eid).unwrap().as_u64().unwrap();
-
-            let model: &Neighborhood = self.neighborhoods.get(model_index).unwrap();
-
-        }
-
-
-        time + self.step_size
-
-
-    }
 }
-
-
-
-
 
 impl ApiHelpers for HouseholdBatterySim {
     fn meta() -> Value {
@@ -106,8 +141,8 @@ impl ApiHelpers for HouseholdBatterySim {
             "Neighborhood":{
                 "public": true,
                 "params": [MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
-                "attrs": ["p_mw_pv", "p_mw_load", "energy_balance", "trades", "total",
-                        "battery_charges"]
+                "attrs": ["trades", "total",
+                        ]
                 },
                 "Consumer": {
                     "public": false,
@@ -160,47 +195,23 @@ impl ApiHelpers for HouseholdBatterySim {
                 .unwrap()
         };
 
-        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(start_time,0., household_configs, self.step_size);
-
-        self.data.push(vec![]); //Add list for simulation data
+        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(self.get_next_neighborhood_eid(), start_time,0., household_configs, self.step_size);
 
         let mosaik_children = model.households_as_mosaik_children();
-        self.neighborhoods.push(model);
+
+        self.neighborhood = Some(model);
 
         mosaik_children
     }
 
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
-        self.neighborhoods
-            .get(model_idx as usize)
-            .and_then(|x| x.get_value(attr))
+    fn get_model_value(&self, _model_idx: u64, _attr: &str) -> Option<Value> {
+        None
     }
 
     /// perform a simulation step and a auction of the marketplace for every neighborhood in
     /// the simulation
-    fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
-        // Resete die Prosumption (vom vorhergehenden step) bevor wir irgendetwas updaten
-        for neighborhood in self.neighborhoods.iter_mut() {
-            neighborhood.reset_prosumption();
-        }
-
-        // Update die Models
-        for (attr_id, idx, deltax) in deltas.into_iter() {
-            for (household_id, value) in deltax {
-                println!("{}", household_id);
-                self.neighborhoods[idx as usize].update_model(
-                    &attr_id,
-                    household_id,
-                    value.as_f64().unwrap_or_default(),
-                );
-            }
-        }
-
-        // iterate through the models and step each model
-        for (i, neighborhood) in self.neighborhoods.iter_mut().enumerate() {
-            neighborhood.step();
-            self.data[i].push(neighborhood.get_all_reading());
-        }
+    fn sim_step(&mut self, _deltas: Vec<(String, u64, Map<String, Value>)>) {
+        panic!("Not implemented in this instance");
     }
 }
 
@@ -212,8 +223,7 @@ impl HouseholdBatterySim {
             eid_prefix: String::from("Model_"),
             step_size: 5 * 60,
             entities: Map::new(),
-            neighborhoods: vec![],
-            data: vec![],
+            neighborhood: None,
         }
     }
     fn params_array_into_vec<'a, B, F>(
@@ -234,26 +244,6 @@ impl HouseholdBatterySim {
             .collect()
     }
 
-    fn params_to_battery_type(
-        &self,
-        model_params: &Map<AttributeId, Value>,
-    ) -> Vec<HouseholdBatteries> {
-        let battery_types: Vec<String> =
-            self.params_array_into_vec(&model_params, &"battery_types".to_string(), |x| {
-                serde_json::from_value(x.clone()).unwrap()
-            });
-        let battery_types = battery_types
-            .iter()
-            .map(|x| match &**x {
-                "SmartBattery" => HouseholdBatteries::SmartBattery,
-                "NoBattery" => HouseholdBatteries::NoBattery,
-                "SimpleBattery" => HouseholdBatteries::SimpleBattery,
-                _ => panic!("Unknown Battery type {}", x),
-            })
-            .collect();
-        battery_types
-    }
-
     fn params_to_household_config(
         &self,
         model_params: &Map<AttributeId, Value>,
@@ -267,10 +257,17 @@ impl HouseholdBatterySim {
             },
         )
     }
+    /// Returns the EID for the next neighborhood
+    fn get_next_neighborhood_eid(&self) -> String {
+        return "Neighborhood0".to_string();
+    }
 }
 
 //The simulator model containing the household models and the attributes for the collector.
+#[derive(Debug)]
 pub struct Neighborhood {
+    /// Entity ID of this Neighborhood
+    eid: String,
     households: HashMap<String, ModelHousehold>,
     /// An Vector of the trades at each simulationstep
     trades: usize,
@@ -284,6 +281,7 @@ pub struct Neighborhood {
 /// A Neighborhood with Prosumers and Consumers.
 impl Neighborhood {
     fn initmodel(
+        eid: String,
         time: TimePeriod,
         init_reading: f64,
         descriptions: Vec<HouseholdDescription>,
@@ -293,6 +291,7 @@ impl Neighborhood {
 
         let households = Self::create_households(descriptions, &time);
         Neighborhood {
+            eid,
             households,
             trades: 0,
             init_reading,
@@ -303,6 +302,30 @@ impl Neighborhood {
         }
     }
 
+    pub(crate) fn add_output_values(
+        &self,
+        requested_outputs: &HashMap<Eid, Vec<AttributeId>>,
+        output_data: &mut Map<String, Value>,
+    ) {
+        for (eid, attrs) in requested_outputs.iter() {
+            let mut requested_values: HashMap<String, Value> = HashMap::with_capacity(attrs.len());
+
+            for attr in attrs {
+                let value = if eid.eq(&self.eid) {
+                    self.get_value(attr).unwrap()
+                } else {
+                    if let Some(household) = self.households.get(eid) {
+                        household.get_value(attr, &self.time)
+                    } else {
+                        panic!("Requested Unknown EID {}", eid);
+                    }
+                };
+                requested_values.insert(attr.clone(), value);
+            }
+
+            output_data.insert(eid.clone(), serde_json::to_value(requested_values).unwrap());
+        }
+    }
     fn households_as_mosaik_children(&self) -> Value {
         let mut child_descriptions: Vec<HashMap<String, String>> =
             Vec::with_capacity(self.households.len());
@@ -316,8 +339,8 @@ impl Neighborhood {
         serde_json::to_value(child_descriptions).unwrap()
     }
 
-    ///Function gets called from get_model() to give the model values.
-    pub fn get_value(&self, attr: &str) -> Option<Value> {
+    /// Returns  values for *Mosaik attrs* of the Mosaik *Neighborhood* object.
+    fn get_value(&self, attr: &str) -> Option<Value> {
         if attr == "trades" {
             match serde_json::to_value(self.trades) {
                 Ok(value_trades) => Some(value_trades),
@@ -359,32 +382,7 @@ impl Neighborhood {
         }
     }
 
-    /// Returns all current readings (step should be finished).
-    pub fn get_all_reading(&self) -> Vec<f64> {
-        self.households.values().map(|x| x.energy_balance).collect()
-    }
-
-    /// Update the models that get new values from the household simulation.
-    pub fn update_model(&mut self, attr: &str, household_id: String, delta: f64) {
-        log::debug!("{}", &household_id);
-        println!("{}", household_id);
-
-        match attr {
-            "p_mw_pv" => {
-                let mut household = self.households.get_mut(&*household_id).unwrap();
-                household.p_mw_pv = delta
-            }
-            "p_mw_load" => {
-                let mut household = self.households.get_mut(&*household_id).unwrap();
-                household.p_mw_load = delta
-            }
-            x => {
-                error!("unknown attr requested: {}", x);
-            }
-        };
-    }
-
-    pub fn reset_prosumption(&mut self) {
+    pub(crate) fn reset_prosumption(&mut self) {
         for (_, household) in self.households.iter_mut() {
             household.reset_prosumption();
         }
@@ -398,8 +396,8 @@ impl Neighborhood {
             HashMap::with_capacity(descriptions.len());
         let mut types: HashMap<String, u32> = HashMap::new();
 
-        let mut descriptions = descriptions;
-        for (idx, household) in descriptions.into_iter().enumerate() {
+        let descriptions = descriptions;
+        for household in descriptions.into_iter() {
             let hh_type = &household.household_type;
             let num_type = *types.get(hh_type).unwrap_or(&0);
 
@@ -415,7 +413,10 @@ impl Neighborhood {
     }
 
     ///perform a normal simulation step.
-    fn step(&mut self) {
+    fn step(&mut self, _time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) {
+        self.reset_prosumption();
+        self.update_households(inputs);
+
         self.calculate_household_energy_balances();
 
         let total_disposable_energy = self.calculate_total_disposable_energy();
@@ -424,6 +425,16 @@ impl Neighborhood {
 
         self.trade_step(&bids);
         self.time = self.time.following();
+    }
+
+    fn update_households(&mut self, inputs: HashMap<Eid, Map<AttributeId, Value>>) {
+        for (eid, map) in inputs.into_iter() {
+            if let Some(household) = self.households.get_mut(&*eid) {
+                household.update_inputs(map);
+            } else {
+                error!("Could not find household {}!", eid);
+            }
+        }
     }
 
     fn calculate_household_energy_balances(&mut self) {
@@ -635,6 +646,23 @@ impl ModelHousehold {
         )
     }
 
+    pub(crate) fn update_inputs(&mut self, inputs: Map<AttributeId, Value>) {
+        for (attribute, value) in inputs.into_iter() {
+            let arr: HashMap<String, f64> = serde_json::from_value(value).unwrap();
+            let agg: f64 = arr.into_iter().map(|(_, x)| x).sum();
+            if attribute.eq("p_mw_load") {
+                self.p_mw_load = agg;
+            } else if attribute.eq("p_mw_pv") {
+                self.p_mw_pv = agg;
+            } else {
+                panic!(
+                    "Unknown Attribute: {} for {}",
+                    attribute, &self.household_type
+                );
+            }
+        }
+    }
+
     pub(crate) fn set_energy_balance(&mut self, energy_balance: EnergyBalance) {
         enerdag_core::db::insert_energy_balance(&self.db, &energy_balance)
             .expect("Could not insert Energy Balance.");
@@ -732,6 +760,18 @@ impl ModelHousehold {
             balance
         } else {
             panic!("No Battery Charge found!");
+        }
+    }
+
+    pub(crate) fn get_value(&self, attr: &AttributeId, time: &TimePeriod) -> Value {
+        match attr as &str {
+            "p_mw_load" => serde_json::to_value(self.p_mw_load).unwrap(),
+            "energy_balance" => serde_json::to_value(self.energy_balance).unwrap(),
+            "p_mw_pv" => serde_json::to_value(self.p_mw_pv).unwrap(),
+            "battery_charge" => serde_json::to_value(self.get_battery_charge(time)).unwrap(),
+            _ => {
+                panic!("Unknown Attribute {} for ModelHousehold", attr)
+            }
         }
     }
 }
