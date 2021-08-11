@@ -94,7 +94,6 @@ impl MosaikApi for HouseholdBatterySim {
                 out_entities.insert(String::from("type"), model.clone());
                 out_entities.insert(String::from("children"), children);
 
-                println!("{:?}", out_entities);
                 out_vector.push(out_entities);
             }
         }
@@ -141,18 +140,19 @@ impl ApiHelpers for HouseholdBatterySim {
             "Neighborhood":{
                 "public": true,
                 "params": [MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
-                "attrs": ["trades", "total",
+                "attrs": ["trades", "total","total_disposable_energy",
                         ]
                 },
                 "Consumer": {
                     "public": false,
                     "params": [],
-                    "attrs": ["p_mw_load", "published_energy_balance", "trades"]
+                    "attrs": ["p_mw_load", "energy_balance", "published_energy_balance", "trades", "battery_charge", "total_disposable_energy"]
                 },
                 "Prosumer": {
                     "public": false,
                     "params": [],
-                    "attrs": ["p_mw_load", "published_energy_balance", "p_mw_pv", "battery_charge", "trades"]
+                    "attrs": ["p_mw_load",  "energy_balance", "published_energy_balance", "p_mw_pv", "battery_charge", "trades",
+                    "disposable_energy", ]
                 },
                 "PV": {
                     "public": false,
@@ -274,7 +274,7 @@ pub struct Neighborhood {
     init_reading: f64,
     total: i64,
     time: TimePeriod,
-
+    total_disposable_energy: i64,
     step_size: i64,
 }
 
@@ -297,16 +297,20 @@ impl Neighborhood {
             init_reading,
             total: 0,
             time: TimePeriod::last(),
-
+            total_disposable_energy: 0,
             step_size,
         }
     }
 
+    /// For each output requested by MOSAIK, this method adds an entry to the `output_data` map.
     pub(crate) fn add_output_values(
         &self,
         requested_outputs: &HashMap<Eid, Vec<AttributeId>>,
         output_data: &mut Map<String, Value>,
     ) {
+        // The step method goes to the next period, so there is only data for the previous.
+        let last_period = self.time.previous();
+
         for (eid, attrs) in requested_outputs.iter() {
             let mut requested_values: HashMap<String, Value> = HashMap::with_capacity(attrs.len());
 
@@ -315,7 +319,7 @@ impl Neighborhood {
                     self.get_neighborhood_attr(attr)
                 } else {
                     if let Some(household) = self.households.get(eid) {
-                        household.get_value(attr, &self.time)
+                        household.get_value(attr, &last_period)
                     } else {
                         panic!("Requested Unknown EID {}", eid);
                     }
@@ -326,6 +330,7 @@ impl Neighborhood {
             output_data.insert(eid.clone(), serde_json::to_value(requested_values).unwrap());
         }
     }
+    /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
     fn households_as_mosaik_children(&self) -> Value {
         let mut child_descriptions: Vec<HashMap<String, String>> =
             Vec::with_capacity(self.households.len());
@@ -344,12 +349,16 @@ impl Neighborhood {
         match attr {
             "trades" => serde_json::to_value(self.trades).unwrap(),
             "total" => serde_json::to_value(self.total).unwrap(),
+            "total_disposable_energy" => {
+                serde_json::to_value(self.total_disposable_energy).unwrap()
+            }
             _ => {
                 panic!("Unknown Attribute requested for Neighborhood: {}", attr)
             }
         }
     }
 
+    /// Restes power generation / usage data for every household.
     pub(crate) fn reset_prosumption(&mut self) {
         for (_, household) in self.households.iter_mut() {
             household.reset_prosumption();
@@ -438,6 +447,7 @@ impl Neighborhood {
             "\n\tTotal Disposable Energy {}\t\n",
             total_disposable_energy
         );
+        self.total_disposable_energy = total_disposable_energy;
         total_disposable_energy
     }
 
@@ -651,6 +661,7 @@ impl ModelHousehold {
         }
     }
 
+    /// Inserts energy balance into db and sets `self.energy_balance` field.
     pub(crate) fn set_energy_balance(&mut self, energy_balance: EnergyBalance) {
         enerdag_core::db::insert_energy_balance(&self.db, &energy_balance)
             .expect("Could not insert Energy Balance.");
@@ -659,6 +670,7 @@ impl ModelHousehold {
         self.energy_balance = energy_balance.energy_balance as f64;
     }
 
+    /// Performs Calculations for the disposable energy in this period.
     pub(crate) fn get_disposable_energy(&self, time: &enerdag_time::TimePeriod) -> i64 {
         use enerdag_core::contracts::HouseholdBatteries::SmartBattery;
 
@@ -679,6 +691,7 @@ impl ModelHousehold {
         }
     }
 
+    /// Sets up the Battery for the given Household.
     pub fn setup_battery(
         battery_type: &HouseholdBatteries,
         db: &Db,
@@ -747,7 +760,8 @@ impl ModelHousehold {
         if let Ok(balance) = get_battery_charge(&self.db, time) {
             balance
         } else {
-            panic!("No Battery Charge found!");
+            error!("Could not find Battery Charge for period : {:?}", time);
+            EnergyBalance::new_with_period(0, time.clone())
         }
     }
 
@@ -755,8 +769,12 @@ impl ModelHousehold {
         match attr as &str {
             "p_mw_load" => serde_json::to_value(self.p_mw_load).unwrap(),
             "published_energy_balance" => serde_json::to_value(self.published_balance).unwrap(),
+            "energy_balance" => serde_json::to_value(self.energy_balance).unwrap(),
             "p_mw_pv" => serde_json::to_value(self.p_mw_pv).unwrap(),
-            "battery_charge" => serde_json::to_value(self.get_battery_charge(time)).unwrap(),
+            "disposable_energy" => serde_json::to_value(self.get_disposable_energy(time)).unwrap(),
+            "battery_charge" => {
+                serde_json::to_value(self.get_battery_charge(time).energy_balance).unwrap()
+            }
             _ => {
                 panic!("Unknown Attribute {} for ModelHousehold", attr)
             }
