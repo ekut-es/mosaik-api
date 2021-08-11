@@ -92,7 +92,6 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
                 out_entities.insert(String::from("children"), children);
                 println!("{:?}", out_entities);
                 out_vector.push(out_entities);
-
             }
         }
         debug!("the created model: {:?}", out_vector);
