@@ -140,7 +140,7 @@ impl ApiHelpers for HouseholdBatterySim {
             "Neighborhood":{
                 "public": true,
                 "params": [MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
-                "attrs": ["trades", "total","total_disposable_energy",
+                "attrs": ["trades", "total","total_disposable_energy", "grid_power_load"
                         ]
                 },
                 "Consumer": {
@@ -205,7 +205,7 @@ impl ApiHelpers for HouseholdBatterySim {
     }
 
     fn get_model_value(&self, _model_idx: u64, _attr: &str) -> Option<Value> {
-        None
+        panic!("Not implemented for this instance")
     }
 
     /// perform a simulation step and a auction of the marketplace for every neighborhood in
@@ -276,6 +276,7 @@ pub struct Neighborhood {
     time: TimePeriod,
     total_disposable_energy: i64,
     step_size: i64,
+    grid_power_load: i64,
 }
 
 /// A Neighborhood with Prosumers and Consumers.
@@ -298,6 +299,7 @@ impl Neighborhood {
             total: 0,
             time: TimePeriod::last(),
             total_disposable_energy: 0,
+            grid_power_load: 0,
             step_size,
         }
     }
@@ -352,13 +354,14 @@ impl Neighborhood {
             "total_disposable_energy" => {
                 serde_json::to_value(self.total_disposable_energy).unwrap()
             }
+            "grid_power_load" => serde_json::to_value(self.grid_power_load).unwrap(),
             _ => {
                 panic!("Unknown Attribute requested for Neighborhood: {}", attr)
             }
         }
     }
 
-    /// Restes power generation / usage data for every household.
+    /// Resets power generation / usage data for every household.
     pub(crate) fn reset_prosumption(&mut self) {
         for (_, household) in self.households.iter_mut() {
             household.reset_prosumption();
@@ -409,7 +412,7 @@ impl Neighborhood {
             if let Some(household) = self.households.get_mut(&*eid) {
                 household.update_inputs(map);
             } else {
-                error!("Could not find household {}!", eid);
+                panic!("Could not find household {}!", eid);
             }
         }
     }
@@ -429,11 +432,12 @@ impl Neighborhood {
         }
     }
 
-    fn calculate_grid_power_load(&self) -> i64 {
-        self.aggregate_household(
+    fn calculate_grid_power_load(&mut self) -> i64 {
+        self.grid_power_load = self.aggregate_household(
             |_, x: &ModelHousehold| x.get_power_load(&self.time),
             |x, y| x + y,
-        )
+        );
+        self.grid_power_load
     }
 
     fn calculate_total_disposable_energy(&mut self) -> i64 {
@@ -466,43 +470,59 @@ impl Neighborhood {
         total_disposable_energy: i64,
         grid_power_load: i64,
     ) -> Vec<([u8; 32], enerdag_marketplace::bid::Bid)> {
-        let mut bids = Vec::new();
+        let bids: Arc<Mutex<Vec<([u8; 32], enerdag_marketplace::bid::Bid)>>> =
+            Arc::new(Mutex::new(Vec::new()));
 
         #[cfg(feature = "random_prices")]
         use rand::{thread_rng, Rng};
         #[cfg(feature = "random_prices")]
         let mut rng = thread_rng();
 
-        for (name, household) in &mut self.households {
-            let energy_balance = EnergyBalance::new_with_period(
-                (household.energy_balance) as i64,
-                self.time.clone(),
-            );
+        /// Use crossbeam scoped threads instead of "vanilla" rust ones, because otherwise the compiler
+        /// would require a static lifetime of households, which is not necessary for the logic of
+        ///the program.  
+        use crossbeam::thread;
+        thread::scope(|scope| {
+            for (name, household) in &mut self.households {
+                let bids = Arc::clone(&bids);
+                let time = self.time.clone();
+                scope.spawn(move |_| {
+                    let energy_balance =
+                        EnergyBalance::new_with_period((household.energy_balance) as i64, time);
 
-            let published_energy_balance = household.perform_trade_round(
-                energy_balance,
-                grid_power_load,
-                total_disposable_energy,
-            );
+                    let published_energy_balance = household.perform_trade_round(
+                        energy_balance,
+                        grid_power_load,
+                        total_disposable_energy,
+                    );
 
-            let mut bid = enerdag_marketplace::bid::Bid {
-                energy_balance: published_energy_balance,
-                ..Default::default()
-            };
+                    let mut bid = enerdag_marketplace::bid::Bid {
+                        energy_balance: published_energy_balance,
+                        ..Default::default()
+                    };
 
-            #[cfg(feature = "random_prices")]
-            {
-                bid.price_buy_max = rng.gen_range(25..32);
-                bid.price_sell_min = rng.gen_range(8..15);
+                    #[cfg(feature = "random_prices")]
+                    {
+                        bid.price_buy_max = rng.gen_range(25..32);
+                        bid.price_sell_min = rng.gen_range(8..15);
+                    }
+                    #[cfg(not(feature = "random_prices"))]
+                    {
+                        bid.price_buy_max = 30;
+                        bid.price_sell_min = 12;
+                    }
+                    let mut bids = bids.lock().unwrap();
+                    bids.push((name.hash(), bid));
+                });
             }
-            #[cfg(not(feature = "random_prices"))]
-            {
-                bid.price_buy_max = 30;
-                bid.price_sell_min = 12;
-            }
-            bids.push((name.hash(), bid));
-        }
-        bids
+        })
+        .unwrap();
+
+        let mutex = Arc::try_unwrap(bids).expect("Could not move bids out of Arc.");
+        let b: Vec<([u8; 32], enerdag_marketplace::bid::Bid)> =
+            mutex.into_inner().expect("Could not get bids from mutex");
+
+        b
     }
 
     ///perform a market auction with the models in households.
@@ -520,6 +540,8 @@ impl Neighborhood {
 /// Used to Dispatch Functions
 type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
 use serde_derive::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
+
 /// Descriptor of a household to simulate. Used to be sent via JSON
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct HouseholdDescription {
@@ -631,7 +653,6 @@ impl ModelHousehold {
         total_disposable_energy: i64,
     ) -> EnergyBalance {
         use test_utilities::perform_trading_round;
-        enerdag_core::db::insert_energy_balance(&self.db, &energy_balance).unwrap();
         let eb = perform_trading_round(
             &self.db,
             &energy_balance.period,
@@ -640,6 +661,14 @@ impl ModelHousehold {
             total_disposable_energy,
         )
         .unwrap();
+        println!(
+            "{}: ({}, {})Internally/Published {}/{}",
+            self.battery_type.to_string(),
+            grid_power_load,
+            total_disposable_energy,
+            energy_balance.energy_balance,
+            eb.energy_balance
+        );
         self.published_balance = eb.energy_balance.clone();
         eb
     }
