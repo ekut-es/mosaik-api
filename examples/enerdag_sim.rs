@@ -441,11 +441,29 @@ impl Neighborhood {
     }
 
     fn calculate_total_disposable_energy(&mut self) -> i64 {
-        let disposable_energy: Vec<i64> = self
-            .households
-            .iter()
-            .map(|(_, h)| h.get_disposable_energy(&self.time))
-            .collect();
+        let disposable_energies: Arc<Mutex<Vec<i64>>> =
+            Arc::new(Mutex::new(Vec::with_capacity(self.households.len())));
+
+        use crossbeam::thread;
+        /// Calculate in parallel with scoped threads.
+        /// scoped threads avoid the need for static lifetimes.
+        thread::scope(|scope| {
+            for (_, household) in &mut self.households {
+                let time = self.time;
+                let disposable_energies = Arc::clone(&disposable_energies);
+                scope.spawn(move |_| {
+                    let disposable_energy = household.get_disposable_energy(&time);
+                    let mut energies = disposable_energies.lock().unwrap();
+                    energies.push(disposable_energy);
+                });
+            }
+        })
+        .expect("Error when calculating disposable energy.");
+
+        let disposable_energy = Arc::try_unwrap(disposable_energies)
+            .unwrap()
+            .into_inner()
+            .unwrap();
         let total_disposable_energy = disposable_energy.iter().sum();
         info!(
             "\n\tTotal Disposable Energy {}\t\n",
@@ -661,7 +679,7 @@ impl ModelHousehold {
             total_disposable_energy,
         )
         .unwrap();
-        println!(
+        debug!(
             "{}: ({}, {})Internally/Published {}/{}",
             self.battery_type.to_string(),
             grid_power_load,
