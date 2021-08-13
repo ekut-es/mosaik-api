@@ -1,3 +1,7 @@
+//! This example can be used to simulate complete traderounds (with calculations of disposable
+//! energy and battery states etc.) of a neighborhood. A single Neighborhood can be instantiated
+//! by sending a list of JSON representations of [HouseholdDescription] to the [create] Method.
+//! The Mosaik-Interface is different from [marketplace_sim](marketplace_sim). The
 use log::*;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -57,7 +61,7 @@ pub fn main() /*-> Result<()>*/
 const MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION: &str = "household_descriptions";
 const MOSAIK_PARAM_START_TIME: &str = "start_time";
 
-/// A Simulation can have multiple [Neighborhoods](Neighborhood) that communicate with MOSAIK.
+///  This simulation can currently simulate a single [Neighborhoods](Neighborhood).
 /// The Neighborhoods then contain an enerdag system.
 pub struct HouseholdBatterySim {
     pub neighborhood: Option<Neighborhood>,
@@ -101,21 +105,13 @@ impl MosaikApi for HouseholdBatterySim {
         out_vector
     }
 
-    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value> {
-        let mut data: Map<String, Value> = Map::new();
-
-        if let Some(nbhd) = &mut self.neighborhood {
-            nbhd.add_output_values(&outputs, &mut data);
-        }
-
-        data
-    }
-
     fn setup_done(&self) {
         info!("Setup done!")
         //todo!()
     }
 
+    /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
+    /// Just gives the inputs to [Neighborhood::step].
     fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
         // println!("Inputs; {:?}", inputs);
 
@@ -124,6 +120,18 @@ impl MosaikApi for HouseholdBatterySim {
         }
 
         time + self.step_size as usize
+    }
+
+    /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
+    /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
+    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value> {
+        let mut data: Map<String, Value> = Map::new();
+
+        if let Some(nbhd) = &mut self.neighborhood {
+            nbhd.add_output_values(&outputs, &mut data);
+        }
+
+        data
     }
 
     fn stop(&self) {
@@ -281,6 +289,13 @@ pub struct Neighborhood {
 
 /// A Neighborhood with Prosumers and Consumers.
 impl Neighborhood {
+    /************************************************
+       create
+       ----
+       Methods invoked by the MOSAIK create function
+       initmodel is used to create the struct itself and after that households_as_mosaik_children
+       returns JSON representation of the households for mosaik
+    ***********************************************/
     fn initmodel(
         eid: String,
         time: TimePeriod,
@@ -303,6 +318,51 @@ impl Neighborhood {
             step_size,
         }
     }
+
+    fn create_households(
+        descriptions: Vec<HouseholdDescription>,
+        time: &TimePeriod,
+    ) -> HashMap<String, ModelHousehold> {
+        let mut households: HashMap<String, ModelHousehold> =
+            HashMap::with_capacity(descriptions.len());
+        let mut types: HashMap<String, u32> = HashMap::new();
+
+        let descriptions = descriptions;
+        for household in descriptions.into_iter() {
+            let hh_type = &household.household_type;
+            let num_type = *types.get(hh_type).unwrap_or(&0);
+
+            let eid = format!("{}_{}", hh_type, num_type);
+            types.insert(hh_type.clone(), num_type + 1);
+
+            households.insert(
+                eid.to_ascii_lowercase(),
+                ModelHousehold::new_from_description(time.clone(), household),
+            );
+        }
+        households
+    }
+    /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
+    fn households_as_mosaik_children(&self) -> Value {
+        let mut child_descriptions: Vec<HashMap<String, String>> =
+            Vec::with_capacity(self.households.len());
+        for (eid, household) in self.households.iter() {
+            let mut hash_map = HashMap::with_capacity(2);
+            hash_map.insert("eid".to_string(), eid.clone());
+            hash_map.insert("type".to_string(), household.household_type.clone());
+            child_descriptions.push(hash_map);
+        }
+
+        serde_json::to_value(child_descriptions).unwrap()
+    }
+
+    /************************************************
+       get_data
+       ----
+       Methods invoked by the MOSAIK get_data function
+       Most important is the add_output_values function which writes the requested values
+       to the given mutable map
+    ***********************************************/
 
     /// For each output requested by MOSAIK, this method adds an entry to the `output_data` map.
     pub(crate) fn add_output_values(
@@ -332,19 +392,6 @@ impl Neighborhood {
             output_data.insert(eid.clone(), serde_json::to_value(requested_values).unwrap());
         }
     }
-    /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
-    fn households_as_mosaik_children(&self) -> Value {
-        let mut child_descriptions: Vec<HashMap<String, String>> =
-            Vec::with_capacity(self.households.len());
-        for (eid, household) in self.households.iter() {
-            let mut hash_map = HashMap::with_capacity(2);
-            hash_map.insert("eid".to_string(), eid.clone());
-            hash_map.insert("type".to_string(), household.household_type.clone());
-            child_descriptions.push(hash_map);
-        }
-
-        serde_json::to_value(child_descriptions).unwrap()
-    }
 
     /// Returns  values for *Mosaik attrs* of the Mosaik *Neighborhood* object.
     fn get_neighborhood_attr(&self, attr: &str) -> Value {
@@ -361,53 +408,39 @@ impl Neighborhood {
         }
     }
 
+    /************************************************
+       Step
+       ----
+       Methods invoked by the MOSAIK step function
+       updating data: reset_prosumption, update_household_input_params
+       prepare data for simulation: calculate_household_energy_balances, calculate_grid_power_load, calculate_total_disposable_energy
+       simulate traderound: collect_market_bids, trade_step
+    ***********************************************/
+
+    ///perform a normal simulation step.
+    fn step(&mut self, _time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) {
+        self.reset_prosumption();
+        self.update_household_input_params(inputs);
+
+        self.calculate_household_energy_balances();
+
+        let total_disposable_energy = self.calculate_total_disposable_energy();
+        let grid_power_load = self.calculate_grid_power_load();
+        let bids = self.collect_market_bids(total_disposable_energy, grid_power_load);
+
+        self.trade_step(&bids);
+        self.time = self.time.following();
+    }
     /// Resets power generation / usage data for every household.
     pub(crate) fn reset_prosumption(&mut self) {
         for (_, household) in self.households.iter_mut() {
             household.reset_prosumption();
         }
     }
-
-    fn create_households(
-        descriptions: Vec<HouseholdDescription>,
-        time: &TimePeriod,
-    ) -> HashMap<String, ModelHousehold> {
-        let mut households: HashMap<String, ModelHousehold> =
-            HashMap::with_capacity(descriptions.len());
-        let mut types: HashMap<String, u32> = HashMap::new();
-
-        let descriptions = descriptions;
-        for household in descriptions.into_iter() {
-            let hh_type = &household.household_type;
-            let num_type = *types.get(hh_type).unwrap_or(&0);
-
-            let eid = format!("{}_{}", hh_type, num_type);
-            types.insert(hh_type.clone(), num_type + 1);
-
-            households.insert(
-                eid.to_ascii_lowercase(),
-                ModelHousehold::new_from_description(time.clone(), household),
-            );
-        }
-        households
-    }
-
-    ///perform a normal simulation step.
-    fn step(&mut self, _time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) {
-        self.reset_prosumption();
-        self.update_households(inputs);
-
-        self.calculate_household_energy_balances();
-
-        let total_disposable_energy = self.calculate_total_disposable_energy();
-        let grid_power_load = self.calculate_grid_power_load();
-        let bids = self.perform_trading_rounds(total_disposable_energy, grid_power_load);
-
-        self.trade_step(&bids);
-        self.time = self.time.following();
-    }
-
-    fn update_households(&mut self, inputs: HashMap<Eid, Map<AttributeId, Value>>) {
+    /// updates the params given by mosaik.
+    /// *panics!* if a household can't be found by eid.
+    /// households may *panic!* if they don't recognize an attribute.
+    fn update_household_input_params(&mut self, inputs: HashMap<Eid, Map<AttributeId, Value>>) {
         for (eid, map) in inputs.into_iter() {
             if let Some(household) = self.households.get_mut(&*eid) {
                 household.update_inputs(map);
@@ -416,7 +449,7 @@ impl Neighborhood {
             }
         }
     }
-
+    /// Calculates the energy balance for each household in the neighborhood and makes a db entry.
     fn calculate_household_energy_balances(&mut self) {
         for (_, household) in self.households.iter_mut() {
             let energy_balance = household.p_mw_pv - household.p_mw_load;
@@ -432,6 +465,7 @@ impl Neighborhood {
         }
     }
 
+    /// Calculates the power deficit/surplus on the grid
     fn calculate_grid_power_load(&mut self) -> i64 {
         self.grid_power_load = self.aggregate_household(
             |_, x: &ModelHousehold| x.get_power_load(&self.time),
@@ -440,6 +474,7 @@ impl Neighborhood {
         self.grid_power_load
     }
 
+    /// Aggregates the total disposable energy of the neighborhood.
     fn calculate_total_disposable_energy(&mut self) -> i64 {
         let disposable_energies: Arc<Mutex<Vec<i64>>> =
             Arc::new(Mutex::new(Vec::with_capacity(self.households.len())));
@@ -483,7 +518,9 @@ impl Neighborhood {
         r
     }
 
-    fn perform_trading_rounds(
+    /// For each node in the neighborhood, this method runs everything a node does in a trading
+    /// round up to (and inclusive) publishing a bid. Collects the bids and returns them.
+    fn collect_market_bids(
         &mut self,
         total_disposable_energy: i64,
         grid_power_load: i64,
@@ -543,7 +580,7 @@ impl Neighborhood {
         b
     }
 
-    ///perform a market auction with the models in households.
+    /// Perform a market auction based on the published bids.
     fn trade_step(&mut self, bids: &Vec<([u8; 32], enerdag_marketplace::bid::Bid)>) {
         let mut market = Market::new_from_bytes(&bids, enerdag_currency::Currency::from_cents(7));
         market.trade();
@@ -578,6 +615,7 @@ pub struct HouseholdDescription {
 }
 
 #[derive(Debug)]
+/// This represents a node/household in the neighborhood.
 pub struct ModelHousehold {
     /// One of "Consumer", "Prosumer" or "PV".
     pub household_type: String,
@@ -691,6 +729,7 @@ impl ModelHousehold {
         eb
     }
 
+    /// Updates the inputs that sent via MOSAIK. *panics!* if an unknown input appears.
     pub(crate) fn update_inputs(&mut self, inputs: Map<AttributeId, Value>) {
         for (attribute, value) in inputs.into_iter() {
             let arr: HashMap<String, f64> = serde_json::from_value(value).unwrap();
