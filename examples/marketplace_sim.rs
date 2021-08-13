@@ -94,7 +94,7 @@ impl ApiHelpers for MarketplaceSim {
         &mut self.entities
     }
 
-    fn add_neighborhood(&mut self, model_params: Map<AttributeId, Value>) -> Value {
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Value {
         if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
             let /*mut*/ model:Model = Model::initmodel(init_reading);
             self.models.push(model);
