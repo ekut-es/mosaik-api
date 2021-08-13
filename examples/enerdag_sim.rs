@@ -480,8 +480,8 @@ impl Neighborhood {
             Arc::new(Mutex::new(Vec::with_capacity(self.households.len())));
 
         use crossbeam::thread;
-        /// Calculate in parallel with scoped threads.
-        /// scoped threads avoid the need for static lifetimes.
+        // Calculate in parallel with scoped threads.
+        // scoped threads avoid the need for static lifetimes.
         thread::scope(|scope| {
             for (_, household) in &mut self.households {
                 let time = self.time;
