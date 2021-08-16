@@ -90,7 +90,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
                 out_entities.insert(String::from("eid"), json!(eid));
                 out_entities.insert(String::from("type"), model.clone());
                 out_entities.insert(String::from("children"), children);
-                println!("{:?}", out_entities);
+                debug!("{:?}", out_entities);
                 out_vector.push(out_entities);
             }
         }
