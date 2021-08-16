@@ -46,8 +46,9 @@ pub trait ApiHelpers {
     fn get_step_size(&self) -> i64;
     /// Get the list containing the created entities.
     fn get_mut_entities(&mut self) -> &mut Map<String, Value>;
-    /// Create a model instance (= entity) with an initial value.
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>);
+    /// Create a model instance (= entity) with an initial value. Returns the [JSON-Value](Value)
+    /// representation of the children, if the entity has children.
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value>;
     /// Get the value from a entity.
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
     /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
@@ -85,10 +86,14 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
             for i in next_eid..(next_eid + num) {
                 out_entities = Map::new();
                 let eid = format!("{}{}", self.get_eid_prefix(), i);
-                self.add_model(model_params.clone());
+                let children = self.add_model(model_params.clone());
                 self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                 out_entities.insert(String::from("eid"), json!(eid));
                 out_entities.insert(String::from("type"), model.clone());
+                if let Some(children) = children {
+                    out_entities.insert(String::from("children"), children);
+                }
+                debug!("{:?}", out_entities);
                 out_vector.push(out_entities);
             }
         }
@@ -101,7 +106,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
 
     ///perform a simulation step and return the new time
     fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
-        debug!("the inputs in step: {:?}", inputs);
+        trace!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
         for (eid, attrs) in inputs.into_iter() {
             for (attr, attr_values) in attrs.into_iter() {
@@ -394,7 +399,7 @@ async fn broker_loop<T: MosaikApi>(
                 match json::parse_request(full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
-                        println!("The request: {:?}", request);
+                        trace!("The request: {:?}", request);
                         use json::Response::*;
                         match json::handle_request(request, &mut simulator) {
                             Successfull(response) => {
@@ -419,7 +424,7 @@ async fn broker_loop<T: MosaikApi>(
                         }
                     }
                     Err(e) => {
-                        error!("Error while parsing the request: {}", e);
+                        error!("Error while parsing the request: {:?}", e);
                     }
                 }
             }
