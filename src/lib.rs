@@ -46,8 +46,9 @@ pub trait ApiHelpers {
     fn get_step_size(&self) -> i64;
     /// Get the list containing the created entities.
     fn get_mut_entities(&mut self) -> &mut Map<String, Value>;
-    /// Create a model instance (= entity) with an initial value.
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Value;
+    /// Create a model instance (= entity) with an initial value. Returns the [JSON-Value](Value)
+    /// representation of the children, if the entity has children.
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value>;
     /// Get the value from a entity.
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
     /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
@@ -89,7 +90,9 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
                 self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                 out_entities.insert(String::from("eid"), json!(eid));
                 out_entities.insert(String::from("type"), model.clone());
-                out_entities.insert(String::from("children"), children);
+                if let Some(children) = children {
+                    out_entities.insert(String::from("children"), children);
+                }
                 println!("{:?}", out_entities);
                 out_vector.push(out_entities);
             }

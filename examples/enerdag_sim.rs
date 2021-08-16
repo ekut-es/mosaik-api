@@ -96,7 +96,10 @@ impl MosaikApi for HouseholdBatterySim {
                 self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
                 out_entities.insert(String::from("eid"), json!(eid));
                 out_entities.insert(String::from("type"), model.clone());
-                out_entities.insert(String::from("children"), children);
+
+                if let Some(children) = children {
+                    out_entities.insert(String::from("children"), children);
+                }
 
                 out_vector.push(out_entities);
             }
@@ -192,7 +195,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Value {
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value> {
         let household_configs = self.params_to_household_config(&model_params);
 
         let start_time = if !model_params.contains_key(MOSAIK_PARAM_START_TIME) {
@@ -209,7 +212,7 @@ impl ApiHelpers for HouseholdBatterySim {
 
         self.neighborhood = Some(model);
 
-        mosaik_children
+        Some(mosaik_children)
     }
 
     fn get_model_value(&self, _model_idx: u64, _attr: &str) -> Option<Value> {
