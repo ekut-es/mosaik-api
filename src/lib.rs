@@ -103,7 +103,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
 
     ///perform a simulation step and return the new time
     fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
-        println!("the inputs in step: {:?}", inputs);
+        trace!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
         for (eid, attrs) in inputs.into_iter() {
             for (attr, attr_values) in attrs.into_iter() {
