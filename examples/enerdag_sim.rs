@@ -27,6 +27,26 @@ struct Opt {
     addr: Option<String>,
 }
 
+/// Descriptor of a household to simulate. Used to be sent via JSON
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct HouseholdDescription {
+    /// Should be one of "Prosumer", "Consumer" or "PV", but does not have effect on internal calculations
+    pub household_type: String,
+    /// The Initial energy balance
+    pub initial_energy_balance: f64,
+    /// How a possible Smart Battery is set uo
+    pub battery_config: BatteryConfigToml,
+    /// Type of the Battery
+    pub battery_type: HouseholdBatteries,
+    /// Battery Capacity in WH (10 000 WH = 10 kWH)
+    pub battery_capacity: u64,
+    /// Initial Charge of the battery in WH
+    pub initial_charge: u64,
+    /// Filepath to a csv file containing the forecast. Only applicable if the BatteryConfig contains
+    /// a CSVDisposableEnergy
+    pub csv_filepath: Option<String>,
+}
+
 type MW = f64;
 #[allow(non_camel_case_types)]
 type kWh = f64;
@@ -599,23 +619,7 @@ impl Neighborhood {
 type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-
-/// Descriptor of a household to simulate. Used to be sent via JSON
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct HouseholdDescription {
-    /// Should be one of "Prosumer", "Consumer" or "PV", but does not have effect on internal calculations
-    pub household_type: String,
-    /// The Initial energy balance
-    pub initial_energy_balance: f64,
-    /// How a possible Smart Battery is set uo
-    pub battery_config: BatteryConfigToml,
-    /// Type of the Battery
-    pub battery_type: HouseholdBatteries,
-    /// Battery Capacity in WH (10 000 WH = 10 kWH)
-    pub battery_capacity: u64,
-    /// Initial Charge of the battery in WH
-    pub initial_charge: u64,
-}
+use test_utilities::config::insert_csv_battery_config;
 
 #[derive(Debug)]
 /// This represents a node/household in the neighborhood.
@@ -649,6 +653,7 @@ impl ModelHousehold {
             description.battery_type,
             description.battery_capacity,
             description.initial_charge,
+            description.csv_filepath,
             time,
         )
     }
@@ -659,6 +664,7 @@ impl ModelHousehold {
         battery_type: HouseholdBatteries,
         battery_capacity: u64,
         initial_charge: u64,
+        csv_filepath: Option<String>,
         time: enerdag_time::TimePeriod,
     ) -> Self {
         let db = test_utilities::setup_db();
@@ -669,22 +675,9 @@ impl ModelHousehold {
             battery_config,
             battery_capacity as i64,
             initial_charge as i64,
+            csv_filepath,
             &time,
         );
-        match battery_type {
-            HouseholdBatteries::SmartBattery => {
-                Self::setup_smart_battery(
-                    &db,
-                    battery_config,
-                    battery_capacity as i64,
-                    initial_charge as i64,
-                    &time,
-                );
-            }
-            _ => {
-                warn!("Not implemented yet");
-            }
-        }
 
         ModelHousehold {
             household_type,
@@ -787,12 +780,18 @@ impl ModelHousehold {
         config: &BatteryConfigToml,
         capacity: i64,
         charge: i64,
+        csv_filepath: Option<String>,
         initial_period: &TimePeriod,
     ) {
         match battery_type {
-            HouseholdBatteries::SmartBattery => {
-                Self::setup_smart_battery(db, config, capacity, charge, initial_period)
-            }
+            HouseholdBatteries::SmartBattery => Self::setup_smart_battery(
+                db,
+                config,
+                capacity,
+                charge,
+                csv_filepath,
+                initial_period,
+            ),
             HouseholdBatteries::SimpleBattery => todo!(),
             HouseholdBatteries::NoBattery => Self::setup_no_battery(db),
         }
@@ -802,6 +801,7 @@ impl ModelHousehold {
         config: &BatteryConfigToml,
         capacity: i64,
         charge: i64,
+        csv_filepath: Option<String>,
         initial_period: &TimePeriod,
     ) {
         use test_utilities::config::insert_uema_battery_config;
@@ -809,6 +809,17 @@ impl ModelHousehold {
         use test_utilities::test_helper_re::setup_smart_battery;
         setup_smart_battery(db, capacity);
         insert_initial_state(db, initial_period, charge);
+
+        // Small sanity check that regarding the  predictors and if a file was passed.
+        match config.disposable_energy_calc {
+            DisposableEnergyCalcToml::CSV => {
+                assert!(csv_filepath.is_some(), "The CSV Predictor needs a filepath")
+            }
+            _ if csv_filepath.is_some() => {
+                warn!("You did not configure the CSV Predictor but passed a CSV File!");
+            }
+            _ => {}
+        }
 
         match config.disposable_energy_calc {
             DisposableEnergyCalcToml::SARIMA => {
@@ -819,6 +830,10 @@ impl ModelHousehold {
             }
             DisposableEnergyCalcToml::UEMA => insert_uema_battery_config(db, capacity),
             DisposableEnergyCalcToml::TwentyPercent => {}
+            DisposableEnergyCalcToml::CSV => {
+                let filepath = csv_filepath.expect("Need a filepath to configure CSV Predictor");
+                insert_csv_battery_config(db, capacity, filepath);
+            }
         }
     }
 
