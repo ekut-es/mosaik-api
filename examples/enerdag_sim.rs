@@ -222,8 +222,16 @@ impl ApiHelpers for HouseholdBatterySim {
             warn!("No Start Time in Parameters, using Fallback to actual time.");
             TimePeriod::last()
         } else {
-            serde_json::from_value(model_params.get(MOSAIK_PARAM_START_TIME).unwrap().clone())
+            let mut timestamp: String =
+                serde_json::from_value(model_params.get(MOSAIK_PARAM_START_TIME).unwrap().clone())
+                    .unwrap();
+            // "2016-07-01 00:00:00"
+            timestamp.push_str("+00:00"); // Append Necessary UTC Datetime Info
+            let date = chrono::DateTime::parse_from_str(&*timestamp, "%F %X%:z")
                 .unwrap()
+                .with_timezone(&chrono::Utc);
+
+            enerdag_time::TimePeriod::create_period(date)
         };
 
         let /*mut*/ model: Neighborhood = Neighborhood::initmodel(self.get_next_neighborhood_eid(), start_time,0., household_configs, self.step_size);
@@ -335,7 +343,7 @@ impl Neighborhood {
             trades: 0,
             init_reading,
             total: 0,
-            time: TimePeriod::last(),
+            time,
             total_disposable_energy: 0,
             grid_power_load: 0,
             step_size,
@@ -617,6 +625,7 @@ impl Neighborhood {
 
 /// Used to Dispatch Functions
 type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
+use chrono::Utc;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use test_utilities::config::insert_csv_battery_config;
