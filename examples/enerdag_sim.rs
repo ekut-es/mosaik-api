@@ -183,7 +183,7 @@ impl ApiHelpers for HouseholdBatterySim {
                     "public": false,
                     "params": [],
                     "attrs": ["p_mw_load",  "energy_balance", "published_energy_balance", "p_mw_pv", "battery_charge", "trades",
-                    "disposable_energy", ]
+                    "disposable_energy", "p2p_traded", "avg_p2p_price"]
                 },
                 "PV": {
                     "public": false,
@@ -465,7 +465,7 @@ impl Neighborhood {
     /// Resets power generation / usage data for every household.
     pub(crate) fn reset_prosumption(&mut self) {
         for (_, household) in self.households.iter_mut() {
-            household.reset_prosumption();
+            household.reset_traderound_variables();
         }
     }
     /// updates the params given by mosaik.
@@ -618,14 +618,48 @@ impl Neighborhood {
         let total = market.get_total_leftover_energy();
         self.total = total.0 + total.1;
         debug!("all the trades: {:?}", &self.trades);
-        let trades = market.get_trades();
+        let trades = market.finish();
         self.trades = trades.len();
+        for trade in trades {
+            let buyer = self.search_household(&trade.buyer).unwrap().clone();
+            let seller = self.search_household(&trade.seller).unwrap().clone();
+            self.add_directed_trade_to_household(&buyer, &trade);
+            self.add_directed_trade_to_household(&seller, &trade);
+        }
+    }
+
+    /// Adds the Trade amount as a negative value to the buyer and as a positive value to the
+    /// seller.
+    fn add_directed_trade_to_household(&mut self, household_eid: &String, trade: &Trade) {
+        let direction_multiplied = if household_eid.hash().eq(&trade.buyer) {
+            1
+        } else {
+            -1
+        };
+        let household = self.households.get_mut(household_eid).unwrap();
+        household.price_energy_k_wh.push(trade.price_per_kwh);
+        household
+            .amount_energy_p2p_traded
+            .push(trade.amount_energy as i64 * direction_multiplied);
+    }
+
+    /// Returns the Key of [self.households] that corresponds to the given AddressByte
+    /// TODO: Maybe optimize with a lookup table?
+    fn search_household(&mut self, address: &AddressBytes) -> Option<&String> {
+        for key in self.households.keys() {
+            if key.hash().eq(address) {
+                return Some(key);
+            }
+        }
+        None
     }
 }
 
 /// Used to Dispatch Functions
 type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
 use chrono::Utc;
+use enerdag_crypto::signature::AddressBytes;
+use enerdag_marketplace::trade::Trade;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use test_utilities::config::insert_csv_battery_config;
@@ -647,6 +681,10 @@ pub struct ModelHousehold {
     pub battery_capacity: u64,
     /// Which type of battery
     pub battery_type: HouseholdBatteries,
+    /// Amount of Energy sold/bought on  P2P market
+    pub amount_energy_p2p_traded: Vec<i64>,
+    /// Price of the Energy sold/bought per kWh
+    pub price_energy_k_wh: Vec<enerdag_currency::Currency>,
     /// DB that holds all the information about this household
     db: Db,
 }
@@ -697,12 +735,17 @@ impl ModelHousehold {
             battery_capacity,
             battery_type,
             published_balance: 0,
+            amount_energy_p2p_traded: vec![],
+            price_energy_k_wh: vec![],
         }
     }
-    /// Set input variables to zero.
-    fn reset_prosumption(&mut self) {
+    /// Set variables that are calculated every traderound to zero or empty vectors.
+    fn reset_traderound_variables(&mut self) {
         self.p_mw_load = 0.0;
         self.p_mw_pv = 0.0;
+        self.price_energy_k_wh = vec![];
+        self.amount_energy_p2p_traded = vec![];
+        self.published_balance = 0;
     }
 
     /// Performs all the calculations of the PublishEnergyBalance Smart Contract and returns the
@@ -887,6 +930,21 @@ impl ModelHousehold {
             "disposable_energy" => serde_json::to_value(self.get_disposable_energy(time)).unwrap(),
             "battery_charge" => {
                 serde_json::to_value(self.get_battery_charge(time).energy_balance).unwrap()
+            }
+            "trades" => serde_json::to_value(self.amount_energy_p2p_traded.len()).unwrap(),
+            "p2p_traded" => {
+                serde_json::to_value(self.amount_energy_p2p_traded.iter().sum::<i64>()).unwrap()
+            }
+            "avg_p2p_price" => {
+                let amount_traded: f64 =
+                    self.amount_energy_p2p_traded.iter().sum::<i64>().abs() as f64;
+                let weighted_sum: i64 = self
+                    .amount_energy_p2p_traded
+                    .iter()
+                    .zip(&self.price_energy_k_wh)
+                    .map(|(amount, currency)| amount.abs() * currency.quantity)
+                    .sum();
+                serde_json::to_value(weighted_sum as f64 / amount_traded).unwrap()
             }
             _ => {
                 panic!("Unknown Attribute {} for ModelHousehold", attr)
