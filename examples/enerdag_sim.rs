@@ -637,9 +637,9 @@ impl Neighborhood {
     /// seller.
     fn add_directed_trade_to_household(&mut self, household_eid: &String, trade: &Trade) {
         let direction_multiplied = if household_eid.hash().eq(&trade.buyer) {
-            1
-        } else {
             -1
+        } else {
+            1
         };
         let household = self.households.get_mut(household_eid).unwrap();
         household.price_energy_k_wh.push(trade.price_per_kwh);
@@ -786,6 +786,12 @@ impl ModelHousehold {
     pub(crate) fn update_inputs(&mut self, inputs: Map<AttributeId, Value>) {
         for (attribute, value) in inputs.into_iter() {
             let arr: HashMap<String, f64> = serde_json::from_value(value).unwrap();
+            if arr.len() > 1 {
+                warn!(
+                    "Household receives attribute from more than one source: {:?}",
+                    arr
+                );
+            }
             let agg: f64 = arr.into_iter().map(|(_, x)| x).sum();
             if attribute.eq("p_mw_load") {
                 self.p_mw_load = agg;
@@ -849,9 +855,31 @@ impl ModelHousehold {
                 csv_filepath,
                 initial_period,
             ),
-            HouseholdBatteries::SimpleBattery => todo!(),
+            HouseholdBatteries::SimpleBattery => {
+                Self::setup_simple_battery(db, config, capacity, charge, initial_period)
+            }
             HouseholdBatteries::NoBattery => Self::setup_no_battery(db),
         }
+    }
+    fn setup_simple_battery(
+        db: &Db,
+        config: &BatteryConfigToml,
+        capacity: i64,
+        charge: i64,
+
+        initial_period: &TimePeriod,
+    ) {
+        use enerdag_core::db::battery::insert_battery_charge;
+        use enerdag_core::db::config::set_battery_capacity;
+        use enerdag_core::db::config::set_battery_type;
+        use test_utilities::test_helper_re;
+        set_battery_type(db, &HouseholdBatteries::SimpleBattery).unwrap();
+        set_battery_capacity(db, &(capacity as u64)).unwrap();
+        insert_battery_charge(
+            db,
+            &EnergyBalance::new_with_period(charge, initial_period.clone()),
+        )
+        .unwrap();
     }
     fn setup_smart_battery(
         db: &Db,
