@@ -177,13 +177,18 @@ impl ApiHelpers for HouseholdBatterySim {
                 "Consumer": {
                     "public": false,
                     "params": [],
-                    "attrs": ["p_mw_load", "energy_balance", "published_energy_balance", "trades", "battery_charge", "total_disposable_energy"]
+                    "attrs": ["p_mw_load", "energy_balance", "published_energy_balance", "trades",
+                        "battery_charge", "trades", "p2p_traded",
+                        "avg_p2p_price"
+                    ]
                 },
                 "Prosumer": {
                     "public": false,
                     "params": [],
-                    "attrs": ["p_mw_load",  "energy_balance", "published_energy_balance", "p_mw_pv", "battery_charge", "trades",
-                    "disposable_energy", "p2p_traded", "avg_p2p_price"]
+                    "attrs": ["p_mw_load",  "energy_balance", "published_energy_balance", "p_mw_pv",
+                        "battery_charge", "trades", "disposable_energy", "p2p_traded",
+                        "avg_p2p_price"
+                    ]
                 },
                 "PV": {
                     "public": false,
@@ -938,13 +943,19 @@ impl ModelHousehold {
             "avg_p2p_price" => {
                 let amount_traded: f64 =
                     self.amount_energy_p2p_traded.iter().sum::<i64>().abs() as f64;
-                let weighted_sum: i64 = self
-                    .amount_energy_p2p_traded
-                    .iter()
-                    .zip(&self.price_energy_k_wh)
-                    .map(|(amount, currency)| amount.abs() * currency.quantity)
-                    .sum();
-                serde_json::to_value(weighted_sum as f64 / amount_traded).unwrap()
+                serde_json::to_value(if amount_traded == 0. {
+                    0.
+                } else {
+                    let weighted_sum: i64 = self
+                        .amount_energy_p2p_traded
+                        .iter()
+                        .zip(&self.price_energy_k_wh)
+                        .map(|(amount, currency)| amount.abs() * currency.quantity)
+                        .sum();
+
+                    weighted_sum as f64 / amount_traded
+                })
+                .unwrap()
             }
             _ => {
                 panic!("Unknown Attribute {} for ModelHousehold", attr)
