@@ -818,8 +818,11 @@ impl ModelHousehold {
     /// Performs Calculations for the disposable energy in this period.
     pub(crate) fn get_disposable_energy(&self, time: &enerdag_time::TimePeriod) -> i64 {
         use enerdag_core::contracts::HouseholdBatteries::SmartBattery;
+        use enerdag_core::db::config::_get_battery_type;
 
-        HouseholdBatteries::get_disposable_energy(&SmartBattery, &self.db, time)
+        _get_battery_type(&self.db)
+            .expect("Could not get Battery Type")
+            .get_disposable_energy(&self.db, time)
     }
 
     /// Calculate the load the household draws from / gives to the grid
@@ -901,7 +904,7 @@ impl ModelHousehold {
                 assert!(csv_filepath.is_some(), "The CSV Predictor needs a filepath")
             }
             _ if csv_filepath.is_some() => {
-                warn!("You did not configure the CSV Predictor but passed a CSV File!");
+                println!("You did not configure the CSV Predictor but passed a CSV File!");
             }
             _ => {}
         }
