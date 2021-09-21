@@ -952,7 +952,11 @@ impl ModelHousehold {
         if let Ok(balance) = get_battery_charge(&self.db, time) {
             balance
         } else {
-            error!("Could not find Battery Charge for period : {:?}", time);
+            match self.battery_type {
+                HouseholdBatteries::NoBattery => (),
+                _ => error!("Could not find Battery Charge for period : {:?}", time),
+            };
+
             EnergyBalance::new_with_period(0, time.clone())
         }
     }
