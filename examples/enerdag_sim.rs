@@ -45,6 +45,8 @@ pub struct HouseholdDescription {
     /// Filepath to a csv file containing the forecast. Only applicable if the BatteryConfig contains
     /// a CSVDisposableEnergy
     pub csv_filepath: Option<String>,
+    /// Optionally give eid prefix, so the correct entity can be connected to the correct datasource
+    pub eid_prefix: Option<String>,
 }
 
 type MW = f64;
@@ -366,9 +368,15 @@ impl Neighborhood {
         let descriptions = descriptions;
         for household in descriptions.into_iter() {
             let hh_type = &household.household_type;
+            let eid_start = if let Some(eid_prefix) = &household.eid_prefix {
+                format!("{}_{}", eid_prefix, &(household.household_type))
+            } else {
+                (&household.household_type).clone()
+            };
+
             let num_type = *types.get(hh_type).unwrap_or(&0);
 
-            let eid = format!("{}_{}", hh_type, num_type);
+            let eid = format!("{}_{}", eid_start, num_type);
             types.insert(hh_type.clone(), num_type + 1);
 
             households.insert(
