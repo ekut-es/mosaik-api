@@ -600,12 +600,6 @@ impl Neighborhood {
                         ..Default::default()
                     };
 
-                    #[cfg(feature = "random_prices")]
-                    {
-                        bid.price_buy_max = rng.gen_range(25..32);
-                        bid.price_sell_min = rng.gen_range(8..15);
-                    }
-                    #[cfg(not(feature = "random_prices"))]
                     {
                         bid.price_buy_max = 30;
                         bid.price_sell_min = 12;
