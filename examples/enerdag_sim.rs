@@ -181,7 +181,7 @@ impl ApiHelpers for HouseholdBatterySim {
                     "params": [],
                     "attrs": ["p_mw_load", "energy_balance", "published_energy_balance", "trades",
                         "battery_charge", "trades", "p2p_traded",
-                        "avg_p2p_price"
+                        "avg_p2p_price", "published_p_mW_pv", "published_p_mW_load"
                     ]
                 },
                 "Prosumer": {
@@ -189,7 +189,7 @@ impl ApiHelpers for HouseholdBatterySim {
                     "params": [],
                     "attrs": ["p_mw_load",  "energy_balance", "published_energy_balance", "p_mw_pv",
                         "battery_charge", "trades", "disposable_energy", "p2p_traded",
-                        "avg_p2p_price"
+                        "avg_p2p_price", "published_p_mW_pv", "published_p_mW_load"
                     ]
                 },
                 "PV": {
@@ -994,6 +994,18 @@ impl ModelHousehold {
                 })
                 .unwrap()
             }
+            "published_p_mW_load" => serde_json::to_value(if self.published_balance > 0 {
+                0.
+            } else {
+                wh_to_mw(self.published_balance, chrono::Duration::minutes(5))
+            })
+            .unwrap(),
+            "published_p_mW_pv" => serde_json::to_value(if self.published_balance > 0 {
+                wh_to_mw(self.published_balance, chrono::Duration::minutes(5))
+            } else {
+                0.
+            })
+            .unwrap(),
             _ => {
                 panic!("Unknown Attribute {} for ModelHousehold", attr)
             }
@@ -1009,6 +1021,9 @@ fn mw_to_k_wh(power_m_w: MW, time_in_s: f64) -> kWh {
 
 fn mw_to_wh(power_mw: MW, time_in_s: f64) -> Wh {
     mw_to_k_wh(power_mw, time_in_s) * 1000.
+}
+fn wh_to_mw(power: i64, time: chrono::Duration) -> MW {
+    wh_to_w(power, time) as f64 / 1000.
 }
 
 #[cfg(test)]
