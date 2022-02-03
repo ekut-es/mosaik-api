@@ -665,11 +665,11 @@ impl Neighborhood {
 /// Used to Dispatch Functions
 type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
 use chrono::Utc;
+use enerdag_core::test_utilities::config::insert_csv_battery_config;
 use enerdag_crypto::signature::AddressBytes;
 use enerdag_marketplace::trade::Trade;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use test_utilities::config::insert_csv_battery_config;
 
 #[derive(Debug)]
 /// This represents a node/household in the neighborhood.
@@ -721,7 +721,7 @@ impl ModelHousehold {
         csv_filepath: Option<String>,
         time: enerdag_time::TimePeriod,
     ) -> Self {
-        let db = test_utilities::setup_db();
+        let db = enerdag_core::test_utilities::setup_db();
 
         Self::setup_battery(
             &battery_type,
@@ -763,7 +763,7 @@ impl ModelHousehold {
         grid_power_load: i64,
         total_disposable_energy: i64,
     ) -> EnergyBalance {
-        use test_utilities::perform_trading_round;
+        use enerdag_core::test_utilities::perform_trading_round;
         let eb = perform_trading_round(
             &self.db,
             &energy_balance.period,
@@ -877,7 +877,7 @@ impl ModelHousehold {
         use enerdag_core::db::battery::insert_battery_charge;
         use enerdag_core::db::config::set_battery_capacity;
         use enerdag_core::db::config::set_battery_type;
-        use test_utilities::test_helper_re;
+        use enerdag_core::test_utilities::test_helper_re;
         set_battery_type(db, &HouseholdBatteries::SimpleBattery).unwrap();
         set_battery_capacity(db, &(capacity as u64)).unwrap();
         insert_battery_charge(
@@ -894,6 +894,7 @@ impl ModelHousehold {
         csv_filepath: Option<String>,
         initial_period: &TimePeriod,
     ) {
+        use enerdag_core::*;
         use test_utilities::config::insert_uema_battery_config;
         use test_utilities::data::insert_initial_state;
         use test_utilities::test_helper_re::setup_smart_battery;
