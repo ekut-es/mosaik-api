@@ -160,8 +160,22 @@ impl MosaikApi for HouseholdBatterySim {
     }
 
     fn stop(&self) {
+        warn!("Clearing all the Databases of the simulation!");
+        if let Some(nbhd) = &(self.neighborhood) {
+            for (_, household) in nbhd.households.iter() {
+                let hh_db = &household.db;
+                let trees = hh_db.tree_names();
+                for tree in trees {
+                    if let Ok(tree) = hh_db.open_tree(tree) {
+                        if let Err(e) = tree.clear() {
+                            warn!("Error clearing db.");
+                        }
+                    }
+                }
+            }
+        }
+
         info!("Simulation has stopped!")
-        //todo!()
     }
 }
 
