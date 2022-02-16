@@ -1,5 +1,7 @@
 # mosaik-rust-api
 
+Currenlty for mosaik < v3
+
 Repo for the marketplace simulation.
 
 The [src](./src/) folder contains the API and the TCP manager in `lib.rs` with a parser in `json.rs`. These two are the main components for the communication with mosaik.
