@@ -43,4 +43,4 @@ crossbeam = "0.8"
 default = []
 # To use price ranges instead of fixed prices for trading
 random_prices = []
-sarima = []
+sarima = ["enerdag-core/sarima"]
