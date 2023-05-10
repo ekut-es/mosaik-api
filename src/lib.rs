@@ -274,7 +274,7 @@ async fn connection_loop(
                         Ok(()) => {
                             if let Err(e) = broker
                                 .send(Event::Request {
-                                    full_data: String::from_utf8(full_package[0..(size as usize)].to_vec())
+                                    full_data: String::from_utf8(full_package[0..size].to_vec())
                                         .expect("string from utf 8 connction loops"),
                                     name: name.clone(),
                                 })
@@ -291,7 +291,7 @@ async fn connection_loop(
             },
             void = connection_shutdown_reciever.next().fuse() => match void {
                 Some(_) => {
-                    println!("recieve connection_shutdown command");
+                    info!("recieve connection_shutdown command");
                     break;
                 },
                 None => break,
@@ -351,7 +351,7 @@ async fn broker_loop<T: MosaikApi>(
     let mut peer: (std::net::SocketAddr, Sender<Vec<u8>>);
     let mut events = events.fuse();
 
-    println!("New peer -> creating channels");
+    info!("New peer -> creating channels");
     if let Some(Event::NewPeer {
         name: _,
         stream,
@@ -362,7 +362,7 @@ async fn broker_loop<T: MosaikApi>(
         peer = (
             stream
                 .peer_addr()
-                .expect("unaible to read remote peer address"),
+                .expect("unaible to read remote peer address from {name}"),
             client_sender,
         );
         let mut disconnect_sender = disconnect_sender.clone();
@@ -394,12 +394,12 @@ async fn broker_loop<T: MosaikApi>(
         debug!("Received event: {:?}", event);
         match event {
             //The event that will happen the rest of the time, because the only connector is mosaik.
-            Event::Request { full_data, name: _ } => {
+            Event::Request { full_data, name } => {
                 //parse the request
                 match json::parse_request(full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
-                        trace!("The request: {:?}", request);
+                        trace!("The request: {:?} from {name}", request);
                         use json::Response::*;
                         match json::handle_request(request, &mut simulator) {
                             Successfull(response) => {
@@ -424,23 +424,23 @@ async fn broker_loop<T: MosaikApi>(
                         }
                     }
                     Err(e) => {
-                        error!("Error while parsing the request: {:?}", e);
+                        error!("Error while parsing the request from {name}: {:?}", e);
                     }
                 }
             }
             //The event for a new connector. //TODO: Check if new peer is even needed
             Event::NewPeer {
-                name: _,
+                name,
                 stream: _,
                 shutdown: _,
             } => {
-                error!("There is a peer already. No new peer needed.");
+                error!("There is a peer already. No new peer from {name} needed.");
             }
         }
     }
-    println!("dropping peer");
+    info!("dropping peer");
     drop(peer);
-    println!("closing channels");
+    info!("closing channels");
     drop(disconnect_sender);
     while let Some((_name, _pending_messages)) = disconnect_receiver.next().await {}
 }

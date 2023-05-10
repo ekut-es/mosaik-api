@@ -139,7 +139,7 @@ impl ApiHelpers for MarketplaceSim {
 impl MarketplaceSim {
     ///initialize the simulator
     pub fn init_sim() -> MarketplaceSim {
-        println!("initiate marketplace simulation.");
+        info!("initiate marketplace simulation.");
         MarketplaceSim {
             eid_prefix: String::from("Model_"),
             step_size: 15 * 60,
@@ -308,7 +308,7 @@ impl Model {
         market.trade();
         let total = market.get_total_leftover_energy();
         self.total = total.0 + total.1;
-        println!("{:?}", market.get_trades());
+        info!("{:?}", market.get_trades());
         debug!("all the trades: {:?}", &self.trades);
         let trades = market.get_trades();
         self.trades = trades.len();

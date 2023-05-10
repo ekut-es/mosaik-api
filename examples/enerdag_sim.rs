@@ -138,7 +138,7 @@ impl MosaikApi for HouseholdBatterySim {
     /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
     /// Just gives the inputs to [Neighborhood::step].
     fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
-        // println!("Inputs; {:?}", inputs);
+        // info!("Inputs; {:?}", inputs);
 
         if let Some(nbhd) = &mut self.neighborhood {
             nbhd.step(time, inputs);
@@ -278,7 +278,7 @@ impl ApiHelpers for HouseholdBatterySim {
 impl HouseholdBatterySim {
     ///initialize the simulator
     pub fn init_sim() -> HouseholdBatterySim {
-        println!("initiate marketplace simulation.");
+        info!("initiate marketplace simulation.");
         HouseholdBatterySim {
             eid_prefix: String::from("Model_"),
             step_size: 5 * 60,
@@ -921,7 +921,7 @@ impl ModelHousehold {
                 assert!(csv_filepath.is_some(), "The CSV Predictor needs a filepath")
             }
             _ if csv_filepath.is_some() => {
-                println!("You did not configure the CSV Predictor but passed a CSV File!");
+                info!("You did not configure the CSV Predictor but passed a CSV File!");
             }
             _ => {}
         }

@@ -203,13 +203,13 @@ mod tests {
             }
             if let Value::Object(kwargs) = &call[2] {
                 let map = json!({"times": 23});
-                println!("{:?}", map);
+                info!("{:?}", map);
                 assert_eq!(*kwargs.get("times").unwrap(), map["times"]);
             }
         }
 
         // Access parts of the data by indexing with square brackets.
-        // println!(
+        // info!(
         //     "Please call {} at the number {}",
         //     payload["name"], payload["phones"][0]
         // );
@@ -247,7 +247,7 @@ mod tests {
         let data_bytes_len = data_bytes.len();
 
 
-        //println!("The length of the array: {}", length);*/
+        //info!("The length of the array: {}", length);*/
     }
     #[test]
     #[ignore]
