@@ -10,7 +10,7 @@ async-std = "1"
 async-trait = "0.1.41"
 futures = "0.3.8"
 log = "0.4.11"
-serde = {version = "1.0", features = ["derive"]}
+serde = {version = "1.0.162", features = ["derive"]}
 serde_json = "1.0"
 thiserror = "1.0.22"
 
