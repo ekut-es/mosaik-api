@@ -1,2 +1,5 @@
 [net]
 git-fetch-with-cli = true # use the `git` executable for git operations (fixes git credentials for private repo)
+
+[registries.crates-io]
+protocol = "sparse"
