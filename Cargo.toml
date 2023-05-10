@@ -10,21 +10,21 @@ async-std = "1"
 async-trait = "0.1.41"
 futures = "0.3.8"
 log = "0.4.11"
-serde = {version = "1.0", features = ["derive"]}
+serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0.104"
 serde_json = "1.0"
 thiserror = "1.0.22"
 
 
 [dev-dependencies]
-enerdag-core = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
+enerdag-core = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
 
-enerdag-crypto = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
-enerdag-marketplace = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
-enerdag-time = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
-enerdag-currency = {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
-enerdag-utils =  {git = "https://gitlab+deploy-token-enerdag:Qhsn9UkL6zZxa4xPkWQf@atreus.informatik.uni-tuebingen.de/SecureEnergyProsumer/enerdag/", branch = "main"}
-chrono = {version = "0.4.11", features = ["serde"]}
+enerdag-crypto = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-marketplace = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-time = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-currency = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-utils = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+chrono = { version = "0.4.11", features = ["serde"] }
 #test_utilities = {path = "../enerdag/enerdag-core/test-utilities"}
 #enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
 #enerdag-marketplace = {path = "../enerdag/enerdag-marketplace"}
@@ -35,10 +35,9 @@ chrono = {version = "0.4.11", features = ["serde"]}
 
 structopt = "0.3"
 rand = "0.8.3"
-sled = {version = "0.34.6"}#, optional = true} # for debugging/measuring databse: , default-features = false  }
+sled = { version = "0.34.6" } #, optional = true} # for debugging/measuring databse: , default-features = false  }
 env_logger = "0.9"
 crossbeam = "0.8"
-
 
 
 [features]
