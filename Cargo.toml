@@ -36,7 +36,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 structopt = "0.3"
 rand = "0.8.3"
 sled = { version = "0.34.6" } #, optional = true} # for debugging/measuring databse: , default-features = false  }
-env_logger = "0.9"
+env_logger = "0.10.0"
 crossbeam = "0.8"
 
 
