@@ -160,8 +160,22 @@ impl MosaikApi for HouseholdBatterySim {
     }
 
     fn stop(&self) {
+        warn!("Clearing all the Databases of the simulation!");
+        if let Some(nbhd) = &(self.neighborhood) {
+            for (_, household) in nbhd.households.iter() {
+                let hh_db = &household.db;
+                let trees = hh_db.tree_names();
+                for tree in trees {
+                    if let Ok(tree) = hh_db.open_tree(tree) {
+                        if let Err(e) = tree.clear() {
+                            warn!("Error clearing db.");
+                        }
+                    }
+                }
+            }
+        }
+
         info!("Simulation has stopped!")
-        //todo!()
     }
 }
 
@@ -181,7 +195,7 @@ impl ApiHelpers for HouseholdBatterySim {
                     "params": [],
                     "attrs": ["p_mw_load", "energy_balance", "published_energy_balance", "trades",
                         "battery_charge", "trades", "p2p_traded",
-                        "avg_p2p_price"
+                        "avg_p2p_price", "published_p_mW_pv", "published_p_mW_load"
                     ]
                 },
                 "Prosumer": {
@@ -189,7 +203,7 @@ impl ApiHelpers for HouseholdBatterySim {
                     "params": [],
                     "attrs": ["p_mw_load",  "energy_balance", "published_energy_balance", "p_mw_pv",
                         "battery_charge", "trades", "disposable_energy", "p2p_traded",
-                        "avg_p2p_price"
+                        "avg_p2p_price", "published_p_mW_pv", "published_p_mW_load"
                     ]
                 },
                 "PV": {
@@ -665,11 +679,11 @@ impl Neighborhood {
 /// Used to Dispatch Functions
 type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
 use chrono::Utc;
+use enerdag_core::test_utilities::config::insert_csv_battery_config;
 use enerdag_crypto::signature::AddressBytes;
 use enerdag_marketplace::trade::Trade;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use test_utilities::config::insert_csv_battery_config;
 
 #[derive(Debug)]
 /// This represents a node/household in the neighborhood.
@@ -721,7 +735,7 @@ impl ModelHousehold {
         csv_filepath: Option<String>,
         time: enerdag_time::TimePeriod,
     ) -> Self {
-        let db = test_utilities::setup_db();
+        let db = enerdag_core::test_utilities::setup_db();
 
         Self::setup_battery(
             &battery_type,
@@ -763,7 +777,7 @@ impl ModelHousehold {
         grid_power_load: i64,
         total_disposable_energy: i64,
     ) -> EnergyBalance {
-        use test_utilities::perform_trading_round;
+        use enerdag_core::test_utilities::perform_trading_round;
         let eb = perform_trading_round(
             &self.db,
             &energy_balance.period,
@@ -877,7 +891,7 @@ impl ModelHousehold {
         use enerdag_core::db::battery::insert_battery_charge;
         use enerdag_core::db::config::set_battery_capacity;
         use enerdag_core::db::config::set_battery_type;
-        use test_utilities::test_helper_re;
+        use enerdag_core::test_utilities::test_helper_re;
         set_battery_type(db, &HouseholdBatteries::SimpleBattery).unwrap();
         set_battery_capacity(db, &(capacity as u64)).unwrap();
         insert_battery_charge(
@@ -894,6 +908,7 @@ impl ModelHousehold {
         csv_filepath: Option<String>,
         initial_period: &TimePeriod,
     ) {
+        use enerdag_core::*;
         use test_utilities::config::insert_uema_battery_config;
         use test_utilities::data::insert_initial_state;
         use test_utilities::test_helper_re::setup_smart_battery;
@@ -994,6 +1009,18 @@ impl ModelHousehold {
                 })
                 .unwrap()
             }
+            "published_p_mW_load" => serde_json::to_value(if self.published_balance > 0 {
+                0.
+            } else {
+                wh_to_mw(self.published_balance, chrono::Duration::minutes(5))
+            })
+            .unwrap(),
+            "published_p_mW_pv" => serde_json::to_value(if self.published_balance > 0 {
+                wh_to_mw(self.published_balance, chrono::Duration::minutes(5))
+            } else {
+                0.
+            })
+            .unwrap(),
             _ => {
                 panic!("Unknown Attribute {} for ModelHousehold", attr)
             }
@@ -1009,6 +1036,9 @@ fn mw_to_k_wh(power_m_w: MW, time_in_s: f64) -> kWh {
 
 fn mw_to_wh(power_mw: MW, time_in_s: f64) -> Wh {
     mw_to_k_wh(power_mw, time_in_s) * 1000.
+}
+fn wh_to_mw(power: i64, time: chrono::Duration) -> MW {
+    wh_to_w(power, time) as f64 / 1000.
 }
 
 #[cfg(test)]
