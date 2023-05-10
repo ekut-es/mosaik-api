@@ -168,7 +168,7 @@ impl MosaikApi for HouseholdBatterySim {
                 for tree in trees {
                     if let Ok(tree) = hh_db.open_tree(tree) {
                         if let Err(e) = tree.clear() {
-                            warn!("Error clearing db.");
+                            warn!("Error clearing db {e}");
                         }
                     }
                 }
@@ -678,11 +678,10 @@ impl Neighborhood {
 
 /// Used to Dispatch Functions
 type DispatchFunc<T> = fn(&ModelHousehold, &enerdag_time::TimePeriod) -> T;
-use chrono::Utc;
 use enerdag_core::test_utilities::config::insert_csv_battery_config;
 use enerdag_crypto::signature::AddressBytes;
 use enerdag_marketplace::trade::Trade;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
@@ -833,7 +832,6 @@ impl ModelHousehold {
 
     /// Performs Calculations for the disposable energy in this period.
     pub(crate) fn get_disposable_energy(&self, time: &enerdag_time::TimePeriod) -> i64 {
-        use enerdag_core::contracts::HouseholdBatteries::SmartBattery;
         use enerdag_core::db::config::_get_battery_type;
 
         _get_battery_type(&self.db)
@@ -891,7 +889,6 @@ impl ModelHousehold {
         use enerdag_core::db::battery::insert_battery_charge;
         use enerdag_core::db::config::set_battery_capacity;
         use enerdag_core::db::config::set_battery_type;
-        use enerdag_core::test_utilities::test_helper_re;
         set_battery_type(db, &HouseholdBatteries::SimpleBattery).unwrap();
         set_battery_capacity(db, &(capacity as u64)).unwrap();
         insert_battery_charge(
