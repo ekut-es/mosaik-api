@@ -1,45 +1,46 @@
 # mosaik-rust-api
 
-Currenlty for mosaik < v3
+Currently for mosaik < v3
 
-Repo for the marketplace simulation.
+Repository for the marketplace simulation.
 
-The [src](./src/) folder contains the API and the TCP manager in `lib.rs` with a parser in `json.rs`. These two are the main components for the communication with mosaik.
+The [src](./src/) folder contains the API and the TCP manager in `lib.rs` with a parser in `json.rs`. These are the main components for communicating with mosaik.
 
-The [examples](./examples/) folder contains `marketplace_sim.rs` which is the `main` file in rust terms for which we showcase the simulator. It holds the simulator for the marketplace of enerDAG.
+The [examples](./examples/) folder contains `marketplace_sim.rs`, which is the `main` file in Rust terms for which we present the simulator. It contains the simulator for the enerDAG marketplace.
 
 ## Requirements
 
 - Rust & mosaik-rust-api
-- (Mosaik) Simulation Repository and its requirements
+- (Mosaik) simulation repository and its requirements
 
-### Start the simulation
+### Starting the simulation
 
-1. The first thing that needs to be done is to build `marketplace_sim.rs`:
+1. The first thing to do is to build `marketplace_sim.rs`:
 
     - `cargo build --example marketplace_sim`
 
-2. The second thing is to decide how to start the simulation.
+2. The second thing to do is to decide how to start the simulation.
 
-    There are currently two ways to start the simulation:
-    - The first one is run the current version of `city_energy_simulation.py` interface in the simulation repo under cosimulation_city_energy.
-This version starts *marketplace_sim.rs itself.
+    There are currently two ways to run the simulation:
+    - The first is to run the current version of the `city_energy_simulation.py` interface in the simulation repo under cosimulation_city_energy.
+This version will run *marketplace_sim.rs itself.
 
-    - For the second way `city_energy_simulation.py` needs to be changed first:
-        - `'cmd': '../../mosaik-rust-api/target/debug/examples/marketplace_sim.exe -a %(addr)s',` this line need to be changed to
+    - The second way is to modify `city_energy_simulation.py` first:
+        - `'cmd': '../../mosaik-rust-api/target/debug/examples/marketplace_sim.exe -a %(addr)s',` this line needs to be changed to
         - ` 'connect': '127.0.0.1:3456', `.
 
-        If the change is done, `marketplace_sim.rs` needs to be started beforehand via:
+        Once the change has been made, `marketplace_sim.rs` needs to be started by running
         - `cargo run --example marketplace_sim`.
-            For debug: `$env:RUST_LOG="debug"; cargo run --example marketplace_sim`
+            For debugging: `$env:RUST_LOG="debug"; cargo run --example marketplace_sim`
 
-    After it got started it is waiting on a client to connect to the TCP manager, now `city_energy_simulation.py` can be started.
+    Once started, it will wait for a client to connect to the TCP manager, now the `city_energy_simulation.py`-Cosimulation can be started.
 
-#### Change the scenario
 
-To change the parameters of the simulation, define the scenarios in "rust_interface.py" which is located in the simulation repo under cosimulation_city_energy.
+#### Changing the scenario
 
-One can change the number of consumers, photovoltaic units and prosumers in the line with:
+To change the parameters of the simulation, define the scenarios in "rust_interface.py" located in the simulation repo under cosimulation_city_energy.
+
+You can change the number of consumers, photovoltaic units and prosumers in the line with:
 
 ```Python
 sim_data_entities = hhsim.householdsim(num_of_consumer=5, num_of_PV=5, num_of_prosumer=5, data_base_path=DATABASE_PATH, start_time=START).children
