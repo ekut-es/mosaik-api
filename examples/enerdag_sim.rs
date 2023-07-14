@@ -19,6 +19,8 @@ use mosaik_rust_api::{
 };
 use sled::Db;
 
+// TODO: Add max_advance and time_resolution to step() and init() functions
+
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
 struct Opt {
@@ -182,7 +184,8 @@ impl MosaikApi for HouseholdBatterySim {
 impl ApiHelpers for HouseholdBatterySim {
     fn meta() -> Value {
         json!({
-        "api_version": "2.2",
+        "api_version": "3.0",
+        "type": "time-based",
         "models":{
             "Neighborhood":{
                 "public": true,

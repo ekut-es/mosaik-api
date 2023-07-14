@@ -7,6 +7,8 @@ use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, MosaikApi};
 
+// TODO: Add max_advance and time_resolution to step() and init() functions
+
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
 struct Opt {
@@ -63,7 +65,8 @@ pub struct MarketplaceSim {
 impl ApiHelpers for MarketplaceSim {
     fn meta() -> Value {
         json!({
-        "api_version": "2.2",
+        "api_version": "3.0",
+        "type": "time-based",
         "models":{
             "MarktplatzModel":{
                 "public": true,

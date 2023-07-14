@@ -222,7 +222,8 @@ mod tests {
         let _v = json!(["an", "array"]);
         let _data1 = r#"[1, 1,
         {
-            "api_version": "2.2",
+            "api_version": "3.0",
+            "type": "time-based",
             "models":{
                 "ExampleModel":{
                     "public": true,
