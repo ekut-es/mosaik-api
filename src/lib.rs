@@ -35,7 +35,7 @@ pub type AttributeId = String;
 
 pub trait ApiHelpers {
     /// Gets the meta from the simulator, needs to be implemented on the simulator side.
-    fn meta() -> serde_json::Value;
+    fn meta() -> Meta;
     /// Set the eid\_prefix on the simulator, which we got from the interface.
     fn set_eid_prefix(&mut self, eid_prefix: &str);
     /// Set the step_size on the simulator, which we got from the interface.
