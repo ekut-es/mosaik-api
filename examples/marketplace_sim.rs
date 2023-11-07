@@ -242,14 +242,14 @@ impl Model {
         log::debug!("{}", &household_id);
         match attr {
             "p_mw_pv" => {
-                let mut household = self
+                let household = self
                     .households
                     .entry(household_id)
                     .or_insert(ModelHousehold::new(self.init_reading));
                 household.p_mw_pv = delta
             }
             "p_mw_load" => {
-                let mut household = self
+                let household = self
                     .households
                     .entry(household_id)
                     .or_insert(ModelHousehold::new(self.init_reading));

@@ -43,7 +43,7 @@ To change the parameters of the simulation, define the scenarios in "rust_interf
 You can change the number of consumers, photovoltaic units and prosumers in the line with:
 
 ```Python
-sim_data_entities = hhsim.householdsim(num_of_consumer=5, num_of_PV=5, num_of_prosumer=5, data_base_path=DATABASE_PATH, start_time=START).children
+sim_data_entities = hhsim.householdsim(num_of_consumer=5, num_of_pv=5, num_of_prosumer=5, data_base_path=DATABASE_PATH, start_time=START).children
 ```
 
 The step size of the simulation is currently 15 minutes and can be changed in `city_energy_simulation.py`, as well as the start and end time of the simulation.

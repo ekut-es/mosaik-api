@@ -19,6 +19,8 @@ use mosaik_rust_api::{
 };
 use sled::Db;
 
+type BidWAddrTuple = ([u8; 32], enerdag_marketplace::bid::Bid);
+
 // TODO: Add max_advance and time_resolution to step() and init() functions
 
 ///Read, if we get an address or not
@@ -251,14 +253,14 @@ impl ApiHelpers for HouseholdBatterySim {
                     .unwrap();
             // "2016-07-01 00:00:00"
             timestamp.push_str("+00:00"); // Append Necessary UTC Datetime Info
-            let date = chrono::DateTime::parse_from_str(&*timestamp, "%F %X%:z")
+            let date = chrono::DateTime::parse_from_str(&timestamp, "%F %X%:z")
                 .unwrap()
                 .with_timezone(&chrono::Utc);
 
             enerdag_time::TimePeriod::create_period(date)
         };
 
-        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(self.get_next_neighborhood_eid(), start_time,0., household_configs, self.step_size);
+        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(self.get_next_neighborhood_eid(), start_time, household_configs, self.step_size);
 
         let mosaik_children = model.households_as_mosaik_children();
 
@@ -322,7 +324,7 @@ impl HouseholdBatterySim {
     }
     /// Returns the EID for the next neighborhood
     fn get_next_neighborhood_eid(&self) -> String {
-        return "Neighborhood0".to_string();
+        "Neighborhood0".to_string()
     }
 }
 
@@ -334,7 +336,7 @@ pub struct Neighborhood {
     households: HashMap<String, ModelHousehold>,
     /// An Vector of the trades at each simulationstep
     trades: usize,
-    init_reading: f64,
+    // init_reading: f64,
     total: i64,
     time: TimePeriod,
     total_disposable_energy: i64,
@@ -354,7 +356,7 @@ impl Neighborhood {
     fn initmodel(
         eid: String,
         time: TimePeriod,
-        init_reading: f64,
+        // init_reading: f64,
         descriptions: Vec<HouseholdDescription>,
         step_size: i64,
     ) -> Neighborhood {
@@ -365,7 +367,7 @@ impl Neighborhood {
             eid,
             households,
             trades: 0,
-            init_reading,
+            // init_reading,
             total: 0,
             time,
             total_disposable_energy: 0,
@@ -382,13 +384,12 @@ impl Neighborhood {
             HashMap::with_capacity(descriptions.len());
         let mut types: HashMap<String, u32> = HashMap::new();
 
-        let descriptions = descriptions;
         for household in descriptions.into_iter() {
             let hh_type = &household.household_type;
             let eid_start = if let Some(eid_prefix) = &household.eid_prefix {
                 format!("{}_{}", eid_prefix, &(household.household_type))
             } else {
-                (&household.household_type).clone()
+                household.household_type.clone()
             };
 
             let num_type = *types.get(hh_type).unwrap_or(&0);
@@ -398,11 +399,12 @@ impl Neighborhood {
 
             households.insert(
                 eid.to_ascii_lowercase(),
-                ModelHousehold::new_from_description(time.clone(), household),
+                ModelHousehold::new_from_description(*time, household),
             );
         }
         households
     }
+
     /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
     fn households_as_mosaik_children(&self) -> Value {
         let mut child_descriptions: Vec<HashMap<String, String>> =
@@ -440,12 +442,10 @@ impl Neighborhood {
             for attr in attrs {
                 let value = if eid.eq(&self.eid) {
                     self.get_neighborhood_attr(attr)
+                } else if let Some(household) = self.households.get(eid) {
+                    household.get_value(attr, &last_period)
                 } else {
-                    if let Some(household) = self.households.get(eid) {
-                        household.get_value(attr, &last_period)
-                    } else {
-                        panic!("Requested Unknown EID {}", eid);
-                    }
+                    panic!("Requested Unknown EID {}", eid);
                 };
                 requested_values.insert(attr.clone(), value);
             }
@@ -521,7 +521,7 @@ impl Neighborhood {
             );
             household.set_energy_balance(EnergyBalance::new_with_period(
                 energy_balance_wh as i64,
-                self.time.clone(),
+                self.time,
             ))
         }
     }
@@ -544,7 +544,7 @@ impl Neighborhood {
         // Calculate in parallel with scoped threads.
         // scoped threads avoid the need for static lifetimes.
         thread::scope(|scope| {
-            for (_, household) in &mut self.households {
+            for household in &mut self.households.values_mut() {
                 let time = self.time;
                 let disposable_energies = Arc::clone(&disposable_energies);
                 scope.spawn(move |_| {
@@ -575,7 +575,7 @@ impl Neighborhood {
         F2: Fn(T, T) -> T,
     {
         let m = self.households.iter().map(|x| mapping(x.0, x.1));
-        let r: T = m.reduce(|x, y| agg(x, y)).unwrap();
+        let r: T = m.reduce(agg).unwrap();
         r
     }
 
@@ -586,8 +586,7 @@ impl Neighborhood {
         total_disposable_energy: i64,
         grid_power_load: i64,
     ) -> Vec<([u8; 32], enerdag_marketplace::bid::Bid)> {
-        let bids: Arc<Mutex<Vec<([u8; 32], enerdag_marketplace::bid::Bid)>>> =
-            Arc::new(Mutex::new(Vec::new()));
+        let bids: Arc<Mutex<Vec<BidWAddrTuple>>> = Arc::new(Mutex::new(Vec::new()));
 
         #[cfg(feature = "random_prices")]
         use rand::{thread_rng, Rng};
@@ -601,7 +600,7 @@ impl Neighborhood {
         thread::scope(|scope| {
             for (name, household) in &mut self.households {
                 let bids = Arc::clone(&bids);
-                let time = self.time.clone();
+                let time = self.time;
                 scope.spawn(move |_| {
                     let energy_balance =
                         EnergyBalance::new_with_period((household.energy_balance) as i64, time);
@@ -637,7 +636,7 @@ impl Neighborhood {
 
     /// Perform a market auction based on the published bids.
     fn trade_step(&mut self, bids: &Vec<([u8; 32], enerdag_marketplace::bid::Bid)>) {
-        let mut market = Market::new_from_bytes(&bids, enerdag_currency::Currency::from_cents(7));
+        let mut market = Market::new_from_bytes(bids, enerdag_currency::Currency::from_cents(7));
         market.trade();
         let total = market.get_total_leftover_energy();
         self.total = total.0 + total.1;
@@ -670,12 +669,7 @@ impl Neighborhood {
     /// Returns the Key of [self.households] that corresponds to the given AddressByte
     /// TODO: Maybe optimize with a lookup table?
     fn search_household(&mut self, address: &AddressBytes) -> Option<&String> {
-        for key in self.households.keys() {
-            if key.hash().eq(address) {
-                return Some(key);
-            }
-        }
-        None
+        self.households.keys().find(|&key| key.hash().eq(address))
     }
 }
 
@@ -686,6 +680,10 @@ use enerdag_crypto::signature::AddressBytes;
 use enerdag_marketplace::trade::Trade;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+
+type BatteryCapacity = u64;
+
+type BatterySetup = (BatteryConfigToml, HouseholdBatteries, BatteryCapacity);
 
 #[derive(Debug)]
 /// This represents a node/household in the neighborhood.
@@ -719,9 +717,11 @@ impl ModelHousehold {
         Self::new(
             description.household_type,
             description.initial_energy_balance,
-            &description.battery_config,
-            description.battery_type,
-            description.battery_capacity,
+            (
+                description.battery_config,
+                description.battery_type,
+                description.battery_capacity,
+            ),
             description.initial_charge,
             description.csv_filepath,
             time,
@@ -730,9 +730,10 @@ impl ModelHousehold {
     fn new(
         household_type: String,
         init_reading: f64,
-        battery_config: &BatteryConfigToml,
-        battery_type: HouseholdBatteries,
-        battery_capacity: u64,
+        battery_setup: BatterySetup,
+        // battery_config: &BatteryConfigToml,
+        // battery_type: HouseholdBatteries,
+        // battery_capacity: u64,
         initial_charge: u64,
         csv_filepath: Option<String>,
         time: enerdag_time::TimePeriod,
@@ -740,10 +741,10 @@ impl ModelHousehold {
         let db = enerdag_core::test_utilities::setup_db();
 
         Self::setup_battery(
-            &battery_type,
+            &battery_setup.1,
             &db,
-            battery_config,
-            battery_capacity as i64,
+            &battery_setup.0,
+            battery_setup.2 as i64,
             initial_charge as i64,
             csv_filepath,
             &time,
@@ -755,8 +756,8 @@ impl ModelHousehold {
             db,
             p_mw_load: 0.0,
             p_mw_pv: 0.0,
-            battery_capacity,
-            battery_type,
+            battery_capacity: battery_setup.2,
+            battery_type: battery_setup.1,
             published_balance: 0,
             amount_energy_p2p_traded: vec![],
             price_energy_k_wh: vec![],
@@ -796,7 +797,7 @@ impl ModelHousehold {
             energy_balance.energy_balance,
             eb.energy_balance
         );
-        self.published_balance = eb.energy_balance.clone();
+        self.published_balance = eb.energy_balance;
         eb
     }
 
@@ -810,7 +811,7 @@ impl ModelHousehold {
                     arr
                 );
             }
-            let agg: f64 = arr.into_iter().map(|(_, x)| x).sum();
+            let agg: f64 = arr.into_values().sum();
             if attribute.eq("p_mw_load") {
                 self.p_mw_load = agg;
             } else if attribute.eq("p_mw_pv") {
@@ -846,8 +847,7 @@ impl ModelHousehold {
     pub fn get_power_load(&self, time: &enerdag_time::TimePeriod) -> i64 {
         use enerdag_core::contracts::HousholdBatterySmartContract;
         use enerdag_core::db::config::_get_battery_type;
-        let energy_balance =
-            EnergyBalance::new_with_period(self.energy_balance as i64, time.clone());
+        let energy_balance = EnergyBalance::new_with_period(self.energy_balance as i64, *time);
         if let Ok(HouseholdBatteries::NoBattery) = _get_battery_type(&self.db) {
             let l = chrono::Duration::seconds(enerdag_time::TIME_PERIOD_LENGTH_SECONDS as i64);
             wh_to_w(energy_balance.energy_balance, l)
@@ -883,7 +883,7 @@ impl ModelHousehold {
     }
     fn setup_simple_battery(
         db: &Db,
-        config: &BatteryConfigToml,
+        _config: &BatteryConfigToml,
         capacity: i64,
         charge: i64,
 
@@ -894,11 +894,8 @@ impl ModelHousehold {
         use enerdag_core::db::config::set_battery_type;
         set_battery_type(db, &HouseholdBatteries::SimpleBattery).unwrap();
         set_battery_capacity(db, &(capacity as u64)).unwrap();
-        insert_battery_charge(
-            db,
-            &EnergyBalance::new_with_period(charge, initial_period.clone()),
-        )
-        .unwrap();
+        insert_battery_charge(db, &EnergyBalance::new_with_period(charge, *initial_period))
+            .unwrap();
     }
     fn setup_smart_battery(
         db: &Db,
@@ -974,7 +971,7 @@ impl ModelHousehold {
                 _ => error!("Could not find Battery Charge for period : {:?}", time),
             };
 
-            EnergyBalance::new_with_period(0, time.clone())
+            EnergyBalance::new_with_period(0, *time)
         }
     }
 
@@ -1030,8 +1027,8 @@ impl ModelHousehold {
 
 fn mw_to_k_wh(power_m_w: MW, time_in_s: f64) -> kWh {
     let p_in_k_w = power_m_w * 1000.;
-    let e_in_k_wh = p_in_k_w * (time_in_s / 3600.);
-    return e_in_k_wh;
+    // From kW to kWh
+    p_in_k_w * (time_in_s / 3600.)
 }
 
 fn mw_to_wh(power_mw: MW, time_in_s: f64) -> Wh {
@@ -1069,6 +1066,6 @@ fn k_wh_to_mw(energy: MW, time_in_s: i64) -> kWh {
     let hours = time_in_s as f64 / (3600.);
     let p_in_k_w = energy / hours;
     let p_in_w = p_in_k_w * 1000.;
-    let p_in_mw = p_in_w / (1000. * 1000.);
-    return p_in_mw;
+    // to MW
+    p_in_w / (1000. * 1000.)
 }
