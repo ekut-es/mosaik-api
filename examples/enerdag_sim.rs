@@ -595,7 +595,7 @@ impl Neighborhood {
 
         /// Use crossbeam scoped threads instead of "vanilla" rust ones, because otherwise the compiler
         /// would require a static lifetime of households, which is not necessary for the logic of
-        ///the program.  
+        ///the program.
         use crossbeam::thread;
         thread::scope(|scope| {
             for (name, household) in &mut self.households {
