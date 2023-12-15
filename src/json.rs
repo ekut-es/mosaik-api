@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, u64::MAX};
 
 use log::*;
 use serde_json::{json, map::Map, to_vec, Value};
@@ -76,8 +76,9 @@ pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Resp
             Some(request.kwargs),
         )),
         "step" => Value::from(simulator.step(
-            request.args[0].as_u64().unwrap_or_default() as usize,
-            inputs_to_hashmap(request.args[1].clone()),
+            request.args[0].as_i64().unwrap_or_default() as usize, // TODO default or panic?
+            inputs_to_hashmap(request.args[1].clone()), // TODO maybe clean this entierly from json types (kwargs can't be cleaned)
+            request.args[2].as_u64().unwrap_or(MAX) as usize, // TODO for time-based, always equal to 'until'
         )),
         "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
         "setup_done" => {

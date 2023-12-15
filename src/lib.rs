@@ -104,8 +104,14 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
     ///The function mosaik calls, if the init() and create() calls are done. Return Null
     fn setup_done(&self);
 
-    ///perform a simulation step and return the new time
-    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
+    /// Perform the next simulation step at time and return the new simulation time (the time at which step should be called again)
+    ///  or null if the simulator doesn’t need to step itself.
+    fn step(
+        &mut self,
+        time: usize,
+        inputs: HashMap<Eid, Map<AttributeId, Value>>,
+        max_advance: usize,
+    ) -> Option<usize> {
         trace!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
         for (eid, attrs) in inputs.into_iter() {
@@ -126,7 +132,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
         }
         self.sim_step(deltas);
 
-        time + (self.get_step_size() as usize)
+        Some(time + (self.get_step_size() as usize))
     }
 
     //collect data from the simulation and return a nested Vector containing the information
