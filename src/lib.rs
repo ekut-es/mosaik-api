@@ -33,6 +33,16 @@ pub type Eid = String;
 ///Id of an attribute of a Model
 pub type AttributeId = String;
 
+pub type Children = Value;
+
+pub struct Simulator {
+    // public static final String API_VERSION
+    pub api_version: &'static str,
+    // private final String simName
+    sim_name: &'static str,
+    // missing -> mosaik: MosaikProxy
+}
+
 pub trait ApiHelpers {
     /// Gets the meta from the simulator, needs to be implemented on the simulator side.
     fn meta() -> Meta;
@@ -48,7 +58,7 @@ pub trait ApiHelpers {
     fn get_mut_entities(&mut self) -> &mut Map<String, Value>;
     /// Create a model instance (= entity) with an initial value. Returns the [JSON-Value](Value)
     /// representation of the children, if the entity has children.
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value>;
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Children>;
     /// Get the value from a entity.
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
     /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
