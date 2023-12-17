@@ -74,36 +74,31 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
 
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik.
     /// Return the meta data meta.
-    fn init(
-        &mut self,
-        sid: Sid,
-        time_resolution: f64,
-        sim_params: Option<Map<String, Value>>,
-    ) -> Meta {
+    fn init(&mut self, sid: Sid, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         if time_resolution != 1.0 {
             info!("time_resolution must be 1.0");
             self.set_time_resolution(1.0f64);
         } else {
             self.set_time_resolution(time_resolution);
         }
-        if let Some(sim_params) = sim_params {
-            for (key, value) in sim_params {
-                match (key.as_str(), value) {
-                    /*("time_resolution", Value::Number(time_resolution)) => {
-                        self.set_time_resolution(time_resolution.as_f64().unwrap_or(1.0f64));
-                    }*/
-                    ("eid_prefix", Value::String(eid_prefix)) => {
-                        self.set_eid_prefix(&eid_prefix);
-                    }
-                    ("step_size", Value::Number(step_size)) => {
-                        self.set_step_size(step_size.as_i64().unwrap());
-                    }
-                    _ => {
-                        info!("Unknown parameter: {}", key);
-                    }
+
+        for (key, value) in sim_params {
+            match (key.as_str(), value) {
+                /*("time_resolution", Value::Number(time_resolution)) => {
+                    self.set_time_resolution(time_resolution.as_f64().unwrap_or(1.0f64));
+                }*/
+                ("eid_prefix", Value::String(eid_prefix)) => {
+                    self.set_eid_prefix(&eid_prefix);
+                }
+                ("step_size", Value::Number(step_size)) => {
+                    self.set_step_size(step_size.as_i64().unwrap());
+                }
+                _ => {
+                    info!("Unknown parameter: {}", key);
                 }
             }
         }
+
         Self::meta()
     }
 
@@ -112,26 +107,24 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
         &mut self,
         num: usize,
         model: Model,
-        model_params: Option<Map<AttributeId, Value>>,
+        model_params: Map<AttributeId, Value>,
     ) -> Vec<Map<String, Value>> {
-        let mut out_entities: Map<String, Value>;
         let mut out_vector = Vec::new();
         let next_eid = self.get_mut_entities().len();
-        if let Some(model_params) = model_params {
-            for i in next_eid..(next_eid + num) {
-                out_entities = Map::new();
-                let eid = format!("{}{}", self.get_eid_prefix(), i);
-                let children = self.add_model(model_params.clone());
-                self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-                out_entities.insert(String::from("eid"), json!(eid));
-                out_entities.insert(String::from("type"), model.clone());
-                if let Some(children) = children {
-                    out_entities.insert(String::from("children"), children);
-                }
-                debug!("{:?}", out_entities);
-                out_vector.push(out_entities);
+        for i in next_eid..(next_eid + num) {
+            let mut out_entities: Map<String, Value> = Map::new();
+            let eid = format!("{}{}", self.get_eid_prefix(), i);
+            let children = self.add_model(model_params.clone());
+            self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+            out_entities.insert(String::from("eid"), json!(eid));
+            out_entities.insert(String::from("type"), model.clone()); // FIXME shouldn't this be a Model instance, not a String?
+            if let Some(children) = children {
+                out_entities.insert(String::from("children"), children);
             }
+            debug!("{:?}", out_entities);
+            out_vector.push(out_entities);
         }
+
         debug!("the created model: {:?}", out_vector);
         out_vector
     }

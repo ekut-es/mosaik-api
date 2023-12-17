@@ -74,12 +74,12 @@ pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Resp
                 .get("time_resolution")
                 .map(|x| x.as_f64().unwrap_or(1.0f64))
                 .unwrap_or(1.0f64),
-            Some(request.kwargs),
+            request.kwargs,
         ),
         "create" => Value::from(simulator.create(
             request.args[0].as_u64().unwrap_or_default() as usize,
             request.args[1].clone(),
-            Some(request.kwargs),
+            request.kwargs,
         )),
         "step" => Value::from(simulator.step(
             request.args[0].as_i64().unwrap_or_default() as usize, // TODO default or panic?
