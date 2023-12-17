@@ -95,6 +95,7 @@ pub struct HouseholdBatterySim {
     eid_prefix: String,
     step_size: i64,
     entities: Map<String, Value>,
+    time_resolution: f64,
 }
 
 impl MosaikApi for HouseholdBatterySim {
@@ -278,6 +279,14 @@ impl ApiHelpers for HouseholdBatterySim {
     fn sim_step(&mut self, _deltas: Vec<(String, u64, Map<String, Value>)>) {
         panic!("Not implemented in this instance");
     }
+
+    fn get_time_resolution(&self) -> f64 {
+        self.time_resolution
+    }
+
+    fn set_time_resolution(&mut self, time_resolution: f64) {
+        self.time_resolution = time_resolution;
+    }
 }
 
 impl HouseholdBatterySim {
@@ -289,6 +298,7 @@ impl HouseholdBatterySim {
             step_size: 5 * 60,
             entities: Map::new(),
             neighborhood: None,
+            time_resolution: 1.0f64,
         }
     }
     fn params_array_into_vec<'a, B, F>(

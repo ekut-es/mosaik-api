@@ -63,11 +63,29 @@ pub trait ApiHelpers {
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
     /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
+    // Get the time resolution of the Simulator.
+    fn get_time_resolution(&self) -> f64;
+    // Set the time resolution of the Simulator.
+    fn set_time_resolution(&mut self, time_resolution: f64);
 }
 ///the class for the "empty" API calls
 pub trait MosaikApi: ApiHelpers + Send + 'static {
-    /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
-    fn init(&mut self, _sid: Sid, sim_params: Option<Map<String, Value>>) -> Meta {
+    //fn params<T: ApiHelpers>(&mut self) -> &mut T;
+
+    /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik.
+    /// Return the meta data meta.
+    fn init(
+        &mut self,
+        sid: Sid,
+        time_resolution: f64,
+        sim_params: Option<Map<String, Value>>,
+    ) -> Meta {
+        if time_resolution != 1.0 {
+            info!("time_resolution must be 1.0");
+            self.set_time_resolution(1.0f64);
+        } else {
+            self.set_time_resolution(time_resolution);
+        }
         if let Some(sim_params) = sim_params {
             for (key, value) in sim_params {
                 match (key.as_str(), value) {

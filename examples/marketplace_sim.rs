@@ -43,6 +43,10 @@ pub fn main() /*-> Result<()>*/
 }
 
 impl MosaikApi for MarketplaceSim {
+    /*fn get_mut_params<T: ApiHelpers>(&mut self) -> &mut T {
+        &mut self
+    }*/
+
     fn setup_done(&self) {
         info!("Setup done!")
         //todo!()
@@ -59,6 +63,7 @@ pub struct MarketplaceSim {
     eid_prefix: String,
     step_size: i64,
     entities: Map<String, Value>,
+    time_resolution: f64,
 }
 
 //Implementation of the helpers defined in the library
@@ -137,6 +142,14 @@ impl ApiHelpers for MarketplaceSim {
             self.data[i].push(model.get_all_reading());
         }
     }
+
+    fn get_time_resolution(&self) -> f64 {
+        self.time_resolution
+    }
+
+    fn set_time_resolution(&mut self, time_resolution: f64) {
+        self.time_resolution = time_resolution;
+    }
 }
 
 impl MarketplaceSim {
@@ -149,6 +162,7 @@ impl MarketplaceSim {
             entities: Map::new(),
             models: vec![],
             data: vec![],
+            time_resolution: 1.0f,
         }
     }
 }
