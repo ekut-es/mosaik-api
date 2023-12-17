@@ -69,13 +69,20 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
     fn init(&mut self, _sid: Sid, sim_params: Option<Map<String, Value>>) -> Meta {
         if let Some(sim_params) = sim_params {
-            if let Some(eid_prefix) = sim_params.get("eid_prefix") {
-                if let Some(prefix) = eid_prefix.as_str() {
-                    self.set_eid_prefix(prefix);
-                }
-            } else if let Some(step_size) = sim_params.get("step_size") {
-                if let Some(step_size) = step_size.as_i64() {
-                    self.set_step_size(step_size)
+            for (key, value) in sim_params {
+                match (key.as_str(), value) {
+                    /*("time_resolution", Value::Number(time_resolution)) => {
+                        self.set_time_resolution(time_resolution.as_f64().unwrap_or(1.0f64));
+                    }*/
+                    ("eid_prefix", Value::String(eid_prefix)) => {
+                        self.set_eid_prefix(&eid_prefix);
+                    }
+                    ("step_size", Value::Number(step_size)) => {
+                        self.set_step_size(step_size.as_i64().unwrap());
+                    }
+                    _ => {
+                        info!("Unknown parameter: {}", key);
+                    }
                 }
             }
         }
