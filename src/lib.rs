@@ -186,6 +186,8 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
             data.insert(eid, Value::from(attribute_values));
         }
         data
+        // TODO https://mosaik.readthedocs.io/en/latest/mosaik-api/low-level.html#get-data
+        // api-v3 needs optional 'time' entry in output map for event-based and hybrid Simulators
     }
 
     ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon as the function returns.
