@@ -15,13 +15,11 @@ use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
-    run_simulation, ApiHelpers, AttributeId, ConnectionDirection, Eid, Model, MosaikApi,
+    run_simulation, ApiHelpers, AttributeId, ConnectionDirection, Eid, MosaikApi,
 };
 use sled::Db;
 
 type BidWAddrTuple = ([u8; 32], enerdag_marketplace::bid::Bid);
-
-// TODO: Add max_advance and time_resolution to step() and init() functions
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -104,8 +102,8 @@ impl MosaikApi for HouseholdBatterySim {
     fn create(
         &mut self,
         num: usize,
-        model: Model,
-        model_params: Option<Map<AttributeId, Value>>,
+        model: String,
+        model_params: Map<AttributeId, Value>,
     ) -> Vec<Map<String, Value>> {
         if num > 1 || self.neighborhood.is_some() {
             todo!("Create Support for more  than one Neighborhood");
@@ -113,24 +111,24 @@ impl MosaikApi for HouseholdBatterySim {
         let mut out_entities: Map<String, Value>;
         let mut out_vector = Vec::with_capacity(1);
         let next_eid = self.get_mut_entities().len();
-        if let Some(model_params) = model_params {
-            for i in next_eid..(next_eid + num) {
-                out_entities = Map::new();
 
-                let children = self.add_model(model_params.clone());
-                let nhdb = self.neighborhood.as_ref().unwrap();
-                let eid = nhdb.eid.clone();
-                self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-                out_entities.insert(String::from("eid"), json!(eid));
-                out_entities.insert(String::from("type"), model.clone());
+        for i in next_eid..(next_eid + num) {
+            out_entities = Map::new();
 
-                if let Some(children) = children {
-                    out_entities.insert(String::from("children"), children);
-                }
+            let children = self.add_model(model_params.clone());
+            let nhdb = self.neighborhood.as_ref().unwrap();
+            let eid = nhdb.eid.clone();
+            self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+            out_entities.insert(String::from("eid"), json!(eid));
+            out_entities.insert(String::from("type"), json!(model.clone()));
 
-                out_vector.push(out_entities);
+            if let Some(children) = children {
+                out_entities.insert(String::from("children"), children);
             }
+
+            out_vector.push(out_entities);
         }
+
         debug!("the created model: {:?}", out_vector);
         out_vector
     }

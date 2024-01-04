@@ -25,8 +25,6 @@ pub type Meta = serde_json::Value;
 ///Id of the simulation
 pub type Sid = String;
 
-pub type Model = Value;
-
 ///Id of an entity
 pub type Eid = String;
 
@@ -74,7 +72,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
 
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik.
     /// Return the meta data meta.
-    fn init(&mut self, sid: Sid, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
+    fn init(&mut self, _sid: Sid, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         if time_resolution != 1.0 {
             info!("time_resolution must be 1.0");
             self.set_time_resolution(1.0f64);
@@ -106,7 +104,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
     fn create(
         &mut self,
         num: usize,
-        model: Model,
+        model_name: String,
         model_params: Map<AttributeId, Value>,
     ) -> Vec<Map<String, Value>> {
         let mut out_vector = Vec::new();
@@ -117,7 +115,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
             let children = self.add_model(model_params.clone());
             self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
             out_entities.insert(String::from("eid"), json!(eid));
-            out_entities.insert(String::from("type"), model.clone()); // FIXME shouldn't this be a Model instance, not a String?
+            out_entities.insert(String::from("type"), Value::String(model_name.clone()));
             if let Some(children) = children {
                 out_entities.insert(String::from("children"), children);
             }
@@ -138,6 +136,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
         &mut self,
         time: usize,
         inputs: HashMap<Eid, Map<AttributeId, Value>>,
+        #[allow(unused_variables)] // TODO: use this parameter
         max_advance: usize,
     ) -> Option<usize> {
         trace!("the inputs in step: {:?}", inputs);
@@ -445,6 +444,9 @@ async fn broker_loop<T: MosaikApi>(
                                     error!("error sending response to peer: {}", e);
                                 }
                             }
+                            Failure(response) => {
+                                todo!()
+                            }
                             Stop(response) => {
                                 if let Err(e) = peer.1.send(response).await {
                                     error!("error sending response to peer: {}", e);
@@ -461,6 +463,7 @@ async fn broker_loop<T: MosaikApi>(
                     }
                     Err(e) => {
                         error!("Error while parsing the request from {name}: {:?}", e);
+                        todo!("send a failure message")
                     }
                 }
             }

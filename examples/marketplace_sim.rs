@@ -7,8 +7,6 @@ use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, MosaikApi};
 
-// TODO: Add max_advance and time_resolution to step() and init() functions
-
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
 struct Opt {
@@ -162,7 +160,7 @@ impl MarketplaceSim {
             entities: Map::new(),
             models: vec![],
             data: vec![],
-            time_resolution: 1.0f,
+            time_resolution: 1.0f64,
         }
     }
 }

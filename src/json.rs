@@ -66,19 +66,19 @@ pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Resp
         "init" => simulator.init(
             request.args[0]
                 .as_str()
-                .unwrap_or("No Simulation ID from the request.")
+                .unwrap_or("No Simulation ID from the request.") // FIXME
                 .to_string(),
             // get time_resolution from kwargs and put the rest in sim_params map
             request
                 .kwargs
                 .get("time_resolution")
-                .map(|x| x.as_f64().unwrap_or(1.0f64))
+                .and_then(|x| x.as_f64())
                 .unwrap_or(1.0f64),
             request.kwargs,
         ),
         "create" => Value::from(simulator.create(
             request.args[0].as_u64().unwrap_or_default() as usize,
-            request.args[1].clone(),
+            request.args[1].as_str().unwrap_or("dummy").to_string(),
             request.kwargs,
         )),
         "step" => Value::from(simulator.step(
