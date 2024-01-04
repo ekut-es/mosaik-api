@@ -17,6 +17,7 @@ pub enum MosaikError {
 
 pub enum Response {
     Successfull(Vec<u8>),
+    Failure(Vec<u8>),
     Stop(Vec<u8>),
     None,
 }
@@ -82,10 +83,10 @@ pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Resp
             request.kwargs,
         )),
         "step" => Value::from(simulator.step(
-            request.args[0].as_i64().unwrap_or_default() as usize, // TODO default or panic?
+            request.args[0].as_i64().unwrap_or_default() as usize, // TODO error handling - if let error
             inputs_to_hashmap(request.args[1].clone()), // TODO maybe clean this entierly from json types (kwargs can't be cleaned)
-            request.args[2].as_u64().unwrap_or(MAX) as usize, // TODO for time-based, always equal to 'until'
-        )),
+            request.args[2].as_u64().unwrap_or(MAX) as usize, // TODO error handling - if let error
+        )), // add handling of optional return
         "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
         "setup_done" => {
             simulator.setup_done();

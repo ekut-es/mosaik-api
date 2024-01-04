@@ -37,7 +37,7 @@ pub struct Simulator {
     // public static final String API_VERSION
     pub api_version: &'static str,
     // private final String simName
-    sim_name: &'static str,
+    // - sim_name: &'static str,
     // missing -> mosaik: MosaikProxy
 }
 

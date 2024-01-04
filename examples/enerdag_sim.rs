@@ -140,14 +140,19 @@ impl MosaikApi for HouseholdBatterySim {
 
     /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
     /// Just gives the inputs to [Neighborhood::step].
-    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
+    fn step(
+        &mut self,
+        time: usize,
+        inputs: HashMap<Eid, Map<AttributeId, Value>>,
+        _max_advance: usize,
+    ) -> Option<usize> {
         // info!("Inputs; {:?}", inputs);
 
         if let Some(nbhd) = &mut self.neighborhood {
             nbhd.step(time, inputs);
         }
 
-        time + self.step_size as usize
+        Some(time + self.step_size as usize)
     }
 
     /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
