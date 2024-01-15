@@ -72,9 +72,9 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
 
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik.
     /// Return the meta data meta.
-    fn init(&mut self, _sid: Sid, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
+    fn init(&mut self, _sid: Sid, time_resolution: f64, sim_params: Map<String, Value>) -> Result<Meta>{
         if time_resolution != 1.0 {
-            info!("time_resolution must be 1.0");
+            info!("time_resolution must be 1.0"); // TODO this seems not true
             self.set_time_resolution(1.0f64);
         } else {
             self.set_time_resolution(time_resolution);
@@ -97,7 +97,7 @@ pub trait MosaikApi: ApiHelpers + Send + 'static {
             }
         }
 
-        Self::meta()
+        Ok(Self::meta())
     }
 
     ///Create *num* instances of *model* using the provided *model_params*.
