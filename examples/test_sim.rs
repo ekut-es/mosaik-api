@@ -2,22 +2,48 @@
 #![allow(dead_code)]
 #![cfg(not(test))]
 
-use std::{collections::HashMap, todo, unimplemented};
-
 use log::error;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use std::{collections::HashMap, todo, unimplemented};
+use structopt::StructOpt;
+
 use mosaik_rust_api::{
     default_api::{self, ApiHelpers},
+    run_simulation,
+    tcp::ConnectionDirection,
     types::{
         Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
         SimulatorType, Time,
     },
     MosaikApi,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
-use structopt::StructOpt;
+/* API calls:
 
-use mosaik_rust_api::{run_simulation, tcp::ConnectionDirection};
+    init
+
+    create
+
+    setup_done
+
+    step
+
+    get_data
+
+    stop
+
+Async. requests:
+
+    get_progress
+
+    get_related_entities
+
+    get_data
+
+    set_data
+
+    set_event
+ */
 #[derive(StructOpt, Debug)]
 struct Opt {
     //The local addres mosaik connects to or none, if we connect to them
@@ -101,7 +127,7 @@ impl RSimulator {
     }
 
     pub fn get_val(&self, index: usize) -> f64 {
-        self.models[index].get_val()
+        self.models.get(index).unwrap().get_val() //self.models[index].get_val()
     }
 
     pub fn get_delta(&self, index: usize) -> f64 {
