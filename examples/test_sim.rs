@@ -1,3 +1,9 @@
+// ignore this file when building with cargo
+#![allow(dead_code)]
+#![cfg(not(test))]
+
+use std::collections::HashMap;
+
 /* API calls:
 
     init
@@ -24,11 +30,42 @@ Async. requests:
 
     set_event
  */
-use std::collections::HashMap;
+use mosaik_rust_api::{ApiHelpers, AttributeId, Eid, MosaikApi};
+use serde_json::{json, Map, Value};
+use structopt::StructOpt;
 
-use mosaik_rust_api::{ApiHelpers, Eid, MosaikApi, Sid};
-use serde_json::{json, Value};
+use mosaik_rust_api::{run_simulation, ConnectionDirection};
+#[derive(StructOpt, Debug)]
+struct Opt {
+    //The local addres mosaik connects to or none, if we connect to them
+    #[structopt(short = "a", long)]
+    addr: Option<String>,
+}
+pub fn main() /*-> Result<()>*/
+{
+    //get the address if there is one
+    let opt = Opt::from_args();
+    env_logger::init();
 
+    let address = match opt.addr {
+        //case if we connect us to mosaik
+        Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
+            mosaik_addr.parse().expect("Address is not parseable."),
+        ),
+        //case if mosaik connects to us
+        None => {
+            let addr = "127.0.0.1:3456";
+            ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
+        }
+    };
+
+    //initialize the simulator.
+    let simulator = RExampleSim::new();
+    //start build_connection in the library.
+    if let Err(e) = run_simulation(address, simulator) {
+        error!("{:?}", e);
+    }
+}
 pub struct RModel {
     val: f64,
     delta: f64,
@@ -94,6 +131,7 @@ impl RSimulator {
 pub struct RExampleSim {
     eid_prefix: String,
     step_size: i64,
+    time: u64,
     time_resolution: f64,
     entities: serde_json::Map<String, Value>,
     models: Vec<RModel>,
@@ -101,7 +139,17 @@ pub struct RExampleSim {
 
 impl ApiHelpers for RExampleSim {
     fn meta() -> Value {
-        META
+        json!({
+            "type": "hybrid",
+            "models": {
+                "ExampleModel": {
+                    "public": true,
+                    "params": ["init_val"],
+                    "attrs": ["delta", "val"],
+                    "trigger": ["delta"],
+                },
+            },
+        })
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
@@ -150,36 +198,24 @@ impl ApiHelpers for RExampleSim {
     }
 }
 
-const META: Value = json!({
-    "type": "hybrid",
-    "models": {
-        "ExampleModel": {
-            "public": true,
-            "params": ["init_val"],
-            "attrs": ["delta", "val"],
-            "trigger": ["delta"],
-        },
-    },
-});
-
 impl MosaikApi for RExampleSim {
     fn create(
         &mut self,
         num: usize,
-        model: mosaik_rust_api::Model,
+        model_name: String,
         model_params: serde_json::Map<mosaik_rust_api::AttributeId, Value>,
     ) -> Vec<serde_json::Map<String, Value>> {
         let next_eid = self.entities.len();
         let mut result: Vec<serde_json::Map<String, Value>> = Vec::new();
 
         for i in next_eid..(next_eid + num) {
-            let model_instance = model.clone(); // FIXME this is a String, but shouldn't this rather be a RModel?
+            let model_instance = model_name.clone(); // FIXME this is a String, but shouldn't this rather be a RModel?
             let eid = format!("{}_{}", self.eid_prefix, i);
-            self.entities.insert(eid.clone(), model); // FIXME shouldn't this be a model instance?
+            self.entities.insert(eid.clone(), json!(model_name)); // FIXME shouldn't this be a model instance?
 
             let mut dict = serde_json::Map::new();
             dict.insert("eid".to_string(), json!(eid));
-            dict.insert("type".to_string(), json!(model));
+            dict.insert("type".to_string(), json!(model_name));
 
             result.push(dict);
         }
@@ -187,6 +223,35 @@ impl MosaikApi for RExampleSim {
         // entities must have length of num
         assert_eq!(result.len(), num); // TODO improve error handling
         result
+    }
+
+    fn step(
+        &mut self,
+        time: usize,
+        inputs: HashMap<Eid, Map<AttributeId, Value>>,
+        max_advance: usize,
+    ) -> Option<usize> {
+        self.time = time as u64;
+
+        for (eid, model_instance) in &mut self.entities {
+            if let Some(attrs) = inputs.get(eid) {
+                let mut new_delta = 0.0;
+                for (_, values) in attrs.iter_mut() {
+                    if let Some(new_delta) = values.as_object().map(|v| {
+                        v.values()
+                            .cloned()
+                            .map(|val| val.as_f64().unwrap_or(0.0))
+                            .sum()
+                    }) {
+                        model_instance.delta = new_delta
+                    }
+                }
+            }
+
+            model_instance.step()
+        }
+
+        return Some(time + 1); // Step size is 1 second
     }
 
     fn setup_done(&self) {
@@ -198,6 +263,15 @@ impl MosaikApi for RExampleSim {
     }
 }
 
-//let mut r: Value = ExampleSim.init(0, 1.0, None);
-
-// !ExampleSim.create(1, "ExampleModel", None);
+impl RExampleSim {
+    pub fn new() -> Self {
+        Self {
+            eid_prefix: "Model_".to_string(),
+            step_size: 1,
+            time: 0,
+            time_resolution: 1.0,
+            entities: serde_json::Map::new(),
+            models: Vec::new(),
+        }
+    }
+}
