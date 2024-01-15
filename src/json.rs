@@ -12,7 +12,7 @@ pub enum MosaikError {
     #[error("Parsing Mosaik Payload: {0}")]
     ParseError(String),
     #[error("Parsing Error")]
-    Serde(#[from] serde_json::Error),
+    Serde(#[from] serde_json::Error), // FIXME not used
 }
 
 pub enum Response {
@@ -110,7 +110,14 @@ pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Resp
 
     match to_vec_helper(content, request.id) {
         Some(vec) => Response::Successfull(vec),
-        None => Response::None,
+        None => {
+            let response: Value = Value::Array(vec![
+                json!(2),
+                json!(request.id),
+                Value::String("Stack Trace/Error Message".to_string()),
+            ]);
+            Response::Failure(to_vec(&response).unwrap())
+        }
     }
 }
 
@@ -119,6 +126,7 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
     //msg_type: MsgType,
     //id: usize,
     //payload: String,
+    // FIXME is this function necessary? or check Result in handle_request directly
     let response: Value = Value::Array(vec![json!(1), json!(id), content]);
 
     match to_vec(&response) {
@@ -129,7 +137,7 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
             Some(big_endian) //return the final response
         }
         Err(e) => {
-            error!("Failed to make an Vector with the response: {}", e);
+            error!("Failed to create a vector with the response: {}", e);
             None
         }
     }
