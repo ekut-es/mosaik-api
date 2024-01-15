@@ -442,9 +442,13 @@ async fn broker_loop<T: MosaikApi>(
                                 //-> send the message to mosaik channel reciever
                                 if let Err(e) = peer.1.send(response).await {
                                     error!("error sending response to peer: {}", e);
+                                    // FIXME what to send in this case? Failure?
                                 }
                             }
                             Failure(response) => {
+                                if let Err(e) = peer.1.send(response).await {
+                                    error!("error sending failure response to peer: {}", e);
+                                }
                                 todo!()
                             }
                             Stop(response) => {
@@ -462,6 +466,7 @@ async fn broker_loop<T: MosaikApi>(
                         }
                     }
                     Err(e) => {
+                        //if let Err(e) = peer.1.send()
                         error!("Error while parsing the request from {name}: {:?}", e);
                         todo!("send a failure message")
                     }
