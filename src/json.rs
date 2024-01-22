@@ -144,16 +144,23 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
 }
 
 ///Transform the requested map to hashmap of Id to a mapping
-fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<AttributeId, Value>> {
-    let mut hashmap = HashMap::new();
+fn inputs_to_hashmap(inputs: Value) -> Map<Eid, Map<AttributeId, Map<String, Value>>> {
+    let mut outer_map: Map<Eid, Map<AttributeId, Map<String, Map<String, Value>>>> = Map::new();
     if let Value::Object(eid_map) = inputs {
         for (eid, attr_values) in eid_map.into_iter() {
             if let Value::Object(attrid_map) = attr_values {
-                hashmap.insert(eid, attrid_map);
+                let mut inner_hashmap: Map<AttributeId, Map<String, Map<String, Value>>> =
+                    Map::new();
+                for (attrid, value) in attrid_map.into_iter() {
+                    if let Value::Object(value_map) = value {
+                        inner_hashmap.insert(attrid, value_map);
+                    }
+                }
+                outer_map.insert(eid, inner_hashmap);
             }
         }
     }
-    hashmap
+    outer_map
 }
 
 ///Transform the requested map to hashmap of Id to a vector
