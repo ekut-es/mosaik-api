@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use log::error;
-use mosaik_rust_api::{run_simulation, ApiHelpers, ConnectionDirection, MosaikApi};
+use mosaik_rust_api::{run_simulation, ApiHelpers, ConnectionDirection, MosaikApi, API_VERSION};
 use serde_json::{json, Map, Value};
 use structopt::StructOpt;
 
@@ -66,7 +66,7 @@ impl ApiHelpers for Controller {
 impl MosaikApi for Controller {
     fn init(&mut self, _: String, _: Option<Map<String, Value>>) -> Value {
         json!({
-            "api_version": "3.0",
+            "api_version": API_VERSION,
             "type": "event-based",
             "models": {
                 "Agent": {
@@ -109,7 +109,7 @@ impl MosaikApi for Controller {
             Map<mosaik_rust_api::AttributeId, Value>,
         >,
         // max_advance: usize,
-    ) -> Option<usize> {
+    ) -> usize {
         /* self.time = time
         data = {}
         for agent_eid, attrs in inputs.items():
@@ -170,7 +170,7 @@ impl MosaikApi for Controller {
             }
         }
         self.data = data;
-        None
+        0
     }
 
     fn get_data(
