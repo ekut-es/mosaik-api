@@ -3,21 +3,22 @@ import mosaik
 import mosaik.util
 
 # Sim config. and other parameters
+this_folder = __file__.rsplit("/", 1)[0]
 SIM_CONFIG = {
-    "RExampleSim": {
+    "ExampleSim": {
         "connect": "127.0.0.1:3456",
     },
     "Collector": {
-        "cmd": "%(python)s collector.py %(addr)s",
+        "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",
     },
 }
-END = 10 * 60  # 10 minutes
+END = 10 * 60
 
 # Create World
 world = mosaik.World(SIM_CONFIG)
 
 # Start simulators
-examplesim = world.start("RExampleSim", eid_prefix="RModel_")
+examplesim = world.start("ExampleSim", eid_prefix="RModel_")
 collector = world.start("Collector")
 
 # Instantiate models
