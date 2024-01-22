@@ -6,7 +6,7 @@ import mosaik.util
 this_folder = __file__.rsplit("/", 1)[0]
 SIM_CONFIG = {
     "ExampleSim": {
-        "connect": "127.0.0.1:3456",
+        "cmd": "cargo run --example example_sim -- -a=%(addr)s",
     },
     "Collector": {
         "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",
