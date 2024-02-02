@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 
-use log::error;
 /* API calls:
 
     init
@@ -65,7 +64,7 @@ pub fn main() /*-> Result<()>*/
     let simulator = RExampleSim::new();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        error!("{:?}", e);
+        //error!("{:?}", e);
     }
 }
 
@@ -137,8 +136,8 @@ pub struct RExampleSim {
     step_size: i64,
     time: u64,
     time_resolution: f64,
-    entities: serde_json::Map<String, Value>,
-    models: Vec<RModel>,
+    entities: HashMap<Eid, RModel>,
+    simulator: RSimulator,
 }
 
 impl ApiHelpers for RExampleSim {
@@ -172,16 +171,16 @@ impl ApiHelpers for RExampleSim {
         self.step_size = step_size;
     }
 
-    fn get_mut_entities(&mut self) -> &mut serde_json::Map<String, Value> {
-        &mut self.entities
+    fn get_mut_entities(&mut self) -> &mut Map<Eid, Value> {
+        todo!()
     }
 
     fn add_model(
         &mut self,
-        model_params: serde_json::Map<mosaik_rust_api::AttributeId, Value>,
+        model_params: Map<AttributeId, Value>,
     ) -> Option<Value> {
         let init_val = model_params.get("init_val").map(|v| v.as_f64().unwrap());
-        self.models.push(RModel::new(init_val));
+        self.simulator.models.push(RModel::new(init_val));
         None
     }
 
@@ -213,9 +212,10 @@ impl MosaikApi for RExampleSim {
         let mut result: Vec<serde_json::Map<String, Value>> = Vec::new();
 
         for i in next_eid..(next_eid + num) {
-            let model_instance = model_name.clone(); // FIXME this is a String, but shouldn't this rather be a RModel?
+            let model_instance = RModel::new(None); // FIXME this is a String, but shouldn't this rather be a RModel?
             let eid = format!("{}_{}", self.eid_prefix, i);
-            self.entities.insert(eid.clone(), json!(model_name)); // FIXME shouldn't this be a model instance?
+
+            self.entities.insert(eid.clone(), model_instance);
 
             let mut dict = serde_json::Map::new();
             dict.insert("eid".to_string(), json!(eid));
@@ -252,7 +252,7 @@ impl MosaikApi for RExampleSim {
                 }
             }
 
-            model_instance.step()
+            model_instance.step();
         }
 
         return Some(time + 1); // Step size is 1 second
@@ -274,8 +274,8 @@ impl RExampleSim {
             step_size: 1,
             time: 0,
             time_resolution: 1.0,
-            entities: serde_json::Map::new(),
-            models: Vec::new(),
+            entities: HashMap::new(),
+            simulator: RSimulator::new(),
         }
     }
 }
