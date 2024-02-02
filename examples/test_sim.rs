@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use log::error;
 /* API calls:
 
     init
@@ -64,7 +65,7 @@ pub fn main() /*-> Result<()>*/
     let simulator = RExampleSim::new();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        //error!("{:?}", e);
+        error!("{:?}", e);
     }
 }
 
@@ -239,11 +240,9 @@ impl MosaikApi for RExampleSim {
 
         for (eid, model_instance) in &mut self.entities {
             if let Some(attrs) = inputs.get(eid) {
-                let mut new_delta = 0.0;
-                for (_, values) in attrs.iter_mut() {
+                for (_, values) in attrs {
                     if let Some(new_delta) = values.as_object().map(|v| {
                         v.values()
-                            .cloned()
                             .map(|val| val.as_f64().unwrap_or(0.0))
                             .sum()
                     }) {
