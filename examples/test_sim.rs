@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use log::error;
 /* API calls:
 
     init
@@ -31,10 +32,11 @@ Async. requests:
     set_event
  */
 use mosaik_rust_api::{ApiHelpers, AttributeId, Eid, MosaikApi};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use structopt::StructOpt;
 
-use mosaik_rust_api::{run_simulation, ConnectionDirection};
+use mosaik_rust_api::{run_simulation, tcp::ConnectionDirection};
 #[derive(StructOpt, Debug)]
 struct Opt {
     //The local addres mosaik connects to or none, if we connect to them
@@ -66,6 +68,8 @@ pub fn main() /*-> Result<()>*/
         error!("{:?}", e);
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RModel {
     val: f64,
     delta: f64,
@@ -101,7 +105,7 @@ pub struct RSimulator {
 }
 
 impl RSimulator {
-    pub fn __init__() -> Self {
+    pub fn new() -> Self {
         Self { models: Vec::new() }
     }
 

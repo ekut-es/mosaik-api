@@ -5,7 +5,7 @@ use structopt::StructOpt;
 
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
-use mosaik_rust_api::{run_simulation, ApiHelpers, AttributeId, ConnectionDirection, MosaikApi};
+use mosaik_rust_api::{run_simulation, tcp::ConnectionDirection, ApiHelpers, AttributeId, MosaikApi};
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
