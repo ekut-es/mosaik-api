@@ -1,6 +1,7 @@
 use std::{collections::HashMap, u64::MAX};
 
 use log::*;
+use serde::Deserialize;
 use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
@@ -22,47 +23,22 @@ pub enum Response {
     None,
 }
 
-pub fn parse_request(data: String) -> Result<Request, MosaikError> {
+pub fn parse_request(data: String) -> Result<(u64, Request), MosaikError> {
     // Parse the string of data into serde_json::Value.
-    let payload = match serde_json::from_str(&data)? {
-        Value::Array(vecs) if vecs.len() == 3 => vecs,
-        e => {
-            return Err(MosaikError::ParseError(format!("Invalid Payload: {:?}", e)));
-        }
-    };
+    let payload: MosaikPayload = serde_json::from_str(&data)?;
 
-    if payload[0] != 0 {
+    if payload.msg_type != 0 {
         return Err(MosaikError::ParseError(format!(
             "Payload is not a request: {:?}",
             payload
         )));
     }
 
-    let id: u64 = payload[1].as_u64().unwrap();
-
-    match payload[2].clone() {
-        Value::Array(call) if call.len() == 3 => {
-            match (call[0].as_str(), call[1].clone(), call[2].clone()) {
-                (Some(method), Value::Array(args), Value::Object(kwargs)) => Ok(Request {
-                    id,
-                    method: method.to_string(),
-                    args,
-                    kwargs,
-                }),
-                (e1, e2, e3) => Err(MosaikError::ParseError(format!(
-                    "Payload is not a valid request: {:?} | {:?} | {:?}",
-                    e1, e2, e3
-                ))),
-            }
-        }
-        e => Err(MosaikError::ParseError(format!(
-            "Payload doesn't have valid method, args, kwargs Array: {:?}",
-            e
-        ))),
-    }
+    let request: Request = serde_json::from_value(payload.content)?;
+    Ok((payload.id, request))
 }
 
-pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Response {
+pub fn handle_request<T: MosaikApi>(id: u64, request: Request, simulator: &mut T) -> Response {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(
             request.args[0]
@@ -94,7 +70,7 @@ pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Resp
         }
         "stop" => {
             simulator.stop();
-            return match to_vec_helper(json!(null), request.id) {
+            return match to_vec_helper(json!(null), id) {
                 Some(vec) => Response::Stop(vec),
                 None => Response::None,
             };
@@ -108,12 +84,12 @@ pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Resp
         }
     };
 
-    match to_vec_helper(content, request.id) {
+    match to_vec_helper(content, id) {
         Some(vec) => Response::Successfull(vec),
         None => {
             let response: Value = Value::Array(vec![
                 json!(2),
-                json!(request.id),
+                json!(id),
                 Value::String("Stack Trace/Error Message".to_string()),
             ]);
             Response::Failure(to_vec(&response).unwrap())
@@ -189,9 +165,15 @@ fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
 //     ERROR,
 // }
 
-#[derive(Debug)]
-pub struct Request {
+#[derive(Debug, Deserialize)]
+pub struct MosaikPayload {
+    msg_type: u8,
     id: u64,
+    content: Value,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Request {
     method: String,
     args: Vec<Value>,
     kwargs: Map<String, Value>,

@@ -240,11 +240,11 @@ async fn broker_loop<T: MosaikApi>(
             Event::Request { full_data, name } => {
                 //parse the request
                 match json::parse_request(full_data) {
-                    Ok(request) => {
+                    Ok((id, request)) => {
                         //Handle the request -> simulations calls etc.
                         trace!("The request: {:?} from {name}", request);
                         use json::Response::*;
-                        match json::handle_request(request, &mut simulator) {
+                        match json::handle_request(id, request, &mut simulator) {
                             Successfull(response) => {
                                 //get the second argument in the tuple of peer
                                 //-> send the message to mosaik channel reciever
