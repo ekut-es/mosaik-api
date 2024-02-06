@@ -5,33 +5,7 @@
 use std::collections::HashMap;
 
 use log::error;
-/* API calls:
-
-    init
-
-    create
-
-    setup_done
-
-    step
-
-    get_data
-
-    stop
-
-Async. requests:
-
-    get_progress
-
-    get_related_entities
-
-    get_data
-
-    set_data
-
-    set_event
- */
-use mosaik_rust_api::{ApiHelpers, AttributeId, Eid, MosaikApi};
+use mosaik_rust_api::{ApiHelpers, AttributeId, DefaultMosaikApi, Eid, MosaikApi};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use structopt::StructOpt;
@@ -199,31 +173,11 @@ impl ApiHelpers for RExampleSim {
     }
 }
 
+impl DefaultMosaikApi for RExampleSim {}
+
 impl MosaikApi for RExampleSim {
-    // copied from default implementation
     fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Value {
-        if time_resolution != 1.0 {
-            self.set_time_resolution(1.0f64);
-        } else {
-            self.set_time_resolution(time_resolution);
-        }
-
-        for (key, value) in sim_params {
-            match (key.as_str(), value) {
-                /*("time_resolution", Value::Number(time_resolution)) => {
-                    self.set_time_resolution(time_resolution.as_f64().unwrap_or(1.0f64));
-                }*/
-                ("eid_prefix", Value::String(eid_prefix)) => {
-                    self.set_eid_prefix(&eid_prefix);
-                }
-                ("step_size", Value::Number(step_size)) => {
-                    self.set_step_size(step_size.as_i64().unwrap());
-                }
-                _ => {}
-            }
-        }
-
-        Self::meta()
+        DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
     }
     fn create(
         &mut self,
@@ -278,34 +232,11 @@ impl MosaikApi for RExampleSim {
         return Some(time + 1); // Step size is 1 second
     }
 
-    // copied from default implementation
     fn get_data(
         &mut self,
         outputs: HashMap<mosaik_rust_api::Eid, Vec<AttributeId>>,
     ) -> Map<mosaik_rust_api::Eid, Value> {
-        let mut data: Map<String, Value> = Map::new();
-        for (eid, attrs) in outputs.into_iter() {
-            let model_idx = match self.get_mut_entities().get(&eid) {
-                Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
-                _ => panic!("No correct model eid available."),
-            };
-            let mut attribute_values = Map::new();
-            for attr in attrs.into_iter() {
-                //Get the values of the model
-                if let Some(value) = self.get_model_value(model_idx, &attr) {
-                    attribute_values.insert(attr, value);
-                } else {
-                    error!(
-                        "No attribute called {} available in model {}",
-                        &attr, model_idx
-                    );
-                }
-            }
-            data.insert(eid, Value::from(attribute_values));
-        }
-        data
-        // TODO https://mosaik.readthedocs.io/en/latest/mosaik-api/low-level.html#get-data
-        // api-v3 needs optional 'time' entry in output map for event-based and hybrid Simulators
+        DefaultMosaikApi::get_data(self, outputs)
     }
 
     fn setup_done(&self) {
