@@ -99,6 +99,36 @@ pub struct HouseholdBatterySim {
 impl MosaikApi for HouseholdBatterySim {
     ///Create *num* instances of *model* using the provided *model_params*.
     /// *panics!* if more than one neighborhood is created.
+
+    // copied from default implementation
+    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Value {
+        if time_resolution != 1.0 {
+            info!("time_resolution must be 1.0"); // TODO this seems not true
+            self.set_time_resolution(1.0f64);
+        } else {
+            self.set_time_resolution(time_resolution);
+        }
+
+        for (key, value) in sim_params {
+            match (key.as_str(), value) {
+                /*("time_resolution", Value::Number(time_resolution)) => {
+                    self.set_time_resolution(time_resolution.as_f64().unwrap_or(1.0f64));
+                }*/
+                ("eid_prefix", Value::String(eid_prefix)) => {
+                    self.set_eid_prefix(&eid_prefix);
+                }
+                ("step_size", Value::Number(step_size)) => {
+                    self.set_step_size(step_size.as_i64().unwrap());
+                }
+                _ => {
+                    info!("Unknown parameter: {}", key);
+                }
+            }
+        }
+
+        Self::meta()
+    }
+
     fn create(
         &mut self,
         num: usize,

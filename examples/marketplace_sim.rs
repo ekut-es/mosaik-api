@@ -46,9 +46,130 @@ impl MosaikApi for MarketplaceSim {
         &mut self
     }*/
 
+    // copied from default implementation
+    fn init(
+        &mut self,
+        sid: mosaik_rust_api::Sid,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> mosaik_rust_api::Meta {
+        if time_resolution != 1.0 {
+            info!("time_resolution must be 1.0"); // TODO this seems not true
+            self.set_time_resolution(1.0f64);
+        } else {
+            self.set_time_resolution(time_resolution);
+        }
+
+        for (key, value) in sim_params {
+            match (key.as_str(), value) {
+                /*("time_resolution", Value::Number(time_resolution)) => {
+                    self.set_time_resolution(time_resolution.as_f64().unwrap_or(1.0f64));
+                }*/
+                ("eid_prefix", Value::String(eid_prefix)) => {
+                    self.set_eid_prefix(&eid_prefix);
+                }
+                ("step_size", Value::Number(step_size)) => {
+                    self.set_step_size(step_size.as_i64().unwrap());
+                }
+                _ => {
+                    info!("Unknown parameter: {}", key);
+                }
+            }
+        }
+
+        Self::meta()
+    }
+
+    // copied from default implementation
+    fn create(
+        &mut self,
+        num: usize,
+        model_name: String,
+        model_params: Map<AttributeId, Value>,
+    ) -> Vec<Map<String, Value>> {
+        let mut out_vector = Vec::new();
+        let next_eid = self.get_mut_entities().len();
+        for i in next_eid..(next_eid + num) {
+            let mut out_entities: Map<String, Value> = Map::new();
+            let eid = format!("{}{}", self.get_eid_prefix(), i);
+            let children = self.add_model(model_params.clone());
+            self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+            out_entities.insert(String::from("eid"), json!(eid));
+            out_entities.insert(String::from("type"), Value::String(model_name.clone()));
+            if let Some(children) = children {
+                out_entities.insert(String::from("children"), children);
+            }
+            debug!("{:?}", out_entities);
+            out_vector.push(out_entities);
+        }
+
+        debug!("the created model: {:?}", out_vector);
+        out_vector
+    }
+
     fn setup_done(&self) {
         info!("Setup done!")
         //todo!()
+    }
+
+    // copied from default implementation
+    fn step(
+        &mut self,
+        time: usize,
+        inputs: HashMap<mosaik_rust_api::Eid, Map<AttributeId, Value>>,
+        max_advance: usize,
+    ) -> Option<usize> {
+        trace!("the inputs in step: {:?}", inputs);
+        let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
+        for (eid, attrs) in inputs.into_iter() {
+            for (attr, attr_values) in attrs.into_iter() {
+                let model_idx = match self.get_mut_entities().get(&eid) {
+                    Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
+                    _ => panic!(
+                        "No correct model eid available. Input: {:?}, Entities: {:?}",
+                        eid,
+                        self.get_mut_entities()
+                    ),
+                };
+                if let Value::Object(values) = attr_values {
+                    deltas.push((attr, model_idx, values));
+                    debug!("the deltas for sim step: {:?}", deltas);
+                };
+            }
+        }
+        self.sim_step(deltas);
+
+        Some(time + (self.get_step_size() as usize))
+    }
+
+    // copied from default implementation
+    fn get_data(
+        &mut self,
+        outputs: HashMap<mosaik_rust_api::Eid, Vec<AttributeId>>,
+    ) -> Map<mosaik_rust_api::Eid, Value> {
+        let mut data: Map<String, Value> = Map::new();
+        for (eid, attrs) in outputs.into_iter() {
+            let model_idx = match self.get_mut_entities().get(&eid) {
+                Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
+                _ => panic!("No correct model eid available."),
+            };
+            let mut attribute_values = Map::new();
+            for attr in attrs.into_iter() {
+                //Get the values of the model
+                if let Some(value) = self.get_model_value(model_idx, &attr) {
+                    attribute_values.insert(attr, value);
+                } else {
+                    error!(
+                        "No attribute called {} available in model {}",
+                        &attr, model_idx
+                    );
+                }
+            }
+            data.insert(eid, Value::from(attribute_values));
+        }
+        data
+        // TODO https://mosaik.readthedocs.io/en/latest/mosaik-api/low-level.html#get-data
+        // api-v3 needs optional 'time' entry in output map for event-based and hybrid Simulators
     }
 
     fn stop(&self) {
