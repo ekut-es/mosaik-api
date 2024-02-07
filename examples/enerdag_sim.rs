@@ -15,7 +15,7 @@ use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
-    run_simulation, ApiHelpers, AttributeId, tcp::ConnectionDirection, Eid, MosaikApi,
+    run_simulation, tcp::ConnectionDirection, ApiHelpers, AttributeId, Eid, MosaikApi,
 };
 use sled::Db;
 

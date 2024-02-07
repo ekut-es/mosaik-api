@@ -176,10 +176,7 @@ impl ApiHelpers for RExampleSim {
         todo!()
     }
 
-    fn add_model(
-        &mut self,
-        model_params: Map<AttributeId, Value>,
-    ) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value> {
         let init_val = model_params.get("init_val").map(|v| v.as_f64().unwrap());
         self.simulator.models.push(RModel::new(init_val));
         None
@@ -241,11 +238,10 @@ impl MosaikApi for RExampleSim {
         for (eid, model_instance) in &mut self.entities {
             if let Some(attrs) = inputs.get(eid) {
                 for (_, values) in attrs {
-                    if let Some(new_delta) = values.as_object().map(|v| {
-                        v.values()
-                            .map(|val| val.as_f64().unwrap_or(0.0))
-                            .sum()
-                    }) {
+                    if let Some(new_delta) = values
+                        .as_object()
+                        .map(|v| v.values().map(|val| val.as_f64().unwrap_or(0.0)).sum())
+                    {
                         model_instance.delta = new_delta
                     }
                 }

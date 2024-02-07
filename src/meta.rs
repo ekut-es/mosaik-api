@@ -31,7 +31,7 @@ pub enum AdvanceType {
     #[serde(rename = "hybrid")]
     #[default]
     Hybrid,
-}   
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ModelMeta {
