@@ -23,7 +23,7 @@ pub enum Response {
     None,
 }
 
-pub fn parse_request(data: String) -> Result<(u64, Request), MosaikError> {
+pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
     let payload: MosaikPayload = serde_json::from_str(&data)?;
 
@@ -34,11 +34,12 @@ pub fn parse_request(data: String) -> Result<(u64, Request), MosaikError> {
         )));
     }
 
-    let request: Request = serde_json::from_value(payload.content)?;
-    Ok((payload.id, request))
+    let mut request: Request = serde_json::from_value(payload.content)?;
+    request.msg_id = payload.id;
+    Ok(request)
 }
 
-pub fn handle_request<T: MosaikApi>(id: u64, request: Request, simulator: &mut T) -> Response {
+pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Response {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(
             request.args[0]
@@ -70,7 +71,7 @@ pub fn handle_request<T: MosaikApi>(id: u64, request: Request, simulator: &mut T
         }
         "stop" => {
             simulator.stop();
-            return match to_vec_helper(json!(null), id) {
+            return match to_vec_helper(json!(null), request.msg_id) {
                 Some(vec) => Response::Stop(vec),
                 None => Response::None,
             };
@@ -84,12 +85,12 @@ pub fn handle_request<T: MosaikApi>(id: u64, request: Request, simulator: &mut T
         }
     };
 
-    match to_vec_helper(content, id) {
+    match to_vec_helper(content, request.msg_id) {
         Some(vec) => Response::Successfull(vec),
         None => {
             let response: Value = Value::Array(vec![
                 json!(2),
-                json!(id),
+                json!(request.msg_id),
                 Value::String("Stack Trace/Error Message".to_string()),
             ]);
             Response::Failure(to_vec(&response).unwrap())
@@ -172,8 +173,10 @@ pub struct MosaikPayload {
     content: Value,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Request {
+    #[serde(skip)]
+    msg_id: u64,
     method: String,
     args: Vec<Value>,
     kwargs: Map<String, Value>,
@@ -181,9 +184,27 @@ pub struct Request {
 
 #[cfg(test)]
 mod tests {
-    use log::*;
-
+    use super::*;
     use serde_json::{json, to_vec, Result, Value};
+
+    #[test]
+    fn parse_request_valid() -> Result<()> {
+        let valid_request = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#.to_string();
+        let expected = Request {
+            msg_id: 1,
+            method: "my_func".to_string(),
+            args: vec![json!("hello"), json!("world")],
+            kwargs: {
+                let mut map = Map::new();
+                map.insert("times".to_string(), json!(23))
+                    .unwrap_or_default();
+                map
+            },
+        };
+        assert_eq!(parse_request(valid_request).unwrap(), expected);
+        Ok(())
+    }
+
     #[test]
     fn untyped_example() -> Result<()> {
         // Some JSON input data as a &str. Maybe this comes from the user.
