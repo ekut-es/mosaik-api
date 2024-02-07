@@ -1,5 +1,6 @@
 pub mod json;
 pub mod tcp;
+pub mod meta;
 
 use std::collections::HashMap;
 
