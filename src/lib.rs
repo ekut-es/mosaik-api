@@ -29,13 +29,13 @@ pub type AttributeId = String;
 
 pub type Children = Value;
 
-pub struct Simulator {
-    // public static final String API_VERSION
-    pub api_version: &'static str,
-    // private final String simName
-    // - sim_name: &'static str,
-    // missing -> mosaik: MosaikProxy
-}
+// pub struct Simulator {
+//     // public static final String API_VERSION
+//     pub api_version: &'static str,
+//     // private final String simName
+//     // - sim_name: &'static str,
+//     // missing -> mosaik: MosaikProxy
+// }
 
 pub trait ApiHelpers {
     /// Gets the meta from the simulator, needs to be implemented on the simulator side.
