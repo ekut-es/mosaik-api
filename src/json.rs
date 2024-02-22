@@ -1,4 +1,4 @@
-use std::{collections::HashMap, u64::MAX};
+use std::collections::HashMap;
 
 use log::*;
 use serde::Deserialize;
@@ -14,6 +14,22 @@ pub enum MosaikError {
     ParseError(String),
     #[error("Parsing Error: {0}")]
     Serde(#[from] serde_json::Error),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MosaikPayload {
+    msg_type: u8,
+    id: u64,
+    content: Value,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct Request {
+    #[serde(skip)]
+    msg_id: u64,
+    method: String,
+    args: Vec<Value>,
+    kwargs: Map<String, Value>,
 }
 
 pub enum Response {
@@ -39,30 +55,30 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     Ok(request)
 }
 
-pub fn handle_request<T: MosaikApi>(request: Request, simulator: &mut T) -> Response {
+pub fn handle_request<T: MosaikApi>(
+    request: Request,
+    simulator: &mut T,
+) -> Result<Response, MosaikError> {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(
-            request.args[0]
-                .as_str()
-                .unwrap_or("No Simulation ID from the request.") // FIXME
-                .to_string(),
+            serde_json::from_value(request.args[0])?,
             // get time_resolution from kwargs and put the rest in sim_params map
             request
                 .kwargs
-                .get("time_resolution")
+                .remove("time_resolution")
                 .and_then(|x| x.as_f64())
                 .unwrap_or(1.0f64),
             request.kwargs,
         ),
         "create" => Value::from(simulator.create(
-            request.args[0].as_u64().unwrap_or_default() as usize,
-            request.args[1].as_str().unwrap_or("dummy").to_string(),
+            serde_json::from_value(request.args[0])?,
+            serde_json::from_value(request.args[1])?,
             request.kwargs,
         )),
         "step" => Value::from(simulator.step(
-            request.args[0].as_i64().unwrap_or_default() as usize, // TODO error handling - if let error
-            inputs_to_hashmap(request.args[1].clone()), // TODO maybe clean this entierly from json types (kwargs can't be cleaned)
-            request.args[2].as_u64().unwrap_or(MAX) as usize, // TODO error handling - if let error
+            serde_json::from_value(request.args[0])?,
+            inputs_to_hashmap(request.args[1]), // TODO maybe clean this entirely from json types (kwargs can't be cleaned)
+            serde_json::from_value(request.args[2])?,
         )), // add handling of optional return
         "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
         "setup_done" => {
@@ -122,6 +138,7 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
 
 ///Transform the requested map to hashmap of Id to a mapping
 fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<AttributeId, Value>> {
+    // FIXME: this is currently not correct!!!!! compare to main branch
     let mut outer_map = HashMap::new();
     if let Value::Object(eid_map) = inputs {
         for (eid, attr_values) in eid_map.into_iter() {
@@ -165,22 +182,6 @@ fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
 //     SUCCESS,
 //     ERROR,
 // }
-
-#[derive(Debug, Deserialize)]
-pub struct MosaikPayload {
-    msg_type: u8,
-    id: u64,
-    content: Value,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-pub struct Request {
-    #[serde(skip)]
-    msg_id: u64,
-    method: String,
-    args: Vec<Value>,
-    kwargs: Map<String, Value>,
-}
 
 #[cfg(test)]
 mod tests {
