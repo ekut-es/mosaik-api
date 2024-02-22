@@ -12,7 +12,7 @@ use crate::{AttributeId, Eid, MosaikApi};
 pub enum MosaikError {
     #[error("Parsing Mosaik Payload: {0}")]
     ParseError(String),
-    #[error("Parsing Error")]
+    #[error("Parsing Error: {0}")]
     Serde(#[from] serde_json::Error),
 }
 
@@ -185,10 +185,10 @@ pub struct Request {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::{json, to_vec, Result, Value};
+    use serde_json::{json, to_vec, Value};
 
     #[test]
-    fn parse_request_valid() -> Result<()> {
+    fn parse_request_valid() -> Result<(), MosaikError> {
         let valid_request = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#.to_string();
         let expected = Request {
             msg_id: 1,
@@ -201,12 +201,12 @@ mod tests {
                 map
             },
         };
-        assert_eq!(parse_request(valid_request).unwrap(), expected);
+        assert_eq!(parse_request(valid_request)?, expected);
         Ok(())
     }
 
     #[test]
-    fn untyped_example() -> Result<()> {
+    fn untyped_example() -> serde_json::Result<()> {
         // Some JSON input data as a &str. Maybe this comes from the user.
         let data = r#"
         [0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
