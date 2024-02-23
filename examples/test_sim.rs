@@ -5,7 +5,10 @@
 use std::collections::HashMap;
 
 use log::error;
-use mosaik_rust_api::{ApiHelpers, AttributeId, DefaultMosaikApi, Eid, MosaikApi};
+use mosaik_rust_api::{
+    types::{Attr, EntityId, InputData, OutputData, OutputRequest},
+    ApiHelpers, DefaultMosaikApi, MosaikApi,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use structopt::StructOpt;
@@ -111,7 +114,7 @@ pub struct RExampleSim {
     step_size: i64,
     time: u64,
     time_resolution: f64,
-    entities: HashMap<Eid, RModel>,
+    entities: HashMap<EntityId, RModel>,
     simulator: RSimulator,
 }
 
@@ -146,11 +149,11 @@ impl ApiHelpers for RExampleSim {
         self.step_size = step_size;
     }
 
-    fn get_mut_entities(&mut self) -> &mut Map<Eid, Value> {
+    fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value> {
         todo!()
     }
 
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
         let init_val = model_params.get("init_val").map(|v| v.as_f64().unwrap());
         self.simulator.models.push(RModel::new(init_val));
         None
@@ -183,10 +186,10 @@ impl MosaikApi for RExampleSim {
         &mut self,
         num: usize,
         model_name: String,
-        model_params: serde_json::Map<mosaik_rust_api::AttributeId, Value>,
-    ) -> Vec<serde_json::Map<String, Value>> {
+        model_params: Map<Attr, Value>,
+    ) -> Vec<Map<String, Value>> {
         let next_eid = self.entities.len();
-        let mut result: Vec<serde_json::Map<String, Value>> = Vec::new();
+        let mut result: Vec<Map<String, Value>> = Vec::new();
 
         for i in next_eid..(next_eid + num) {
             let model_instance = RModel::new(None); // FIXME this is a String, but shouldn't this rather be a RModel?
@@ -194,7 +197,7 @@ impl MosaikApi for RExampleSim {
 
             self.entities.insert(eid.clone(), model_instance);
 
-            let mut dict = serde_json::Map::new();
+            let mut dict = Map::new();
             dict.insert("eid".to_string(), json!(eid));
             dict.insert("type".to_string(), json!(model_name));
 
@@ -206,12 +209,7 @@ impl MosaikApi for RExampleSim {
         result
     }
 
-    fn step(
-        &mut self,
-        time: usize,
-        inputs: HashMap<Eid, Map<AttributeId, Value>>,
-        max_advance: usize,
-    ) -> Option<usize> {
+    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
         self.time = time as u64;
 
         for (eid, model_instance) in &mut self.entities {
@@ -232,10 +230,7 @@ impl MosaikApi for RExampleSim {
         return Some(time + 1); // Step size is 1 second
     }
 
-    fn get_data(
-        &mut self,
-        outputs: HashMap<mosaik_rust_api::Eid, Vec<AttributeId>>,
-    ) -> Map<mosaik_rust_api::Eid, Value> {
+    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
         DefaultMosaikApi::get_data(self, outputs)
     }
 

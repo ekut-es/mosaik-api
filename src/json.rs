@@ -6,7 +6,7 @@ use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
 
-use crate::{AttributeId, Eid, MosaikApi};
+use crate::{MosaikApi, OutputRequest};
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
@@ -157,7 +157,7 @@ fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<AttributeId, Value>> {
 }
 
 ///Transform the requested map to hashmap of Id to a vector
-fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
+fn outputs_to_hashmap(outputs: Vec<Value>) -> OutputRequest {
     let mut hashmap = HashMap::new();
     for output in outputs {
         if let Value::Object(eid_map) = output {
@@ -185,6 +185,8 @@ fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::types::InputData;
+
     use super::*;
     use serde_json::{json, to_vec, Value};
 

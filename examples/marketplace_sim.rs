@@ -6,7 +6,10 @@ use structopt::StructOpt;
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use mosaik_rust_api::{
-    run_simulation, tcp::ConnectionDirection, ApiHelpers, AttributeId, DefaultMosaikApi, MosaikApi,
+    run_simulation,
+    tcp::ConnectionDirection,
+    types::{Attr, InputData, OutputData, OutputRequest, SimId},
+    ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -50,7 +53,7 @@ impl MosaikApi for MarketplaceSim {
 
     fn init(
         &mut self,
-        sid: mosaik_rust_api::Sid,
+        sid: SimId,
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> mosaik_rust_api::Meta {
@@ -61,7 +64,7 @@ impl MosaikApi for MarketplaceSim {
         &mut self,
         num: usize,
         model_name: String,
-        model_params: Map<AttributeId, Value>,
+        model_params: Map<Attr, Value>,
     ) -> Vec<Map<String, Value>> {
         DefaultMosaikApi::create(self, num, model_name, model_params)
     }
@@ -71,19 +74,11 @@ impl MosaikApi for MarketplaceSim {
         //todo!()
     }
 
-    fn step(
-        &mut self,
-        time: usize,
-        inputs: HashMap<mosaik_rust_api::Eid, Map<AttributeId, Value>>,
-        max_advance: usize,
-    ) -> Option<usize> {
+    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
         DefaultMosaikApi::step(self, time, inputs, max_advance)
     }
 
-    fn get_data(
-        &mut self,
-        outputs: HashMap<mosaik_rust_api::Eid, Vec<AttributeId>>,
-    ) -> Map<mosaik_rust_api::Eid, Value> {
+    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
         DefaultMosaikApi::get_data(self, outputs)
     }
 
@@ -137,7 +132,7 @@ impl ApiHelpers for MarketplaceSim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
         if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
             let /*mut*/ model:Model = Model::initmodel(init_reading);
             self.models.push(model);

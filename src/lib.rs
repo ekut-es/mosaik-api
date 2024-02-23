@@ -1,13 +1,15 @@
 pub mod json;
 pub mod tcp;
+pub mod types;
 
 use std::collections::HashMap;
 
 use crate::tcp::{build_connection, ConnectionDirection};
 use async_std::task;
 use async_trait::async_trait;
-use log::{debug, error, info, trace};
+use log::{debug, error, info};
 use serde_json::{json, Map, Value};
+use types::{Attr, EntityId, InputData, OutputData, OutputRequest, SimId};
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 ///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
@@ -17,15 +19,6 @@ pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> 
 
 ///information about the model(s) of the simulation
 pub type Meta = serde_json::Value;
-
-///Id of the simulation
-pub type Sid = String;
-
-///Id of an entity
-pub type Eid = String;
-
-///Id of an attribute of a Model
-pub type AttributeId = String;
 
 pub type Children = Value;
 
@@ -49,10 +42,10 @@ pub trait ApiHelpers {
     /// Get the step_size for the api call step().
     fn get_step_size(&self) -> i64;
     /// Get the list containing the created entities.
-    fn get_mut_entities(&mut self) -> &mut Map<Eid, Value>;
+    fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value>;
     /// Create a model instance (= entity) with an initial value. Returns the [JSON-Value](Value)
     /// representation of the children, if the entity has children.
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Children>;
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Children>;
     /// Get the value from a entity.
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
     /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
@@ -64,7 +57,7 @@ pub trait ApiHelpers {
 }
 
 pub trait DefaultMosaikApi: ApiHelpers {
-    fn init(&mut self, sid: Sid, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
+    fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         if time_resolution != 1.0 {
             info!("time_resolution must be 1.0"); // TODO this seems not true
             self.set_time_resolution(1.0f64);
@@ -96,7 +89,7 @@ pub trait DefaultMosaikApi: ApiHelpers {
         &mut self,
         num: usize,
         model_name: String,
-        model_params: Map<AttributeId, Value>,
+        model_params: Map<Attr, Value>,
     ) -> Vec<Map<String, Value>> {
         let mut out_vector = Vec::new();
         let next_eid = self.get_mut_entities().len();
@@ -118,17 +111,14 @@ pub trait DefaultMosaikApi: ApiHelpers {
         out_vector
     }
 
-    fn step(
-        &mut self,
-        time: usize,
-        inputs: HashMap<Eid, Map<AttributeId, Value>>,
-        max_advance: usize,
-    ) -> Option<usize> {
+    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
+        /* FIXME this is not yet compatible with new typing system.
+
         trace!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
         for (eid, attrs) in inputs.into_iter() {
             for (attr, attr_values) in attrs.into_iter() {
-                let model_idx = match self.get_mut_entities().get(&eid) {
+                let model_idx = match self.get_mut_entities().get(&eid.clone()) {
                     Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
                     _ => panic!(
                         "No correct model eid available. Input: {:?}, Entities: {:?}",
@@ -136,25 +126,22 @@ pub trait DefaultMosaikApi: ApiHelpers {
                         self.get_mut_entities()
                     ),
                 };
-                if let Value::Object(values) = attr_values {
-                    deltas.push((attr, model_idx, values));
-                    debug!("the deltas for sim step: {:?}", deltas);
-                };
+                deltas.push((eid, model_idx, attr_values));
             }
         }
-        self.sim_step(deltas);
+        self.sim_step(deltas);*/
 
         Some(time + (self.get_step_size() as usize))
     }
 
-    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value> {
-        let mut data: Map<String, Value> = Map::new();
+    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
+        let mut data: HashMap<String, HashMap<Attr, Value>> = HashMap::new();
         for (eid, attrs) in outputs.into_iter() {
             let model_idx = match self.get_mut_entities().get(&eid) {
                 Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
                 _ => panic!("No correct model eid available."),
             };
-            let mut attribute_values = Map::new();
+            let mut attribute_values: HashMap<Attr, Value> = HashMap::new();
             for attr in attrs.into_iter() {
                 //Get the values of the model
                 if let Some(value) = self.get_model_value(model_idx, &attr) {
@@ -166,7 +153,7 @@ pub trait DefaultMosaikApi: ApiHelpers {
                     );
                 }
             }
-            data.insert(eid, Value::from(attribute_values));
+            data.insert(eid, attribute_values);
         }
         data
         // TODO https://mosaik.readthedocs.io/en/latest/mosaik-api/low-level.html#get-data
@@ -178,7 +165,7 @@ pub trait DefaultMosaikApi: ApiHelpers {
 pub trait MosaikApi: Send + 'static {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik.
     /// Return the meta data meta.
-    fn init(&mut self, sid: Sid, time_resolution: f64, sim_params: Map<String, Value>) -> Meta;
+    fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta;
 
     ///Create *num* instances of *model* using the provided *model_params*.
     /// Returned list must have the same length as *num*
@@ -186,7 +173,7 @@ pub trait MosaikApi: Send + 'static {
         &mut self,
         num: usize,
         model_name: String,
-        model_params: Map<AttributeId, Value>,
+        model_params: Map<Attr, Value>,
     ) -> Vec<Map<String, Value>>;
 
     ///The function mosaik calls, if the init() and create() calls are done. Return Null
@@ -194,15 +181,10 @@ pub trait MosaikApi: Send + 'static {
 
     /// Perform the next simulation step at time and return the new simulation time (the time at which step should be called again)
     ///  or null if the simulator doesn’t need to step itself.
-    fn step(
-        &mut self,
-        time: usize,
-        inputs: HashMap<Eid, Map<AttributeId, Value>>,
-        max_advance: usize,
-    ) -> Option<usize>;
+    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize>;
 
     //collect data from the simulation and return a nested Vector containing the information
-    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value>;
+    fn get_data(&mut self, outputs: OutputRequest) -> OutputData;
 
     ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon as the function returns.
     fn stop(&self);
