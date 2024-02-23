@@ -61,7 +61,7 @@ pub fn handle_request<T: MosaikApi>(
 ) -> Result<Response, MosaikError> {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(
-            serde_json::from_value(request.args[0])?,
+            serde_json::from_value(request.args[0].clone())?,
             // get time_resolution from kwargs and put the rest in sim_params map
             request
                 .kwargs
@@ -71,14 +71,14 @@ pub fn handle_request<T: MosaikApi>(
             request.kwargs,
         ),
         "create" => Value::from(simulator.create(
-            serde_json::from_value(request.args[0])?,
-            serde_json::from_value(request.args[1])?,
+            serde_json::from_value(request.args[0].clone())?,
+            serde_json::from_value(request.args[1].clone())?,
             request.kwargs,
         )),
         "step" => Value::from(simulator.step(
-            serde_json::from_value(request.args[0])?,
-            inputs_to_hashmap(request.args[1]), // TODO maybe clean this entirely from json types (kwargs can't be cleaned)
-            serde_json::from_value(request.args[2])?,
+            serde_json::from_value(request.args[0].clone())?,
+            serde_json::from_value(request.args[1].clone())?, // TODO maybe clean this entirely from json types (kwargs can't be cleaned)
+            serde_json::from_value(request.args[2].clone())?,
         )), // add handling of optional return
         "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
         "setup_done" => {
@@ -136,26 +136,6 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
     }
 }
 
-///Transform the requested map to hashmap of Id to a mapping
-fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<AttributeId, Value>> {
-    // FIXME: this is currently not correct!!!!! compare to main branch
-    let mut outer_map = HashMap::new();
-    if let Value::Object(eid_map) = inputs {
-        for (eid, attr_values) in eid_map.into_iter() {
-            if let Value::Object(attrid_map) = attr_values {
-                let mut inner_hashmap = Map::new();
-                for (attrid, value) in attrid_map.into_iter() {
-                    if let Value::Object(value_map) = value {
-                        inner_hashmap.insert(attrid, json!(value_map));
-                    }
-                }
-                outer_map.insert(eid, inner_hashmap);
-            }
-        }
-    }
-    outer_map
-}
-
 ///Transform the requested map to hashmap of Id to a vector
 fn outputs_to_hashmap(outputs: Vec<Value>) -> OutputRequest {
     let mut hashmap = HashMap::new();
@@ -205,6 +185,53 @@ mod tests {
             },
         };
         assert_eq!(parse_request(valid_request)?, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_step_request() -> Result<(), MosaikError> {
+        let valid_request = r#"
+        [0, 1, ["step",
+                [1,
+                 {"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4},
+                            "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}
+                            },
+                            "eid_2": 2
+                },
+                200
+                ], {}
+              ]
+        ]"#
+        .to_string();
+
+        let expected = Request {
+            msg_id: 1,
+            method: "step".to_string(),
+            args: vec![
+                json!(1),
+                json!({"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4}, "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}}}),
+                json!(200),
+            ],
+            kwargs: Map::new(),
+        };
+        let p = parse_request(valid_request)?;
+        println!("got until here");
+        let input: InputData = serde_json::from_value(p.args[1].clone())?;
+        println!("p: {:?}", p.args[1]);
+        println!("input: {:?}", input);
+
+        assert_eq!(
+            input
+                .get("eid_1")
+                .unwrap()
+                .get("attr_2")
+                .unwrap()
+                .get("src_full_id_1")
+                .unwrap(),
+            3
+        );
+        assert_eq!(p, expected);
         Ok(())
     }
 
