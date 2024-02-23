@@ -65,7 +65,7 @@ pub fn handle_request<T: MosaikApi>(
             // get time_resolution from kwargs and put the rest in sim_params map
             request
                 .kwargs
-                .remove("time_resolution")
+                .get("time_resolution")
                 .and_then(|x| x.as_f64())
                 .unwrap_or(1.0f64),
             request.kwargs,
@@ -88,8 +88,8 @@ pub fn handle_request<T: MosaikApi>(
         "stop" => {
             simulator.stop();
             return match to_vec_helper(json!(null), request.msg_id) {
-                Some(vec) => Response::Stop(vec),
-                None => Response::None,
+                Some(vec) => Ok(Response::Stop(vec)),
+                None => Ok(Response::None),
             };
         }
         e => {
@@ -97,19 +97,19 @@ pub fn handle_request<T: MosaikApi>(
                 "A different not yet implemented method {:?} got requested. Therefore the simulation should most likely stop now",
                 e
             );
-            return Response::None; //TODO: see issue #2 but most likely it should stay as it is instead of return json!(null)
+            return Ok(Response::None); //TODO: see issue #2 but most likely it should stay as it is instead of return json!(null)
         }
     };
 
     match to_vec_helper(content, request.msg_id) {
-        Some(vec) => Response::Successfull(vec),
+        Some(vec) => Ok(Response::Successfull(vec)),
         None => {
             let response: Value = Value::Array(vec![
                 json!(2),
                 json!(request.msg_id),
                 Value::String("Stack Trace/Error Message".to_string()),
             ]);
-            Response::Failure(to_vec(&response).unwrap())
+            Ok(Response::Failure(to_vec(&response).unwrap()))
         }
     }
 }
