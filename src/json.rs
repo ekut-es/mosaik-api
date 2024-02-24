@@ -77,10 +77,10 @@ pub fn handle_request<T: MosaikApi>(
         )),
         "step" => Value::from(simulator.step(
             serde_json::from_value(request.args[0].clone())?,
-            serde_json::from_value(request.args[1].clone())?, // TODO maybe clean this entirely from json types (kwargs can't be cleaned)
+            serde_json::from_value(request.args[1].clone())?,
             serde_json::from_value(request.args[2].clone())?,
         )), // add handling of optional return
-        "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
+        "get_data" => serde_json::to_value(simulator.get_data(outputs_to_hashmap(request.args)))?,
         "setup_done" => {
             simulator.setup_done();
             json!(null)
