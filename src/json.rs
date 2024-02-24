@@ -236,6 +236,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_get_data_request() -> Result<(), MosaikError> {
+        let valid_request =
+            r#"[0, 1, ["get_data", [{"eid_1": ["attr_1", "attr_2"]}], {}]]"#.to_string();
+        let mut outputs = Map::new();
+        outputs.insert("eid_1".to_string(), json!(vec!["attr_1", "attr_2"]));
+        let expected = Request {
+            msg_id: 1,
+            method: "get_data".to_string(),
+            args: vec![json!(outputs)],
+            kwargs: Map::new(),
+        };
+        assert_eq!(parse_request(valid_request)?, expected);
+        Ok(())
+    }
+
+    #[test]
     fn untyped_example() -> serde_json::Result<()> {
         // Some JSON input data as a &str. Maybe this comes from the user.
         let data = r#"
