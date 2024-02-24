@@ -138,6 +138,7 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
 
 ///Transform the requested map to hashmap of Id to a vector
 fn outputs_to_hashmap(outputs: Vec<Value>) -> OutputRequest {
+    // FIXME outputs is probably no vector and this method therefore obsolete
     let mut hashmap = HashMap::new();
     for output in outputs {
         if let Value::Object(eid_map) = output {
@@ -196,8 +197,7 @@ mod tests {
                 [1,
                  {"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4},
                             "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}
-                            },
-                            "eid_2": 2
+                            }
                 },
                 200
                 ], {}
@@ -218,7 +218,6 @@ mod tests {
         let p = parse_request(valid_request)?;
         println!("got until here");
         let input: InputData = serde_json::from_value(p.args[1].clone())?;
-        println!("p: {:?}", p.args[1]);
         println!("input: {:?}", input);
 
         assert_eq!(
