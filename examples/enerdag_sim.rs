@@ -17,7 +17,7 @@ use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
-    types::{Attr, EntityId, FullId, InputData, OutputData, OutputRequest},
+    types::{Attr, FullId, InputData, OutputData, OutputRequest},
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 use sled::Db;
