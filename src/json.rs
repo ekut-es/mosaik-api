@@ -81,6 +81,7 @@ pub fn handle_request<T: MosaikApi>(
             serde_json::from_value(request.args[2].clone())?,
         )), // add handling of optional return
         "get_data" => serde_json::to_value(simulator.get_data(outputs_to_hashmap(request.args)))?,
+        // TODO check if outputs_to_hashmap is obsolete (see comment there)
         "setup_done" => {
             simulator.setup_done();
             json!(null)
