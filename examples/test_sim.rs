@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 #![cfg(not(test))]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, todo};
 
 use log::error;
 use mosaik_rust_api::{
@@ -210,6 +210,7 @@ impl MosaikApi for RExampleSim {
     }
 
     fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
+        /* FIXME: this is not yet compatible with new json typing
         self.time = time as u64;
 
         for (eid, model_instance) in &mut self.entities {
@@ -225,7 +226,7 @@ impl MosaikApi for RExampleSim {
             }
 
             model_instance.step();
-        }
+        }*/
 
         return Some(time + 1); // Step size is 1 second
     }
