@@ -80,8 +80,9 @@ pub fn handle_request<T: MosaikApi>(
             serde_json::from_value(request.args[1].clone())?,
             serde_json::from_value(request.args[2].clone())?,
         )), // add handling of optional return
-        "get_data" => serde_json::to_value(simulator.get_data(outputs_to_hashmap(request.args)))?,
-        // TODO check if outputs_to_hashmap is obsolete (see comment there)
+        "get_data" => serde_json::to_value(
+            simulator.get_data(serde_json::from_value(request.args[0].clone())?),
+        )?,
         "setup_done" => {
             simulator.setup_done();
             json!(null)
@@ -137,27 +138,6 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
     }
 }
 
-///Transform the requested map to hashmap of Id to a vector
-fn outputs_to_hashmap(outputs: Vec<Value>) -> OutputRequest {
-    // FIXME outputs is probably no vector and this method therefore obsolete
-    let mut hashmap = HashMap::new();
-    for output in outputs {
-        if let Value::Object(eid_map) = output {
-            for (eid, attr_id_array) in eid_map.into_iter() {
-                if let Value::Array(attr_id) = attr_id_array {
-                    hashmap.insert(
-                        eid,
-                        attr_id
-                            .iter()
-                            .filter_map(|x| x.as_str().map(|x| x.to_string()))
-                            .collect(),
-                    );
-                }
-            }
-        }
-    }
-    hashmap
-}
 //TODO: Clean this up and remove it?
 // enum MsgType {
 //     REQ,
