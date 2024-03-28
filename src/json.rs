@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-
 use log::*;
 use serde::Deserialize;
 use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
 
-use crate::{MosaikApi, OutputRequest};
+use crate::MosaikApi;
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
