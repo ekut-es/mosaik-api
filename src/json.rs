@@ -33,7 +33,7 @@ pub struct Request {
 }
 
 pub enum Response {
-    Successfull(Vec<u8>),
+    Successful(Vec<u8>),
     Failure(Vec<u8>),
     Stop(Vec<u8>),
     None,
@@ -103,7 +103,7 @@ pub fn handle_request<T: MosaikApi>(
     };
 
     match to_vec_helper(content, request.msg_id) {
-        Some(vec) => Ok(Response::Successfull(vec)),
+        Some(vec) => Ok(Response::Successful(vec)),
         None => {
             let response: Value = Value::Array(vec![
                 json!(2),
