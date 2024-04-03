@@ -1,5 +1,5 @@
-///! Mosaik types as defined in the Mosaik API
-///! https://gitlab.com/mosaik/api/mosaik-api-python/-/blob/2e5e6cb1610db20dd43d9580c4b3f8ab4318256a/mosaik_api_v3/types.py
+//! Mosaik types as defined in the [Mosaik API](https://gitlab.com/mosaik/api/mosaik-api-python/-/blob/2e5e6cb1610db20dd43d9580c4b3f8ab4318256a/mosaik_api_v3/types.py)
+
 use std::collections::HashMap;
 
 use serde_json::{Map, Value};
