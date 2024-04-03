@@ -115,7 +115,7 @@ pub trait DefaultMosaikApi: ApiHelpers {
         trace!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(EntityId, u64, Map<Attr, Value>)> = Vec::new();
         for (eid, attrs) in inputs.into_iter() {
-            for (_, attr_values) in attrs.into_iter() {
+            for (attr, attr_values) in attrs.into_iter() {
                 let model_idx = match self.get_mut_entities().get(&eid.clone()) {
                     Some(entity_val) if entity_val.is_u64() => entity_val.as_u64().unwrap(), //unwrap safe, because we check for u64
                     _ => panic!(
@@ -124,7 +124,7 @@ pub trait DefaultMosaikApi: ApiHelpers {
                         self.get_mut_entities()
                     ),
                 };
-                deltas.push((eid.clone(), model_idx, attr_values));
+                deltas.push((attr, model_idx, attr_values));
             }
         }
         self.sim_step(deltas);
