@@ -72,6 +72,11 @@ pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
     related to this entity."""
     children: List[CreateResult]
     """The child entities of this entity."""
+    extra_info: Any
+    """Any additional information about the entity that the simulator
+    wants to pass back to the scenario.
+    """
+
 
 class CreateResult(CreateResultOptionals):
     """The type for elements of the list returned by `create` calls in
