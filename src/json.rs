@@ -54,17 +54,16 @@ pub fn parse_request(data: String) -> Result<Request, MosaikError> {
 }
 
 pub fn handle_request<T: MosaikApi>(
-    request: Request,
+    mut request: Request,
     simulator: &mut T,
 ) -> Result<Response, MosaikError> {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(
             serde_json::from_value(request.args[0].clone())?,
-            // get time_resolution from kwargs and put the rest in sim_params map
             request
                 .kwargs
-                .get("time_resolution")
-                .and_then(|x| x.as_f64())
+                .remove("time_resolution")
+                .and_then(|value| value.as_f64())
                 .unwrap_or(1.0f64),
             request.kwargs,
         ),
