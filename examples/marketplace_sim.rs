@@ -99,7 +99,28 @@ pub struct MarketplaceSim {
 //Implementation of the helpers defined in the library
 impl ApiHelpers for MarketplaceSim {
     fn meta() -> Value {
-        json!({
+        let model1 = ModelMeta {
+            public: true,
+            params: vec!["init_reading".to_string()],
+            attrs: vec![
+                "p_mw_pv".to_string(),
+                "p_mw_load".to_string(),
+                "reading".to_string(),
+                "trades".to_string(),
+                "total".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let meta = MetaStruct {
+            models: {
+                let mut m = Map::new();
+                m.insert("MarktplatzModel".to_string(), json!(model1));
+                m
+            },
+            ..Default::default()
+        };
+        /*json!({
         "api_version": "3.0",
         "type": "time-based",
         "models":{
@@ -109,7 +130,8 @@ impl ApiHelpers for MarketplaceSim {
                 "attrs": ["p_mw_pv", "p_mw_load", "reading", "trades", "total"]
                 }
             }
-        })
+        })*/
+        json!(meta)
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
