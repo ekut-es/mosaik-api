@@ -1,29 +1,43 @@
-use std::{collections::HashMap, u64::MAX};
-
 use log::*;
 use serde::Deserialize;
 use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
 
-use crate::{AttributeId, Eid, MosaikApi};
+use crate::MosaikApi;
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
     #[error("Parsing Mosaik Payload: {0}")]
     ParseError(String),
-    #[error("Parsing Error")]
+    #[error("Parsing Error: {0}")]
     Serde(#[from] serde_json::Error),
 }
 
+#[derive(Debug, Deserialize)]
+pub struct MosaikPayload {
+    msg_type: u8,
+    id: u64,
+    content: Value,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct Request {
+    #[serde(skip)]
+    msg_id: u64,
+    method: String,
+    args: Vec<Value>,
+    kwargs: Map<String, Value>,
+}
+
 pub enum Response {
-    Successfull(Vec<u8>),
+    Successful(Vec<u8>),
     Failure(Vec<u8>),
     Stop(Vec<u8>),
     None,
 }
 
-pub fn parse_request(data: String) -> Result<(u64, Request), MosaikError> {
+pub fn parse_request(data: String) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
     let payload: MosaikPayload = serde_json::from_str(&data)?;
 
@@ -34,45 +48,47 @@ pub fn parse_request(data: String) -> Result<(u64, Request), MosaikError> {
         )));
     }
 
-    let request: Request = serde_json::from_value(payload.content)?;
-    Ok((payload.id, request))
+    let mut request: Request = serde_json::from_value(payload.content)?;
+    request.msg_id = payload.id;
+    Ok(request)
 }
 
-pub fn handle_request<T: MosaikApi>(id: u64, request: Request, simulator: &mut T) -> Response {
+pub fn handle_request<T: MosaikApi>(
+    mut request: Request,
+    simulator: &mut T,
+) -> Result<Response, MosaikError> {
     let content: Value = match request.method.as_ref() {
         "init" => simulator.init(
-            request.args[0]
-                .as_str()
-                .unwrap_or("No Simulation ID from the request.") // FIXME
-                .to_string(),
-            // get time_resolution from kwargs and put the rest in sim_params map
+            serde_json::from_value(request.args[0].clone())?,
             request
                 .kwargs
-                .get("time_resolution")
-                .and_then(|x| x.as_f64())
+                .remove("time_resolution")
+                .and_then(|value| value.as_f64())
                 .unwrap_or(1.0f64),
             request.kwargs,
         ),
         "create" => Value::from(simulator.create(
-            request.args[0].as_u64().unwrap_or_default() as usize,
-            request.args[1].as_str().unwrap_or("dummy").to_string(),
+            serde_json::from_value(request.args[0].clone())?,
+            serde_json::from_value(request.args[1].clone())?,
             request.kwargs,
         )),
         "step" => Value::from(simulator.step(
-            request.args[0].as_i64().unwrap_or_default() as usize, // TODO error handling - if let error
-            inputs_to_hashmap(request.args[1].clone()), // TODO maybe clean this entierly from json types (kwargs can't be cleaned)
-            request.args[2].as_u64().unwrap_or(MAX) as usize, // TODO error handling - if let error
+            serde_json::from_value(request.args[0].clone())?,
+            serde_json::from_value(request.args[1].clone())?,
+            serde_json::from_value(request.args[2].clone())?,
         )), // add handling of optional return
-        "get_data" => Value::from(simulator.get_data(outputs_to_hashmap(request.args))),
+        "get_data" => serde_json::to_value(
+            simulator.get_data(serde_json::from_value(request.args[0].clone())?),
+        )?,
         "setup_done" => {
             simulator.setup_done();
             json!(null)
         }
         "stop" => {
             simulator.stop();
-            return match to_vec_helper(json!(null), id) {
-                Some(vec) => Response::Stop(vec),
-                None => Response::None,
+            return match to_vec_helper(json!(null), request.msg_id) {
+                Some(vec) => Ok(Response::Stop(vec)),
+                None => Ok(Response::None),
             };
         }
         e => {
@@ -80,19 +96,19 @@ pub fn handle_request<T: MosaikApi>(id: u64, request: Request, simulator: &mut T
                 "A different not yet implemented method {:?} got requested. Therefore the simulation should most likely stop now",
                 e
             );
-            return Response::None; //TODO: see issue #2 but most likely it should stay as it is instead of return json!(null)
+            return Ok(Response::None); //TODO: see issue #2 but most likely it should stay as it is instead of return json!(null)
         }
     };
 
-    match to_vec_helper(content, id) {
-        Some(vec) => Response::Successfull(vec),
+    match to_vec_helper(content, request.msg_id) {
+        Some(vec) => Ok(Response::Successful(vec)),
         None => {
             let response: Value = Value::Array(vec![
                 json!(2),
-                json!(id),
+                json!(request.msg_id),
                 Value::String("Stack Trace/Error Message".to_string()),
             ]);
-            Response::Failure(to_vec(&response).unwrap())
+            Ok(Response::Failure(to_vec(&response).unwrap()))
         }
     }
 }
@@ -119,45 +135,6 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
     }
 }
 
-///Transform the requested map to hashmap of Id to a mapping
-fn inputs_to_hashmap(inputs: Value) -> HashMap<Eid, Map<AttributeId, Value>> {
-    let mut outer_map = HashMap::new();
-    if let Value::Object(eid_map) = inputs {
-        for (eid, attr_values) in eid_map.into_iter() {
-            if let Value::Object(attrid_map) = attr_values {
-                let mut inner_hashmap = Map::new();
-                for (attrid, value) in attrid_map.into_iter() {
-                    if let Value::Object(value_map) = value {
-                        inner_hashmap.insert(attrid, json!(value_map));
-                    }
-                }
-                outer_map.insert(eid, inner_hashmap);
-            }
-        }
-    }
-    outer_map
-}
-
-///Transform the requested map to hashmap of Id to a vector
-fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
-    let mut hashmap = HashMap::new();
-    for output in outputs {
-        if let Value::Object(eid_map) = output {
-            for (eid, attr_id_array) in eid_map.into_iter() {
-                if let Value::Array(attr_id) = attr_id_array {
-                    hashmap.insert(
-                        eid,
-                        attr_id
-                            .iter()
-                            .filter_map(|x| x.as_str().map(|x| x.to_string()))
-                            .collect(),
-                    );
-                }
-            }
-        }
-    }
-    hashmap
-}
 //TODO: Clean this up and remove it?
 // enum MsgType {
 //     REQ,
@@ -165,27 +142,94 @@ fn outputs_to_hashmap(outputs: Vec<Value>) -> HashMap<Eid, Vec<AttributeId>> {
 //     ERROR,
 // }
 
-#[derive(Debug, Deserialize)]
-pub struct MosaikPayload {
-    msg_type: u8,
-    id: u64,
-    content: Value,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Request {
-    method: String,
-    args: Vec<Value>,
-    kwargs: Map<String, Value>,
-}
-
 #[cfg(test)]
 mod tests {
-    use log::*;
+    use crate::types::InputData;
 
-    use serde_json::{json, to_vec, Result, Value};
+    use super::*;
+    use serde_json::{json, to_vec, Value};
+
     #[test]
-    fn untyped_example() -> Result<()> {
+    fn parse_request_valid() -> Result<(), MosaikError> {
+        let valid_request = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#.to_string();
+        let expected = Request {
+            msg_id: 1,
+            method: "my_func".to_string(),
+            args: vec![json!("hello"), json!("world")],
+            kwargs: {
+                let mut map = Map::new();
+                map.insert("times".to_string(), json!(23))
+                    .unwrap_or_default();
+                map
+            },
+        };
+        assert_eq!(parse_request(valid_request)?, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_step_request() -> Result<(), MosaikError> {
+        let valid_request = r#"
+        [0, 1, ["step",
+                [1,
+                 {"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4},
+                            "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}
+                            }
+                },
+                200
+                ], {}
+              ]
+        ]"#
+        .to_string();
+
+        let expected = Request {
+            msg_id: 1,
+            method: "step".to_string(),
+            args: vec![
+                json!(1),
+                json!({"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4}, "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}}}),
+                json!(200),
+            ],
+            kwargs: Map::new(),
+        };
+        let p = parse_request(valid_request)?;
+        println!("got until here");
+        let input: InputData = serde_json::from_value(p.args[1].clone())?;
+        println!("input: {:?}", input);
+
+        assert_eq!(
+            input
+                .get("eid_1")
+                .unwrap()
+                .get("attr_2")
+                .unwrap()
+                .get("src_full_id_1")
+                .unwrap(),
+            3
+        );
+        assert_eq!(p, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_get_data_request() -> Result<(), MosaikError> {
+        let valid_request =
+            r#"[0, 1, ["get_data", [{"eid_1": ["attr_1", "attr_2"]}], {}]]"#.to_string();
+        let mut outputs = Map::new();
+        outputs.insert("eid_1".to_string(), json!(vec!["attr_1", "attr_2"]));
+        let expected = Request {
+            msg_id: 1,
+            method: "get_data".to_string(),
+            args: vec![json!(outputs)],
+            kwargs: Map::new(),
+        };
+        assert_eq!(parse_request(valid_request)?, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn untyped_example() -> serde_json::Result<()> {
         // Some JSON input data as a &str. Maybe this comes from the user.
         let data = r#"
         [0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;

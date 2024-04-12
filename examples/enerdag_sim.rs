@@ -15,7 +15,10 @@ use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
-    run_simulation, tcp::ConnectionDirection, ApiHelpers, AttributeId, Eid, MosaikApi,
+    run_simulation,
+    tcp::ConnectionDirection,
+    types::{Attr, FullId, InputData, OutputData, OutputRequest},
+    ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 use sled::Db;
 
@@ -65,12 +68,12 @@ pub fn main() /*-> Result<()>*/
     let address = match opt.addr {
         //case if we connect us to mosaik
         Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
-            mosaik_addr.parse().expect("Address is not parseable."),
+            mosaik_addr.parse().expect("Address is not parsable."),
         ),
         //case if mosaik connects to us
         None => {
             let addr = "127.0.0.1:3456";
-            ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
+            ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parsable."))
         }
     };
 
@@ -96,14 +99,20 @@ pub struct HouseholdBatterySim {
     time_resolution: f64,
 }
 
+impl DefaultMosaikApi for HouseholdBatterySim {}
+
 impl MosaikApi for HouseholdBatterySim {
     ///Create *num* instances of *model* using the provided *model_params*.
     /// *panics!* if more than one neighborhood is created.
+    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Value {
+        DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
+    }
+
     fn create(
         &mut self,
         num: usize,
         model: String,
-        model_params: Map<AttributeId, Value>,
+        model_params: Map<Attr, Value>,
     ) -> Vec<Map<String, Value>> {
         if num > 1 || self.neighborhood.is_some() {
             todo!("Create Support for more  than one Neighborhood");
@@ -140,12 +149,7 @@ impl MosaikApi for HouseholdBatterySim {
 
     /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
     /// Just gives the inputs to [Neighborhood::step].
-    fn step(
-        &mut self,
-        time: usize,
-        inputs: HashMap<Eid, Map<AttributeId, Value>>,
-        _max_advance: usize,
-    ) -> Option<usize> {
+    fn step(&mut self, time: usize, inputs: InputData, _max_advance: usize) -> Option<usize> {
         // info!("Inputs; {:?}", inputs);
 
         if let Some(nbhd) = &mut self.neighborhood {
@@ -157,8 +161,8 @@ impl MosaikApi for HouseholdBatterySim {
 
     /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
     /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
-    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value> {
-        let mut data: Map<String, Value> = Map::new();
+    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
+        let mut data: OutputData = HashMap::new();
 
         if let Some(nbhd) = &mut self.neighborhood {
             nbhd.add_output_values(&outputs, &mut data);
@@ -245,7 +249,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
         let household_configs = self.params_to_household_config(&model_params);
 
         let start_time = if !model_params.contains_key(MOSAIK_PARAM_START_TIME) {
@@ -306,8 +310,8 @@ impl HouseholdBatterySim {
     }
     fn params_array_into_vec<'a, B, F>(
         &self,
-        model_params: &'a Map<AttributeId, Value>,
-        param: &AttributeId,
+        model_params: &'a Map<Attr, Value>,
+        param: &Attr,
         f: F,
     ) -> Vec<B>
     where
@@ -324,7 +328,7 @@ impl HouseholdBatterySim {
 
     fn params_to_household_config(
         &self,
-        model_params: &Map<AttributeId, Value>,
+        model_params: &Map<Attr, Value>,
     ) -> Vec<HouseholdDescription> {
         self.params_array_into_vec(
             model_params,
@@ -443,14 +447,14 @@ impl Neighborhood {
     /// For each output requested by MOSAIK, this method adds an entry to the `output_data` map.
     pub(crate) fn add_output_values(
         &self,
-        requested_outputs: &HashMap<Eid, Vec<AttributeId>>,
-        output_data: &mut Map<String, Value>,
+        requested_outputs: &OutputRequest,
+        output_data: &mut OutputData,
     ) {
         // The step method goes to the next period, so there is only data for the previous.
         let last_period = self.time.previous();
 
         for (eid, attrs) in requested_outputs.iter() {
-            let mut requested_values: HashMap<String, Value> = HashMap::with_capacity(attrs.len());
+            let mut requested_values: HashMap<Attr, Value> = HashMap::with_capacity(attrs.len());
 
             for attr in attrs {
                 let value = if eid.eq(&self.eid) {
@@ -463,7 +467,7 @@ impl Neighborhood {
                 requested_values.insert(attr.clone(), value);
             }
 
-            output_data.insert(eid.clone(), serde_json::to_value(requested_values).unwrap());
+            output_data.insert(eid.clone(), requested_values);
         }
     }
 
@@ -492,7 +496,7 @@ impl Neighborhood {
     ***********************************************/
 
     ///perform a normal simulation step.
-    fn step(&mut self, _time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) {
+    fn step(&mut self, _time: usize, inputs: InputData) {
         self.reset_prosumption();
         self.update_household_input_params(inputs);
 
@@ -514,7 +518,7 @@ impl Neighborhood {
     /// updates the params given by mosaik.
     /// *panics!* if a household can't be found by eid.
     /// households may *panic!* if they don't recognize an attribute.
-    fn update_household_input_params(&mut self, inputs: HashMap<Eid, Map<AttributeId, Value>>) {
+    fn update_household_input_params(&mut self, inputs: InputData) {
         for (eid, map) in inputs.into_iter() {
             if let Some(household) = self.households.get_mut(&*eid) {
                 household.update_inputs(map);
@@ -815,16 +819,15 @@ impl ModelHousehold {
     }
 
     /// Updates the inputs that sent via MOSAIK. *panics!* if an unknown input appears.
-    pub(crate) fn update_inputs(&mut self, inputs: Map<AttributeId, Value>) {
-        for (attribute, value) in inputs.into_iter() {
-            let arr: HashMap<String, f64> = serde_json::from_value(value).unwrap();
-            if arr.len() > 1 {
+    pub(crate) fn update_inputs(&mut self, inputs: HashMap<Attr, Map<FullId, Value>>) {
+        for (attribute, map) in inputs.into_iter() {
+            if map.len() > 1 {
                 warn!(
                     "Household receives attribute from more than one source: {:?}",
-                    arr
+                    map
                 );
             }
-            let agg: f64 = arr.into_values().sum();
+            let agg: f64 = map.values().map(|v| v.as_f64().unwrap_or(0.0)).sum();
             if attribute.eq("p_mw_load") {
                 self.p_mw_load = agg;
             } else if attribute.eq("p_mw_pv") {
@@ -988,7 +991,7 @@ impl ModelHousehold {
         }
     }
 
-    pub(crate) fn get_value(&self, attr: &AttributeId, time: &TimePeriod) -> Value {
+    pub(crate) fn get_value(&self, attr: &Attr, time: &TimePeriod) -> Value {
         match attr as &str {
             "p_mw_load" => serde_json::to_value(self.p_mw_load).unwrap(),
             "published_energy_balance" => serde_json::to_value(self.published_balance).unwrap(),

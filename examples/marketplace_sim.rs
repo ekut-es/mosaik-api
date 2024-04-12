@@ -6,7 +6,10 @@ use structopt::StructOpt;
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use mosaik_rust_api::{
-    run_simulation, tcp::ConnectionDirection, ApiHelpers, AttributeId, MosaikApi,
+    run_simulation,
+    tcp::ConnectionDirection,
+    types::{Attr, InputData, OutputData, OutputRequest, SimId},
+    ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -41,14 +44,42 @@ pub fn main() /*-> Result<()>*/
     }
 }
 
+impl DefaultMosaikApi for MarketplaceSim {}
+
 impl MosaikApi for MarketplaceSim {
     /*fn get_mut_params<T: ApiHelpers>(&mut self) -> &mut T {
         &mut self
     }*/
 
+    fn init(
+        &mut self,
+        sid: SimId,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> mosaik_rust_api::Meta {
+        DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
+    }
+
+    fn create(
+        &mut self,
+        num: usize,
+        model_name: String,
+        model_params: Map<Attr, Value>,
+    ) -> Vec<Map<String, Value>> {
+        DefaultMosaikApi::create(self, num, model_name, model_params)
+    }
+
     fn setup_done(&self) {
         info!("Setup done!")
         //todo!()
+    }
+
+    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
+        DefaultMosaikApi::step(self, time, inputs, max_advance)
+    }
+
+    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
+        DefaultMosaikApi::get_data(self, outputs)
     }
 
     fn stop(&self) {
@@ -101,7 +132,7 @@ impl ApiHelpers for MarketplaceSim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
         if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
             let /*mut*/ model:Model = Model::initmodel(init_reading);
             self.models.push(model);

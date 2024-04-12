@@ -82,10 +82,10 @@ pub async fn build_connection<T: MosaikApi>(addr: ConnectionDirection, simulator
     }
 }
 
-///Recieve the Requests, send them to the broker_loop.
+///Receive the Requests, send them to the broker_loop.
 async fn connection_loop(
     mut broker: Sender<Event>,
-    mut connection_shutdown_reciever: Receiver<bool>,
+    mut connection_shutdown_receiver: Receiver<bool>,
     stream: TcpStream,
 ) -> Result<()> {
     info!("Started connection loop");
@@ -103,7 +103,7 @@ async fn connection_loop(
         .await
         .unwrap();
 
-    let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number infront the request.
+    let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number in front of the request.
 
     //Read the rest of the data and send it to the broker_loop
     loop {
@@ -118,7 +118,7 @@ async fn connection_loop(
                             if let Err(e) = broker
                                 .send(Event::Request {
                                     full_data: String::from_utf8(full_package[0..size].to_vec())
-                                        .expect("string from utf 8 connction loops"),
+                                        .expect("string from utf 8 connection loops"),
                                     name: name.clone(),
                                 })
                                 .await
@@ -132,9 +132,9 @@ async fn connection_loop(
                 },
                 Err(_) => break,
             },
-            void = connection_shutdown_reciever.next().fuse() => match void {
+            void = connection_shutdown_receiver.next().fuse() => match void {
                 Some(_) => {
-                    info!("recieve connection_shutdown command");
+                    info!("receive connection_shutdown command");
                     break;
                 },
                 None => break,
@@ -144,7 +144,7 @@ async fn connection_loop(
     Ok(())
 }
 
-///Recieve the Response from the broker_loop and write it in the stream.
+//Receive the Response from the broker_loop and write it in the stream.
 async fn connection_writer_loop(
     messages: &mut Receiver<Vec<u8>>,
     stream: Arc<TcpStream>,
@@ -183,7 +183,7 @@ enum Event {
     },
 }
 
-///Recieve requests from the connection_loop, parse them, get the values from the API and send the finished response to the connection_writer_loop
+///Receive requests from the connection_loop, parse them, get the values from the API and send the finished response to the connection_writer_loop
 async fn broker_loop<T: MosaikApi>(
     events: Receiver<Event>,
     mut connection_shutdown_sender: Sender<bool>,
@@ -205,12 +205,12 @@ async fn broker_loop<T: MosaikApi>(
         peer = (
             stream
                 .peer_addr()
-                .expect("unaible to read remote peer address from {name}"),
+                .expect("unable to read remote peer address from {name}"),
             client_sender,
         );
         let mut disconnect_sender = disconnect_sender.clone();
         spawn_and_log_error(async move {
-            let res = connection_writer_loop(&mut client_receiver, stream, shutdown).await; //spawn a connection writer with the message recieved over the channel
+            let res = connection_writer_loop(&mut client_receiver, stream, shutdown).await; //spawn a connection writer with the message received over the channel
             disconnect_sender
                 .send((String::from("Mosaik"), client_receiver))
                 .await
@@ -218,7 +218,7 @@ async fn broker_loop<T: MosaikApi>(
             res
         });
     } else {
-        panic!("Didn't recieve new peer as first event.");
+        panic!("Didn't receive new peer as first event.");
     }
 
     //loop for the different events.
@@ -240,26 +240,26 @@ async fn broker_loop<T: MosaikApi>(
             Event::Request { full_data, name } => {
                 //parse the request
                 match json::parse_request(full_data) {
-                    Ok((id, request)) => {
+                    Ok(request) => {
                         //Handle the request -> simulations calls etc.
                         trace!("The request: {:?} from {name}", request);
                         use json::Response::*;
-                        match json::handle_request(id, request, &mut simulator) {
-                            Successfull(response) => {
+                        match json::handle_request(request, &mut simulator) {
+                            Ok(Successful(response)) => {
                                 //get the second argument in the tuple of peer
-                                //-> send the message to mosaik channel reciever
+                                //-> send the message to mosaik channel receiver
                                 if let Err(e) = peer.1.send(response).await {
                                     error!("error sending response to peer: {}", e);
                                     // FIXME what to send in this case? Failure?
                                 }
                             }
-                            Failure(response) => {
+                            Ok(Failure(response)) => {
                                 if let Err(e) = peer.1.send(response).await {
                                     error!("error sending failure response to peer: {}", e);
                                 }
                                 todo!()
                             }
-                            Stop(response) => {
+                            Ok(Stop(response)) => {
                                 if let Err(e) = peer.1.send(response).await {
                                     error!("error sending response to peer: {}", e);
                                 }
@@ -268,9 +268,10 @@ async fn broker_loop<T: MosaikApi>(
                                 }
                                 break 'event_loop;
                             }
-                            None => {
+                            Ok(None) => {
                                 info!("Nothing to respond");
                             }
+                            Err(_) => todo!(),
                         }
                     }
                     Err(e) => {
