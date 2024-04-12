@@ -14,6 +14,28 @@ pub type Attr = String;
 ///The name of a model.
 pub type ModelName = String;
 
+///A simulator ID
+pub type SimId = String;
+
+///An entity ID
+pub type EntityId = String;
+
+///A full ID of the form "sim_id.entity_id"
+pub type FullId = String;
+
+///The format of input data for simulator's step methods.
+pub type InputData = HashMap<EntityId, HashMap<Attr, Map<FullId, Value>>>;
+
+///The requested outputs for get_data. For each entity where data is
+///needed, the required attributes are listed.
+pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
+
+///The format of output data as return by ``get_data``
+pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
+
+// The below types are copied from the python implementation.
+// Not yet implemented in rust, mostly due to complex JSON handling.
+
 /*class ModelDescriptionOptionals(TypedDict, total=False):
     any_inputs: bool
     """Whether this model accepts inputs other than those specified in `attrs`."""
@@ -47,24 +69,6 @@ class Meta(MetaOptionals):
     models: Dict[ModelName, ModelDescription]
     """The descriptions of this simulator's models."""
 */
-///A simulator ID
-pub type SimId = String;
-
-///An entity ID
-pub type EntityId = String;
-
-///A full ID of the form "sim_id.entity_id"
-pub type FullId = String;
-
-///The format of input data for simulator's step methods.
-pub type InputData = HashMap<EntityId, HashMap<Attr, Map<FullId, Value>>>;
-
-///The requested outputs for get_data. For each entity where data is
-///needed, the required attributes are listed.
-pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
-
-///The format of output data as return by ``get_data``
-pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
 
 /*class CreateResultOptionals(TypedDict, total=False):
     rel: List[EntityId]
