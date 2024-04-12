@@ -1,25 +1,20 @@
 pub mod json;
-pub mod meta;
 pub mod tcp;
 pub mod types;
-
-use std::collections::HashMap;
 
 use crate::tcp::{build_connection, ConnectionDirection};
 use async_std::task;
 use async_trait::async_trait;
 use log::{debug, error, info, trace};
 use serde_json::{json, Map, Value};
-use types::{Attr, EntityId, InputData, OutputData, OutputRequest, SimId};
+use std::collections::HashMap;
+use types::{Attr, EntityId, InputData, OutputData, OutputRequest, SimId, Meta};
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 ///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
 pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> AResult<()> {
     task::block_on(build_connection(addr, simulator))
 }
-
-///information about the model(s) of the simulation
-pub type Meta = serde_json::Value;
 
 pub type Children = Value;
 

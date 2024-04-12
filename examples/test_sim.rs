@@ -6,7 +6,10 @@ use std::{collections::HashMap, todo};
 
 use log::error;
 use mosaik_rust_api::{
-    types::{Attr, EntityId, InputData, OutputData, OutputRequest},
+    types::{
+        Attr, EntityId, InputData, Meta, ModelDescription, ModelDescriptionOptionals, OutputData,
+        OutputRequest, SimulatorType,
+    },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 use serde::{Deserialize, Serialize};
@@ -119,18 +122,29 @@ pub struct RExampleSim {
 }
 
 impl ApiHelpers for RExampleSim {
-    fn meta() -> Value {
-        json!({
-            "type": "hybrid",
-            "models": {
-                "ExampleModel": {
-                    "public": true,
-                    "params": ["init_val"],
-                    "attrs": ["delta", "val"],
-                    "trigger": ["delta"],
-                },
+    fn meta() -> Meta {
+        let example_model = ModelDescription {
+            public: true,
+            params: vec!["init_val".to_string()],
+            attrs: vec!["delta".to_string(), "val".to_string()],
+            optionals: Some(ModelDescriptionOptionals {
+                trigger: Some(vec!["delta".to_string()]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let meta = Meta {
+            api_version: "3.0",
+            type_: SimulatorType::TimeBased,
+            models: {
+                let mut m = HashMap::new();
+                m.insert("ExampleModel".to_string(), example_model);
+                m
             },
-        })
+            ..Default::default()
+        };
+        meta
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
@@ -179,7 +193,7 @@ impl ApiHelpers for RExampleSim {
 impl DefaultMosaikApi for RExampleSim {}
 
 impl MosaikApi for RExampleSim {
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Value {
+    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
     }
     fn create(

@@ -58,15 +58,17 @@ pub fn handle_request<T: MosaikApi>(
     simulator: &mut T,
 ) -> Result<Response, MosaikError> {
     let content: Value = match request.method.as_ref() {
-        "init" => simulator.init(
-            serde_json::from_value(request.args[0].clone())?,
-            request
-                .kwargs
-                .remove("time_resolution")
-                .and_then(|value| value.as_f64())
-                .unwrap_or(1.0f64),
-            request.kwargs,
-        ),
+        "init" => serde_json::to_value(
+            simulator.init(
+                serde_json::from_value(request.args[0].clone())?,
+                request
+                    .kwargs
+                    .remove("time_resolution")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(1.0f64),
+                request.kwargs,
+            ),
+        )?,
         "create" => Value::from(simulator.create(
             serde_json::from_value(request.args[0].clone())?,
             serde_json::from_value(request.args[1].clone())?,

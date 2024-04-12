@@ -17,7 +17,10 @@ use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
-    types::{Attr, FullId, InputData, OutputData, OutputRequest},
+    types::{
+        Attr, FullId, InputData, Meta, ModelDescription, ModelName, OutputData, OutputRequest,
+        SimulatorType,
+    },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 use sled::Db;
@@ -104,7 +107,7 @@ impl DefaultMosaikApi for HouseholdBatterySim {}
 impl MosaikApi for HouseholdBatterySim {
     ///Create *num* instances of *model* using the provided *model_params*.
     /// *panics!* if more than one neighborhood is created.
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Value {
+    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
     }
 
@@ -192,43 +195,80 @@ impl MosaikApi for HouseholdBatterySim {
 }
 
 impl ApiHelpers for HouseholdBatterySim {
-    fn meta() -> Value {
-        json!({
-        "api_version": "3.0",
-        "type": "time-based",
-        "models":{
-            "Neighborhood":{
-                "public": true,
-                "params": [MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
-                "attrs": ["trades", "total","total_disposable_energy", "grid_power_load"
-                        ]
-                },
-                "Consumer": {
-                    "public": false,
-                    "params": [],
-                    "attrs": ["p_mw_load", "energy_balance", "published_energy_balance", "trades",
-                        "battery_charge", "trades", "p2p_traded",
-                        "avg_p2p_price", "published_p_mW_pv", "published_p_mW_load"
-                    ]
-                },
-                "Prosumer": {
-                    "public": false,
-                    "params": [],
-                    "attrs": ["p_mw_load",  "energy_balance", "published_energy_balance", "p_mw_pv",
-                        "battery_charge", "trades", "disposable_energy", "p2p_traded",
-                        "avg_p2p_price", "published_p_mW_pv", "published_p_mW_load"
-                    ]
-                },
-                "PV": {
-                    "public": false,
-                    "params": [],
-                    "attrs": ["p_mw_pv", "trades"]
-                }
+    fn meta() -> Meta {
+        let neighborhood = ModelDescription {
+            public: true,
+            params: vec![
+                MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION.to_string(),
+                MOSAIK_PARAM_START_TIME.to_string(),
+            ],
+            attrs: vec![
+                "trades".to_string(),
+                "total".to_string(),
+                "total_disposable_energy".to_string(),
+                "grid_power_load".to_string(),
+            ],
+            ..Default::default()
+        };
 
-            }
-        })
+        let consumer = ModelDescription {
+            public: false,
+            params: vec![],
+            attrs: vec![
+                "p_mw_load".to_string(),
+                "energy_balance".to_string(),
+                "published_energy_balance".to_string(),
+                "trades".to_string(),
+                "battery_charge".to_string(),
+                "trades".to_string(),
+                "p2p_traded".to_string(),
+                "avg_p2p_price".to_string(),
+                "published_p_mW_pv".to_string(),
+                "published_p_mW_load".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let prosumer = ModelDescription {
+            public: false,
+            params: vec![],
+            attrs: vec![
+                "p_mw_load".to_string(),
+                "energy_balance".to_string(),
+                "published_energy_balance".to_string(),
+                "p_mw_pv".to_string(),
+                "battery_charge".to_string(),
+                "trades".to_string(),
+                "disposable_energy".to_string(),
+                "p2p_traded".to_string(),
+                "avg_p2p_price".to_string(),
+                "published_p_mW_pv".to_string(),
+                "published_p_mW_load".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let pv = ModelDescription {
+            public: false,
+            params: vec![],
+            attrs: vec!["p_mw_pv".to_string(), "trades".to_string()],
+            ..Default::default()
+        };
+        let meta = Meta {
+            api_version: "3.0",
+            type_: SimulatorType::TimeBased,
+            models: {
+                let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
+                m.insert("Neighborhood".to_string(), neighborhood);
+                m.insert("Consumer".to_string(), consumer);
+                m.insert("Prosumer".to_string(), prosumer);
+                m.insert("PV".to_string(), pv);
+                m
+            },
+            ..Default::default()
+        };
+        meta
     }
-
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
         self.eid_prefix = eid_prefix.to_string();
     }

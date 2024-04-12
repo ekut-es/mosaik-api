@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-
 ///Time is represented as the number of simulation steps since the
 ///simulation started. One step represents `time_resolution` seconds.
 pub type Time = i64;
@@ -33,42 +33,58 @@ pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 ///The format of output data as return by ``get_data``
 pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct ModelDescriptionOptionals {
+    // Whether this model accepts inputs other than those specified in `attrs`.
+    pub any_inputs: Option<bool>,
+    // The input attributes that trigger a step of the associated simulator.
+    // (Non-trigger attributes are collected and supplied to the simulator when it
+    // steps next.)
+    pub trigger: Option<Vec<Attr>>,
+    // The output attributes that are persistent.
+    pub persistent: Option<Vec<Attr>>,
+}
+
+// Description of a single model in `Meta`
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct ModelDescription {
+    // Whether the model can be created directly.
+    pub public: bool,
+    // The parameters given during creating of this model.
+    pub params: Vec<String>,
+    // The input and output attributes of this model.
+    pub attrs: Vec<Attr>,
+    #[serde(flatten)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optionals: Option<ModelDescriptionOptionals>,
+}
+
+// The meta-data for a simulator.
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct Meta {
+    // The API version that this simulator supports in the format "major.minor".
+    pub api_version: &'static str,
+    // The simulator's stepping type.
+    #[serde(rename = "type")]
+    pub type_: SimulatorType,
+    // The descriptions of this simulator's models.
+    pub models: HashMap<ModelName, ModelDescription>,
+    // The names of the extra methods this simulator supports.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_methods: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum SimulatorType {
+    TimeBased,
+    EventBased,
+    #[default]
+    Hybrid,
+}
+
 // The below types are copied from the python implementation.
 // Not yet implemented in rust, mostly due to complex JSON handling.
-
-/*class ModelDescriptionOptionals(TypedDict, total=False):
-    any_inputs: bool
-    """Whether this model accepts inputs other than those specified in `attrs`."""
-    trigger: Iterable[Attr]
-    """The input attributes that trigger a step of the associated simulator.
-
-    (Non-trigger attributes are collected and supplied to the simulator when it
-    steps next.)"""
-    persistent: Iterable[Attr]
-    """The output attributes that are persistent."""
-
-class ModelDescription(ModelDescriptionOptionals):
-    """Description of a single model in `Meta`"""
-    public: bool
-    """Whether the model can be created directly."""
-    params: List[str]
-    """The parameters given during creating of this model."""
-    attrs: List[Attr]
-    """The input and output attributes of this model."""
-
-class MetaOptionals(TypedDict, total=False):
-    extra_methods: List[str]
-    """The names of the extra methods this simulator supports."""
-
-class Meta(MetaOptionals):
-    """The meta-data for a simulator."""
-    api_version: Literal["3.0"]
-    """The API version that this simulator supports in the format "major.minor"."""
-    type: Literal['time-based', 'event-based', 'hybrid']
-    """The simulator's stepping type."""
-    models: Dict[ModelName, ModelDescription]
-    """The descriptions of this simulator's models."""
-*/
 
 /*class CreateResultOptionals(TypedDict, total=False):
     rel: List[EntityId]

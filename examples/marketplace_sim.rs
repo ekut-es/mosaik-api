@@ -8,7 +8,9 @@ use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
-    types::{Attr, InputData, OutputData, OutputRequest, SimId},
+    types::{
+        Attr, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId, SimulatorType,
+    },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 ///Read, if we get an address or not
@@ -51,12 +53,7 @@ impl MosaikApi for MarketplaceSim {
         &mut self
     }*/
 
-    fn init(
-        &mut self,
-        sid: SimId,
-        time_resolution: f64,
-        sim_params: Map<String, Value>,
-    ) -> mosaik_rust_api::Meta {
+    fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
     }
 
@@ -98,8 +95,8 @@ pub struct MarketplaceSim {
 
 //Implementation of the helpers defined in the library
 impl ApiHelpers for MarketplaceSim {
-    fn meta() -> Value {
-        let model1 = ModelMeta {
+    fn meta() -> Meta {
+        let model1 = ModelDescription {
             public: true,
             params: vec!["init_reading".to_string()],
             attrs: vec![
@@ -112,26 +109,17 @@ impl ApiHelpers for MarketplaceSim {
             ..Default::default()
         };
 
-        let meta = MetaStruct {
+        let meta = Meta {
+            api_version: "3.0",
+            type_: SimulatorType::TimeBased,
             models: {
-                let mut m = Map::new();
-                m.insert("MarktplatzModel".to_string(), json!(model1));
+                let mut m = HashMap::new();
+                m.insert("MarktplatzModel".to_string(), model1);
                 m
             },
             ..Default::default()
         };
-        /*json!({
-        "api_version": "3.0",
-        "type": "time-based",
-        "models":{
-            "MarktplatzModel":{
-                "public": true,
-                "params": ["init_reading"],
-                "attrs": ["p_mw_pv", "p_mw_load", "reading", "trades", "total"]
-                }
-            }
-        })*/
-        json!(meta)
+        meta
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
