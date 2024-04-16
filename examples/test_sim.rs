@@ -7,8 +7,8 @@ use std::{collections::HashMap, todo};
 use log::error;
 use mosaik_rust_api::{
     types::{
-        Attr, EntityId, InputData, Meta, ModelDescription, ModelDescriptionOptionals, OutputData,
-        OutputRequest, SimulatorType,
+        Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, ModelDescriptionOptionals,
+        OutputData, OutputRequest, SimulatorType,
     },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
@@ -167,7 +167,7 @@ impl ApiHelpers for RExampleSim {
         todo!()
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         let init_val = model_params.get("init_val").map(|v| v.as_f64().unwrap());
         self.simulator.models.push(RModel::new(init_val));
         None
@@ -201,20 +201,21 @@ impl MosaikApi for RExampleSim {
         num: usize,
         model_name: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<Map<String, Value>> {
+    ) -> Vec<CreateResult> {
         let next_eid = self.entities.len();
-        let mut result: Vec<Map<String, Value>> = Vec::new();
+        let mut result: Vec<CreateResult> = Vec::new();
 
         for i in next_eid..(next_eid + num) {
-            let model_instance = RModel::new(None); // FIXME this is a String, but shouldn't this rather be a RModel?
+            let model_instance = RModel::new(None);
             let eid = format!("{}_{}", self.eid_prefix, i);
 
             self.entities.insert(eid.clone(), model_instance);
 
-            let mut dict = Map::new();
-            dict.insert("eid".to_string(), json!(eid));
-            dict.insert("type".to_string(), json!(model_name));
-
+            let dict = CreateResult {
+                eid,
+                r#type: model_name.clone(),
+                optionals: None,
+            };
             result.push(dict);
         }
 

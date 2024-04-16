@@ -83,31 +83,32 @@ pub enum SimulatorType {
     Hybrid,
 }
 
-// The below types are copied from the python implementation.
-// Not yet implemented in rust, mostly due to complex JSON handling.
+// class CreateResultOptionals(TypedDict, total=False):
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+pub struct CreateResultOptionals {
+    /// The entity IDs of the entities of this simulator that are related to this entity.
+    pub rel: Option<Vec<EntityId>>,
+    /// The child entities of this entity.
+    pub children: Option<Vec<CreateResult>>,
+    /// Any additional information about the entity that the simulator wants to pass back to the scenario.
+    pub extra_info: Option<HashMap<String, String>>,
+}
 
-/*class CreateResultOptionals(TypedDict, total=False):
-    rel: List[EntityId]
-    """The entity IDs of the entities of this simulator that are
-    related to this entity."""
-    children: List[CreateResult]
-    """The child entities of this entity."""
-    extra_info: Any
-    """Any additional information about the entity that the simulator
-    wants to pass back to the scenario.
-    """
+/// The type for elements of the list returned by `create` calls in the mosaik API."""
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+pub struct CreateResult {
+    /// The entity ID of this entity.
+    pub eid: EntityId,
+    /// The model name (as given in the simulator's meta) of this entity.
+    pub r#type: ModelName,
 
-
-class CreateResult(CreateResultOptionals):
-    """The type for elements of the list returned by `create` calls in
-    the mosaik API."""
-    eid: EntityId
-    """The entity ID of this entity."""
-    type: ModelName
-    """The model name (as given in the simulator's meta) of this entity.
-    """
+    pub optionals: Option<CreateResultOptionals>,
+}
 
 pub type CreateResultChild = CreateResult;
+// The below types are copied from the python implementation.
+
+/*
 
 class EntitySpec(TypedDict):
     type: ModelName

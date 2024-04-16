@@ -3,7 +3,7 @@
 //! by sending a list of JSON representations of [HouseholdDescription] to the [create] Method.
 //! The Mosaik-Interface is different from [marketplace_sim](marketplace_sim). The
 use log::*;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
@@ -18,8 +18,8 @@ use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, FullId, InputData, Meta, ModelDescription, ModelName, OutputData, OutputRequest,
-        SimulatorType,
+        Attr, CreateResult, CreateResultChild, CreateResultOptionals, FullId, InputData, Meta,
+        ModelDescription, ModelName, OutputData, OutputRequest, SimulatorType,
     },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
@@ -116,29 +116,27 @@ impl MosaikApi for HouseholdBatterySim {
         num: usize,
         model: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<Map<String, Value>> {
+    ) -> Vec<CreateResult> {
         if num > 1 || self.neighborhood.is_some() {
             todo!("Create Support for more  than one Neighborhood");
         }
-        let mut out_entities: Map<String, Value>;
         let mut out_vector = Vec::with_capacity(1);
         let next_eid = self.get_mut_entities().len();
 
         for i in next_eid..(next_eid + num) {
-            out_entities = Map::new();
-
-            let children = self.add_model(model_params.clone());
             let nhdb = self.neighborhood.as_ref().unwrap();
             let eid = nhdb.eid.clone();
             self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-            out_entities.insert(String::from("eid"), json!(eid));
-            out_entities.insert(String::from("type"), json!(model.clone()));
-
-            if let Some(children) = children {
-                out_entities.insert(String::from("children"), children);
-            }
-
-            out_vector.push(out_entities);
+            let out_entity = CreateResult {
+                eid,
+                r#type: model.clone(),
+                optionals: Some(CreateResultOptionals {
+                    rel: None,
+                    children: self.add_model(model_params.clone()),
+                    extra_info: None,
+                }),
+            };
+            out_vector.push(out_entity);
         }
 
         debug!("the created model: {:?}", out_vector);
@@ -289,7 +287,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>> {
         let household_configs = self.params_to_household_config(&model_params);
 
         let start_time = if !model_params.contains_key(MOSAIK_PARAM_START_TIME) {
@@ -463,17 +461,19 @@ impl Neighborhood {
     }
 
     /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
-    fn households_as_mosaik_children(&self) -> Value {
-        let mut child_descriptions: Vec<HashMap<String, String>> =
+    fn households_as_mosaik_children(&self) -> Vec<CreateResultChild> {
+        let mut child_descriptions: Vec<CreateResultChild> =
             Vec::with_capacity(self.households.len());
         for (eid, household) in self.households.iter() {
-            let mut hash_map = HashMap::with_capacity(2);
-            hash_map.insert("eid".to_string(), eid.clone());
-            hash_map.insert("type".to_string(), household.household_type.clone());
-            child_descriptions.push(hash_map);
+            let child = CreateResultChild {
+                eid: eid.clone(),
+                r#type: household.household_type.clone(),
+                optionals: None,
+            };
+            child_descriptions.push(child);
         }
 
-        serde_json::to_value(child_descriptions).unwrap()
+        child_descriptions
     }
 
     /************************************************

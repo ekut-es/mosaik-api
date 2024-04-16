@@ -69,11 +69,11 @@ pub fn handle_request<T: MosaikApi>(
                 request.kwargs,
             ),
         )?,
-        "create" => Value::from(simulator.create(
+        "create" => serde_json::to_value(simulator.create(
             serde_json::from_value(request.args[0].clone())?,
             serde_json::from_value(request.args[1].clone())?,
             request.kwargs,
-        )),
+        ))?,
         "step" => Value::from(simulator.step(
             serde_json::from_value(request.args[0].clone())?,
             serde_json::from_value(request.args[1].clone())?,

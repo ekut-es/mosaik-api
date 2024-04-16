@@ -9,7 +9,8 @@ use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId, SimulatorType,
+        Attr, CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
+        SimulatorType,
     },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
@@ -62,7 +63,7 @@ impl MosaikApi for MarketplaceSim {
         num: usize,
         model_name: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<Map<String, Value>> {
+    ) -> Vec<CreateResult> {
         DefaultMosaikApi::create(self, num, model_name, model_params)
     }
 
@@ -142,9 +143,9 @@ impl ApiHelpers for MarketplaceSim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
-            let /*mut*/ model:Model = Model::initmodel(init_reading);
+            let model = Model::initmodel(init_reading);
             self.models.push(model);
             self.data.push(vec![]); //Add list for simulation data
         }
