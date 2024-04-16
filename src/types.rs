@@ -164,6 +164,9 @@ mod tests {
         meta.extra_methods = Some(vec!["foo".to_string()]);
 
         let meta_json = serde_json::to_string(&meta).unwrap();
-        assert_eq!(r#"{"api_version":"3.0","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"any_inputs":true,"trigger":["trigger1"],"persistent":["trades"]}},"extra_methods":["foo"]}"#, meta_json)
+        assert_eq!(
+            r#"{"api_version":"3.0","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"any_inputs":true,"trigger":["trigger1"],"persistent":["trades"]}},"extra_methods":["foo"]}"#,
+            meta_json
+        )
     }
 }
