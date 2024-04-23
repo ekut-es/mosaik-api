@@ -120,11 +120,13 @@ class EntityGraph(TypedDict):
 // tests for Meta
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_meta() {
-        let mut meta = super::Meta::default();
+        let mut meta = Meta::default();
         meta.api_version = "3.0";
-        let model1 = super::ModelDescription {
+        let model1 = ModelDescription {
             public: true,
             params: vec!["init_reading".to_string()],
             attrs: vec![
@@ -134,12 +136,13 @@ mod tests {
                 "trades".to_string(),
                 "total".to_string(),
             ],
+
             ..Default::default()
         };
         meta.models.insert("MarktplatzModel".to_string(), model1);
 
         assert_eq!(meta.api_version, "3.0");
-        assert_eq!(meta.type_, super::SimulatorType::Hybrid);
+        assert_eq!(meta.type_, SimulatorType::Hybrid);
         assert_eq!(meta.models.len(), 1);
 
         let meta_json = serde_json::to_string(&meta).unwrap();
@@ -148,13 +151,13 @@ mod tests {
 
     #[test]
     fn test_meta_optionals() {
-        let mut meta = super::Meta::default();
+        let mut meta = Meta::default();
         meta.api_version = "3.0";
-        let model1 = super::ModelDescription {
+        let model1 = ModelDescription {
             public: true,
             params: vec!["init_reading".to_string()],
             attrs: vec!["p_mw_pv".to_string(), "p_mw_load".to_string()],
-            optionals: Some(super::ModelDescriptionOptionals {
+            optionals: Some(ModelDescriptionOptionals {
                 any_inputs: Some(true),
                 trigger: Some(vec!["trigger1".to_string()]),
                 persistent: Some(vec!["trades".to_string()]),
