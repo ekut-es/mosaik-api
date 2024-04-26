@@ -36,12 +36,15 @@ pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct ModelDescriptionOptionals {
     // Whether this model accepts inputs other than those specified in `attrs`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub any_inputs: Option<bool>,
     // The input attributes that trigger a step of the associated simulator.
     // (Non-trigger attributes are collected and supplied to the simulator when it
     // steps next.)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub trigger: Option<Vec<Attr>>,
     // The output attributes that are persistent.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub persistent: Option<Vec<Attr>>,
 }
 
@@ -106,21 +109,83 @@ pub struct CreateResult {
 }
 
 pub type CreateResultChild = CreateResult;
-// The below types are copied from the python implementation.
 
 /*
+// The below types are copied from the python implementation.
 
 class EntitySpec(TypedDict):
     type: ModelName
 
 class EntityGraph(TypedDict):
     nodes: Dict[FullId, EntitySpec]
-    edges: List[Tuple[FullId, FullId, Dict]]*/
+    edges: List[Tuple[FullId, FullId, Dict]]
+*/
 
 // tests for Meta
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_model_description_without_optionals() {
+        let mut model = ModelDescription::default();
+
+        assert_eq!(model.public, false);
+        assert_eq!(model.params.len(), 0);
+        assert_eq!(model.attrs.len(), 0);
+        assert_eq!(model.optionals, None);
+
+        let model_json = serde_json::to_string(&model).unwrap();
+        assert_eq!(r#"{"public":false,"params":[],"attrs":[]}"#, model_json);
+
+        model.public = true;
+        model.params.push("init_reading".to_string());
+        model.attrs.push("trades".to_string());
+        model.attrs.push("total".to_string());
+
+        assert_eq!(model.public, true);
+        assert_eq!(model.params.len(), 1);
+        assert_eq!(model.attrs.len(), 2);
+        assert_eq!(model.optionals, None);
+
+        let model_json = serde_json::to_string(&model).unwrap();
+        assert_eq!(
+            r#"{"public":true,"params":["init_reading"],"attrs":["trades","total"]}"#,
+            model_json
+        )
+    }
+
+    #[test]
+    fn test_model_description_with_optionals() {
+        let mut model = ModelDescription::default();
+        model.public = true;
+        model.params.push("init_reading".to_string());
+        model.attrs.push("p_mw_pv".to_string());
+        model.attrs.push("p_mw_load".to_string());
+        model.optionals = Some(ModelDescriptionOptionals {
+            any_inputs: Some(true),
+            trigger: Some(vec!["trigger1".to_string()]),
+            persistent: Some(vec!["trades".to_string()]),
+        });
+
+        let model_json = serde_json::to_string(&model).unwrap();
+        assert_eq!(
+            r#"{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"any_inputs":true,"trigger":["trigger1"],"persistent":["trades"]}"#,
+            model_json
+        );
+
+        model.optionals = Some(ModelDescriptionOptionals {
+            any_inputs: None,
+            trigger: Some(vec!["trigger1".to_string()]),
+            persistent: None,
+        });
+
+        let model_json = serde_json::to_string(&model).unwrap();
+        assert_eq!(
+            r#"{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"trigger":["trigger1"]}"#,
+            model_json
+        )
+    }
 
     #[test]
     fn test_meta() {
