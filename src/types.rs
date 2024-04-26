@@ -48,7 +48,7 @@ pub struct ModelDescriptionOptionals {
     pub persistent: Option<Vec<Attr>>,
 }
 
-// Description of a single model in `Meta`
+/// Description of a single model in `Meta`
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct ModelDescription {
     // Whether the model can be created directly.
@@ -62,8 +62,8 @@ pub struct ModelDescription {
     pub optionals: Option<ModelDescriptionOptionals>,
 }
 
-// The meta-data for a simulator.
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+/// The meta-data for a simulator.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct Meta {
     // The API version that this simulator supports in the format "major.minor".
     pub api_version: &'static str,
