@@ -37,7 +37,7 @@ pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
 pub struct ModelDescriptionOptionals {
     // Whether this model accepts inputs other than those specified in `attrs`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub any_inputs: Option<bool>,
+    pub any_inputs: Option<bool>, // TODO can this default to false (then the Options could be removed)
     // The input attributes that trigger a step of the associated simulator.
     // (Non-trigger attributes are collected and supplied to the simulator when it
     // steps next.)
