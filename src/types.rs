@@ -201,28 +201,36 @@ mod tests {
     #[test]
     fn test_meta() {
         let mut meta = Meta::default();
-        meta.api_version = "3.0";
+        assert_eq!(meta.api_version, "3.0");
+        assert_eq!(
+            meta.type_,
+            SimulatorType::Hybrid,
+            "Default type should be Hybrid"
+        );
+
+        let empty_meta_json = serde_json::to_string(&meta).unwrap();
+        assert_eq!(
+            r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, empty_meta_json,
+            "Empty meta should not have extra_methods and no empty models."
+        );
+
+        // TODO is this a bug in the python implementation?
+        meta.api_version = "3.1";
+        assert_eq!(meta.api_version, "3.1", "API version should be changeable");
+
+        assert!(meta.models.is_empty());
         let model1 = ModelDescription {
             public: true,
             params: vec!["init_reading".to_string()],
-            attrs: vec![
-                "p_mw_pv".to_string(),
-                "p_mw_load".to_string(),
-                "reading".to_string(),
-                "trades".to_string(),
-                "total".to_string(),
-            ],
-
+            attrs: vec!["trades".to_string(), "total".to_string()],
             ..Default::default()
         };
         meta.models.insert("MarktplatzModel".to_string(), model1);
+        assert_eq!(meta.models.len(), 1, "Should have one model");
 
-        assert_eq!(meta.api_version, "3.0");
-        assert_eq!(meta.type_, SimulatorType::Hybrid);
-        assert_eq!(meta.models.len(), 1);
-
+        assert!(meta.extra_methods.is_empty());
         let meta_json = serde_json::to_string(&meta).unwrap();
-        assert_eq!("{\"api_version\":\"3.0\",\"type\":\"hybrid\",\"models\":{\"MarktplatzModel\":{\"public\":true,\"params\":[\"init_reading\"],\"attrs\":[\"p_mw_pv\",\"p_mw_load\",\"reading\",\"trades\",\"total\"]}}}", meta_json)
+        assert_eq!(r#"{"api_version":"3.1","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#, meta_json, "Meta should have one model and no extra methods.")
     }
 
     #[test]
@@ -241,7 +249,7 @@ mod tests {
             ..Default::default()
         };
         meta.models.insert("MarktplatzModel".to_string(), model1);
-        meta.extra_methods = Some(vec!["foo".to_string()]);
+        meta.extra_methods.push("foo".to_string());
 
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
