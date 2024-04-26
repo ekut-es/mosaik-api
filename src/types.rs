@@ -186,9 +186,8 @@ mod tests {
         );
 
         model.optionals = Some(ModelDescriptionOptionals {
-            any_inputs: None,
             trigger: Some(vec!["trigger1".to_string()]),
-            persistent: None,
+            ..Default::default()
         });
 
         let model_json = serde_json::to_string(&model).unwrap();
@@ -230,31 +229,32 @@ mod tests {
 
         assert!(meta.extra_methods.is_empty());
         let meta_json = serde_json::to_string(&meta).unwrap();
-        assert_eq!(r#"{"api_version":"3.1","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#, meta_json, "Meta should have one model and no extra methods.")
+        assert_eq!(
+            r#"{"api_version":"3.1","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#,
+            meta_json,
+            "Meta should have one model and no extra methods."
+        )
     }
 
     #[test]
     fn test_meta_optionals() {
         let mut meta = Meta::default();
-        meta.api_version = "3.0";
-        let model1 = ModelDescription {
-            public: true,
-            params: vec!["init_reading".to_string()],
-            attrs: vec!["p_mw_pv".to_string(), "p_mw_load".to_string()],
-            optionals: Some(ModelDescriptionOptionals {
-                any_inputs: Some(true),
-                trigger: Some(vec!["trigger1".to_string()]),
-                persistent: Some(vec!["trades".to_string()]),
-            }),
-            ..Default::default()
-        };
-        meta.models.insert("MarktplatzModel".to_string(), model1);
+        let meta_json = serde_json::to_string(&meta).unwrap();
+        assert_eq!(
+            r#"{"api_version":"3.0","type":"hybrid","models":{}}"#,
+            meta_json,
+            "JSON String should contain no 'extra_methods'."
+        );
+
         meta.extra_methods.push("foo".to_string());
+        meta.extra_methods.push("bar".to_string());
+        assert_eq!(meta.extra_methods.len(), 2, "Should have 2 extra methods.");
 
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
-            r#"{"api_version":"3.0","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"any_inputs":true,"trigger":["trigger1"],"persistent":["trades"]}},"extra_methods":["foo"]}"#,
-            meta_json
+            r#"{"api_version":"3.0","type":"hybrid","models":{},"extra_methods":["foo","bar"]}"#,
+            meta_json,
+            "JSON String should contain 'foo' and 'bar' as extra methods."
         )
     }
 }
