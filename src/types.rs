@@ -241,8 +241,7 @@ mod tests {
         let mut meta = Meta::default();
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
-            r#"{"api_version":"3.0","type":"hybrid","models":{}}"#,
-            meta_json,
+            r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, meta_json,
             "JSON String should contain no 'extra_methods'."
         );
 
