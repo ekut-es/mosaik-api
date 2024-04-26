@@ -63,7 +63,7 @@ pub struct ModelDescription {
 }
 
 /// The meta-data for a simulator.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Meta {
     // The API version that this simulator supports in the format "major.minor".
     pub api_version: &'static str,
@@ -73,8 +73,19 @@ pub struct Meta {
     // The descriptions of this simulator's models.
     pub models: HashMap<ModelName, ModelDescription>,
     // The names of the extra methods this simulator supports.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra_methods: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub extra_methods: Vec<String>,
+}
+
+impl Default for Meta {
+    fn default() -> Self {
+        Meta {
+            api_version: "3.0",
+            type_: SimulatorType::default(),
+            models: HashMap::new(),
+            extra_methods: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
