@@ -225,23 +225,19 @@ impl MosaikApi for RExampleSim {
     }
 
     fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
-        /* FIXME: this is not yet compatible with new json typing
         self.time = time as u64;
-
+        // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
+        // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
         for (eid, model_instance) in &mut self.entities {
             if let Some(attrs) = inputs.get(eid) {
+                let mut new_delta = 0.0;
                 for (_, values) in attrs {
-                    if let Some(new_delta) = values
-                        .as_object()
-                        .map(|v| v.values().map(|val| val.as_f64().unwrap_or(0.0)).sum())
-                    {
-                        model_instance.delta = new_delta
-                    }
+                    new_delta = values.values().map(|v| v.as_f64().unwrap()).sum();
                 }
+                model_instance.delta = new_delta;
             }
-
             model_instance.step();
-        }*/
+        }
 
         return Some(time + 1); // Step size is 1 second
     }
