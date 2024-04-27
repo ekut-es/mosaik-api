@@ -84,9 +84,10 @@ pub fn handle_request<T: MosaikApi>(
         )?,
         "setup_done" => {
             simulator.setup_done();
-            json!(null)
+            Value::Null
         }
         "stop" => {
+            info!("Received stop command!");
             simulator.stop();
             return match to_vec_helper(json!(null), request.msg_id) {
                 Some(vec) => Ok(Response::Stop(vec)),
