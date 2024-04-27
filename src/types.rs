@@ -97,26 +97,34 @@ pub enum SimulatorType {
     Hybrid,
 }
 
-// class CreateResultOptionals(TypedDict, total=False):
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
-pub struct CreateResultOptionals {
-    /// The entity IDs of the entities of this simulator that are related to this entity.
-    pub rel: Option<Vec<EntityId>>,
-    /// The child entities of this entity.
-    pub children: Option<Vec<CreateResult>>,
-    /// Any additional information about the entity that the simulator wants to pass back to the scenario.
-    pub extra_info: Option<HashMap<String, String>>,
-}
-
 /// The type for elements of the list returned by `create` calls in the mosaik API."""
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct CreateResult {
     /// The entity ID of this entity.
     pub eid: EntityId,
     /// The model name (as given in the simulator's meta) of this entity.
     pub r#type: ModelName,
+    /// Optional: The entity IDs of the entities of this simulator that are related to this entity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rel: Option<Vec<EntityId>>,
+    /// Optional: The child entities of this entity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<CreateResult>>,
+    /// Optional: Any additional information about the entity that the simulator wants to pass back to the scenario.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_info: Option<HashMap<String, String>>,
+}
 
-    pub optionals: Option<CreateResultOptionals>,
+impl CreateResult {
+    pub fn new(eid: EntityId, r#type: ModelName) -> Self {
+        CreateResult {
+            eid,
+            r#type,
+            rel: None,
+            children: None,
+            extra_info: None,
+        }
+    }
 }
 
 pub type CreateResultChild = CreateResult;
@@ -254,6 +262,49 @@ mod tests {
             r#"{"api_version":"3.0","type":"hybrid","models":{},"extra_methods":["foo","bar"]}"#,
             meta_json,
             "JSON String should contain 'foo' and 'bar' as extra methods."
+        )
+    }
+
+    #[test]
+    fn test_create_result_new() {
+        let create_result = CreateResult::new(String::from("eid_1"), String::from("model_name"));
+        assert_eq!(create_result.eid, "eid_1");
+        assert_eq!(create_result.r#type, "model_name");
+        assert!(create_result.rel.is_none());
+        assert!(create_result.children.is_none());
+        assert!(create_result.extra_info.is_none());
+
+        let create_result_json = serde_json::to_string(&create_result).unwrap();
+        assert_eq!(
+            r#"{"eid":"eid_1","type":"model_name"}"#, create_result_json,
+            "New CreateResult should not contain any optional fields"
+        )
+    }
+
+    #[test]
+    fn test_create_results_filled() {
+        let mut create_result = CreateResult::new("eid_1".to_string(), "model_name".to_string());
+
+        create_result.rel = Some(vec!["eid_2".to_string()]);
+        create_result.children = Some(vec![CreateResult::new(
+            "child_1".to_string(),
+            "child".to_string(),
+        )]);
+
+        assert_eq!(create_result.eid, "eid_1");
+        assert_eq!(create_result.r#type, "model_name");
+        assert_eq!(create_result.rel, Some(vec!["eid_2".to_string()]));
+        assert_eq!(create_result.children.is_some(), true);
+        if let Some(children) = &create_result.children {
+            assert_eq!(children.len(), 1);
+            assert_eq!(children[0].eid, "child_1");
+        }
+
+        let create_result_json = serde_json::to_string(&create_result).unwrap();
+        assert_eq!(
+            r#"{"eid":"eid_1","type":"model_name","rel":["eid_2"],"children":[{"eid":"child_1","type":"child"}]}"#,
+            create_result_json,
+            "Filled create result should contain optional fields without extra_info"
         )
     }
 }

@@ -214,7 +214,7 @@ impl MosaikApi for RExampleSim {
             let dict = CreateResult {
                 eid,
                 r#type: model_name.clone(),
-                optionals: None,
+                ..Default::default()
             };
             result.push(dict);
         }

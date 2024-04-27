@@ -18,8 +18,8 @@ use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, CreateResult, CreateResultChild, CreateResultOptionals, FullId, InputData, Meta,
-        ModelDescription, ModelName, OutputData, OutputRequest, SimulatorType,
+        Attr, CreateResult, CreateResultChild, FullId, InputData, Meta, ModelDescription,
+        ModelName, OutputData, OutputRequest, SimulatorType,
     },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
@@ -130,11 +130,8 @@ impl MosaikApi for HouseholdBatterySim {
             let out_entity = CreateResult {
                 eid,
                 r#type: model.clone(),
-                optionals: Some(CreateResultOptionals {
-                    rel: None,
-                    children: self.add_model(model_params.clone()),
-                    extra_info: None,
-                }),
+                children: self.add_model(model_params.clone()),
+                ..Default::default()
             };
             out_vector.push(out_entity);
         }
@@ -468,7 +465,7 @@ impl Neighborhood {
             let child = CreateResultChild {
                 eid: eid.clone(),
                 r#type: household.household_type.clone(),
-                optionals: None,
+                ..Default::default()
             };
             child_descriptions.push(child);
         }

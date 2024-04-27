@@ -97,11 +97,9 @@ pub trait DefaultMosaikApi: ApiHelpers {
             let out_entity = CreateResult {
                 eid,
                 r#type: model_name.clone(),
-                optionals: Some(CreateResultOptionals {
-                    rel: None,
-                    children: self.add_model(model_params.clone()),
-                    extra_info: None,
-                }),
+                rel: None,
+                children: self.add_model(model_params.clone()),
+                extra_info: None,
             };
             debug!("{:?}", out_entity);
             out_vector.push(out_entity);
