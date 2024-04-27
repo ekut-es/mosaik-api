@@ -35,15 +35,15 @@ pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
 
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct ModelDescriptionOptionals {
-    // Whether this model accepts inputs other than those specified in `attrs`.
+    /// Whether this model accepts inputs other than those specified in `attrs`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub any_inputs: Option<bool>, // TODO can this default to false (then the Options could be removed)
-    // The input attributes that trigger a step of the associated simulator.
-    // (Non-trigger attributes are collected and supplied to the simulator when it
-    // steps next.)
+    /// The input attributes that trigger a step of the associated simulator.
+    /// (Non-trigger attributes are collected and supplied to the simulator when it
+    /// steps next.)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trigger: Option<Vec<Attr>>,
-    // The output attributes that are persistent.
+    /// The output attributes that are persistent.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persistent: Option<Vec<Attr>>,
 }
@@ -51,11 +51,11 @@ pub struct ModelDescriptionOptionals {
 /// Description of a single model in `Meta`
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct ModelDescription {
-    // Whether the model can be created directly.
+    /// Whether the model can be created directly.
     pub public: bool,
-    // The parameters given during creating of this model.
+    /// The parameters given during creating of this model.
     pub params: Vec<String>,
-    // The input and output attributes of this model.
+    /// The input and output attributes of this model.
     pub attrs: Vec<Attr>,
     #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,14 +65,14 @@ pub struct ModelDescription {
 /// The meta-data for a simulator.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Meta {
-    // The API version that this simulator supports in the format "major.minor".
+    /// The API version that this simulator supports in the format "major.minor".
     pub api_version: &'static str,
-    // The simulator's stepping type.
+    /// The simulator's stepping type.
     #[serde(rename = "type")]
     pub type_: SimulatorType,
-    // The descriptions of this simulator's models.
+    /// The descriptions of this simulator's models.
     pub models: HashMap<ModelName, ModelDescription>,
-    // The names of the extra methods this simulator supports.
+    /// The names of the extra methods this simulator supports.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub extra_methods: Vec<String>,
 }
