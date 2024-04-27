@@ -4,17 +4,15 @@ pub mod types;
 
 use crate::{
     tcp::{build_connection, ConnectionDirection},
-    types::CreateResultOptionals,
+    types::*,
 };
+
 use async_std::task;
 use async_trait::async_trait;
 use log::{debug, error, info, trace};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
-use types::{
-    Attr, CreateResult, CreateResultChild, EntityId, InputData, Meta, OutputData, OutputRequest,
-    SimId,
-};
+
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 ///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
