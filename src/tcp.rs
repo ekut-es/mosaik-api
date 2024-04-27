@@ -273,10 +273,10 @@ async fn broker_loop<T: MosaikApi>(
                                 }
                                 todo!()
                             }
-                            Ok(Stop(response)) => {
-                                if let Err(e) = peer.1.send(response).await {
+                            Ok(Stop) => {
+                                /*if let Err(e) = peer.1.send(response).await {
                                     error!("error sending response to peer: {}", e);
-                                }
+                                }*/
                                 if let Err(e) = connection_shutdown_sender.send(true).await {
                                     error!("error sending to the shutdown channel: {}", e);
                                 }

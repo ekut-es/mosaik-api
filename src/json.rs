@@ -33,7 +33,7 @@ pub struct Request {
 pub enum Response {
     Successful(Vec<u8>),
     Failure(Vec<u8>),
-    Stop(Vec<u8>),
+    Stop,
     None,
 }
 
@@ -87,12 +87,9 @@ pub fn handle_request<T: MosaikApi>(
             Value::Null
         }
         "stop" => {
-            info!("Received stop command!");
+            debug!("Received stop command!");
             simulator.stop();
-            return match to_vec_helper(json!(null), request.msg_id) {
-                Some(vec) => Ok(Response::Stop(vec)),
-                None => Ok(Response::None),
-            };
+            return Ok(Response::Stop);
         }
         e => {
             error!(
