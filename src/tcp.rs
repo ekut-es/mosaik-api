@@ -130,14 +130,28 @@ async fn connection_loop(
                     }
 
                 },
-                Err(_) => break,
+                Err(e) => {
+                    match e.kind() {
+                        async_std::io::ErrorKind::UnexpectedEof => {
+                            error!("Unexpected EOF. Error: {}", e);
+                            info!("Read unexpected EOF. Simulation and therefore TCP Connection should be finished. Waiting for Shutdown Request from Shutdown Sender.");
+                        },
+                        _ => {
+                            error!("Error reading Stream Data: {:?}. Stopping connection loop.", e);
+                            break;
+                        }
+                    }
+                }
             },
             void = connection_shutdown_receiver.next().fuse() => match void {
                 Some(_) => {
                     info!("receive connection_shutdown command");
                     break;
                 },
-                None => break,
+                None => {
+                    error!("shutdown sender channel is closed and therefore we assume the connection can and should be stopped.");
+                    break;
+                }
             }
         }
     }
