@@ -56,18 +56,13 @@ pub trait ApiHelpers {
 
 pub trait DefaultMosaikApi: ApiHelpers {
     fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
-        if time_resolution != 1.0 {
-            info!("time_resolution must be 1.0"); // TODO this seems not true
-            self.set_time_resolution(1.0f64);
-        } else {
-            self.set_time_resolution(time_resolution);
+        if time_resolution <= 0.0 {
+            debug!("Non positive time resolution was given!");
         }
+        self.set_time_resolution(time_resolution.abs());
 
         for (key, value) in sim_params {
             match (key.as_str(), value) {
-                /*("time_resolution", Value::Number(time_resolution)) => {
-                    self.set_time_resolution(time_resolution.as_f64().unwrap_or(1.0f64));
-                }*/
                 ("eid_prefix", Value::String(eid_prefix)) => {
                     self.set_eid_prefix(&eid_prefix);
                 }
