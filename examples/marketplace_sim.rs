@@ -97,29 +97,23 @@ pub struct MarketplaceSim {
 //Implementation of the helpers defined in the library
 impl ApiHelpers for MarketplaceSim {
     fn meta() -> Meta {
-        let model1 = ModelDescription {
-            public: true,
-            params: vec!["init_reading".to_string()],
-            attrs: vec![
+        let model1 = ModelDescription::new(
+            true,
+            vec!["init_reading".to_string()],
+            vec![
                 "p_mw_pv".to_string(),
                 "p_mw_load".to_string(),
                 "reading".to_string(),
                 "trades".to_string(),
                 "total".to_string(),
             ],
-            ..Default::default()
-        };
+        );
 
-        let meta = Meta {
-            api_version: "3.0",
-            type_: SimulatorType::TimeBased,
-            models: {
-                let mut m = HashMap::new();
-                m.insert("MarktplatzModel".to_string(), model1);
-                m
-            },
-            ..Default::default()
-        };
+        let meta = Meta::new("3.0", SimulatorType::TimeBased, {
+            let mut m = HashMap::new();
+            m.insert("MarktplatzModel".to_string(), model1);
+            m
+        });
         meta
     }
 

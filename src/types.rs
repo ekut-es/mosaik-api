@@ -33,11 +33,18 @@ pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 ///The format of output data as return by ``get_data``
 pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
 
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
-pub struct ModelDescriptionOptionals {
+/// Description of a single model in `Meta`
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ModelDescription {
+    /// Whether the model can be created directly.
+    pub public: bool,
+    /// The parameters given during creating of this model.
+    pub params: Vec<String>,
+    /// The input and output attributes of this model.
+    pub attrs: Vec<Attr>,
     /// Whether this model accepts inputs other than those specified in `attrs`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub any_inputs: Option<bool>, // TODO can this default to false (then the Options could be removed)
+    pub any_inputs: Option<bool>,
     /// The input attributes that trigger a step of the associated simulator.
     /// (Non-trigger attributes are collected and supplied to the simulator when it
     /// steps next.)
@@ -48,18 +55,17 @@ pub struct ModelDescriptionOptionals {
     pub persistent: Option<Vec<Attr>>,
 }
 
-/// Description of a single model in `Meta`
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
-pub struct ModelDescription {
-    /// Whether the model can be created directly.
-    pub public: bool,
-    /// The parameters given during creating of this model.
-    pub params: Vec<String>,
-    /// The input and output attributes of this model.
-    pub attrs: Vec<Attr>,
-    #[serde(flatten)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub optionals: Option<ModelDescriptionOptionals>,
+impl ModelDescription {
+    pub fn new(public: bool, params: Vec<String>, attrs: Vec<Attr>) -> Self {
+        Self {
+            public,
+            params,
+            attrs,
+            any_inputs: None,
+            trigger: None,
+            persistent: None,
+        }
+    }
 }
 
 /// The meta-data for a simulator.
@@ -69,21 +75,25 @@ pub struct Meta {
     pub api_version: &'static str,
     /// The simulator's stepping type.
     #[serde(rename = "type")]
-    pub type_: SimulatorType,
+    pub simulator_type: SimulatorType,
     /// The descriptions of this simulator's models.
     pub models: HashMap<ModelName, ModelDescription>,
     /// The names of the extra methods this simulator supports.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub extra_methods: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_methods: Option<Vec<String>>,
 }
 
-impl Default for Meta {
-    fn default() -> Self {
-        Meta {
-            api_version: "3.0",
-            type_: SimulatorType::default(),
-            models: HashMap::new(),
-            extra_methods: Vec::new(),
+impl Meta {
+    pub fn new(
+        api_version: &'static str,
+        simulator_type: SimulatorType,
+        models: HashMap<ModelName, ModelDescription>,
+    ) -> Self {
+        Self {
+            api_version,
+            simulator_type,
+            models,
+            extra_methods: None,
         }
     }
 }
@@ -97,29 +107,30 @@ pub enum SimulatorType {
     Hybrid,
 }
 
-/// The type for elements of the list returned by `create` calls in the mosaik API."""
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+/// The type for elements of the list returned by `create` calls in the mosaik API.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct CreateResult {
     /// The entity ID of this entity.
     pub eid: EntityId,
     /// The model name (as given in the simulator's meta) of this entity.
-    pub r#type: ModelName,
-    /// Optional: The entity IDs of the entities of this simulator that are related to this entity.
+    #[serde(rename = "type")]
+    pub model_type: ModelName,
+    /// The entity IDs of the entities of this simulator that are related to this entity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rel: Option<Vec<EntityId>>,
-    /// Optional: The child entities of this entity.
+    /// The child entities of this entity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<CreateResult>>,
-    /// Optional: Any additional information about the entity that the simulator wants to pass back to the scenario.
+    /// Any additional information about the entity that the simulator wants to pass back to the scenario.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra_info: Option<HashMap<String, String>>,
 }
 
 impl CreateResult {
-    pub fn new(eid: EntityId, r#type: ModelName) -> Self {
-        CreateResult {
+    pub fn new(eid: EntityId, model_type: ModelName) -> Self {
+        Self {
             eid,
-            r#type,
+            model_type,
             rel: None,
             children: None,
             extra_info: None,
@@ -147,25 +158,25 @@ mod tests {
 
     #[test]
     fn test_model_description_without_optionals() {
-        let mut model = ModelDescription::default();
+        let mut model = ModelDescription::new(false, vec![], vec![]);
 
         assert_eq!(model.public, false);
         assert_eq!(model.params.len(), 0);
         assert_eq!(model.attrs.len(), 0);
-        assert_eq!(model.optionals, None);
+        assert_eq!(model.any_inputs, None);
+        assert_eq!(model.trigger, None);
+        assert_eq!(model.persistent, None);
 
         let model_json = serde_json::to_string(&model).unwrap();
         assert_eq!(r#"{"public":false,"params":[],"attrs":[]}"#, model_json);
 
         model.public = true;
         model.params.push("init_reading".to_string());
-        model.attrs.push("trades".to_string());
-        model.attrs.push("total".to_string());
+        model.attrs = vec!["trades".to_string(), "total".to_string()];
 
         assert_eq!(model.public, true);
         assert_eq!(model.params.len(), 1);
         assert_eq!(model.attrs.len(), 2);
-        assert_eq!(model.optionals, None);
 
         let model_json = serde_json::to_string(&model).unwrap();
         assert_eq!(
@@ -176,16 +187,14 @@ mod tests {
 
     #[test]
     fn test_model_description_with_optionals() {
-        let mut model = ModelDescription::default();
-        model.public = true;
-        model.params.push("init_reading".to_string());
-        model.attrs.push("p_mw_pv".to_string());
-        model.attrs.push("p_mw_load".to_string());
-        model.optionals = Some(ModelDescriptionOptionals {
-            any_inputs: Some(true),
-            trigger: Some(vec!["trigger1".to_string()]),
-            persistent: Some(vec!["trades".to_string()]),
-        });
+        let mut model = ModelDescription::new(
+            true,
+            vec!["init_reading".to_string()],
+            vec!["p_mw_pv".to_string(), "p_mw_load".to_string()],
+        );
+        model.any_inputs = Some(true);
+        model.trigger = Some(vec!["trigger1".to_string()]);
+        model.persistent = Some(vec!["trades".to_string()]);
 
         let model_json = serde_json::to_string(&model).unwrap();
         assert_eq!(
@@ -193,10 +202,9 @@ mod tests {
             model_json
         );
 
-        model.optionals = Some(ModelDescriptionOptionals {
-            trigger: Some(vec!["trigger1".to_string()]),
-            ..Default::default()
-        });
+        model.trigger = Some(vec!["trigger1".to_string()]);
+        model.any_inputs = None;
+        model.persistent = None;
 
         let model_json = serde_json::to_string(&model).unwrap();
         assert_eq!(
@@ -207,10 +215,10 @@ mod tests {
 
     #[test]
     fn test_meta() {
-        let mut meta = Meta::default();
+        let mut meta = Meta::new("3.0", SimulatorType::default(), HashMap::new());
         assert_eq!(meta.api_version, "3.0");
         assert_eq!(
-            meta.type_,
+            meta.simulator_type,
             SimulatorType::Hybrid,
             "Default type should be Hybrid"
         );
@@ -226,16 +234,15 @@ mod tests {
         assert_eq!(meta.api_version, "3.1", "API version should be changeable");
 
         assert!(meta.models.is_empty());
-        let model1 = ModelDescription {
-            public: true,
-            params: vec!["init_reading".to_string()],
-            attrs: vec!["trades".to_string(), "total".to_string()],
-            ..Default::default()
-        };
+        let model1 = ModelDescription::new(
+            true,
+            vec!["init_reading".to_string()],
+            vec!["trades".to_string(), "total".to_string()],
+        );
         meta.models.insert("MarktplatzModel".to_string(), model1);
         assert_eq!(meta.models.len(), 1, "Should have one model");
 
-        assert!(meta.extra_methods.is_empty());
+        assert!(meta.extra_methods.is_none());
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
             r#"{"api_version":"3.1","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#,
@@ -246,16 +253,15 @@ mod tests {
 
     #[test]
     fn test_meta_optionals() {
-        let mut meta = Meta::default();
+        let mut meta = Meta::new("3.0", SimulatorType::default(), HashMap::new());
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
             r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, meta_json,
             "JSON String should contain no 'extra_methods'."
         );
 
-        meta.extra_methods.push("foo".to_string());
-        meta.extra_methods.push("bar".to_string());
-        assert_eq!(meta.extra_methods.len(), 2, "Should have 2 extra methods.");
+        meta.extra_methods = Some(vec!["foo".to_string(), "bar".to_string()]);
+        assert_eq!(meta.extra_methods.as_ref().unwrap().len(), 2, "Should have 2 extra methods.");
 
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
@@ -269,7 +275,7 @@ mod tests {
     fn test_create_result_new() {
         let create_result = CreateResult::new(String::from("eid_1"), String::from("model_name"));
         assert_eq!(create_result.eid, "eid_1");
-        assert_eq!(create_result.r#type, "model_name");
+        assert_eq!(create_result.model_type, "model_name");
         assert!(create_result.rel.is_none());
         assert!(create_result.children.is_none());
         assert!(create_result.extra_info.is_none());
@@ -292,7 +298,7 @@ mod tests {
         )]);
 
         assert_eq!(create_result.eid, "eid_1");
-        assert_eq!(create_result.r#type, "model_name");
+        assert_eq!(create_result.model_type, "model_name");
         assert_eq!(create_result.rel, Some(vec!["eid_2".to_string()]));
         assert_eq!(create_result.children.is_some(), true);
         if let Some(children) = &create_result.children {

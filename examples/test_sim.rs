@@ -7,13 +7,13 @@ use std::{collections::HashMap, todo};
 use log::error;
 use mosaik_rust_api::{
     types::{
-        Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, ModelDescriptionOptionals,
-        OutputData, OutputRequest, SimulatorType,
+        Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
+        SimulatorType,
     },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use structopt::StructOpt;
 
 use mosaik_rust_api::{run_simulation, tcp::ConnectionDirection};
@@ -127,23 +127,16 @@ impl ApiHelpers for RExampleSim {
             public: true,
             params: vec!["init_val".to_string()],
             attrs: vec!["delta".to_string(), "val".to_string()],
-            optionals: Some(ModelDescriptionOptionals {
-                trigger: Some(vec!["delta".to_string()]),
-                ..Default::default()
-            }),
-            ..Default::default()
+            trigger: Some(vec!["delta".to_string()]),
+            any_inputs: None,
+            persistent: None,
         };
 
-        let meta = Meta {
-            api_version: "3.0",
-            type_: SimulatorType::TimeBased,
-            models: {
-                let mut m = HashMap::new();
-                m.insert("ExampleModel".to_string(), example_model);
-                m
-            },
-            ..Default::default()
-        };
+        let meta = Meta::new("3.0", SimulatorType::TimeBased, {
+            let mut m = HashMap::new();
+            m.insert("ExampleModel".to_string(), example_model);
+            m
+        });
         meta
     }
 
@@ -211,11 +204,7 @@ impl MosaikApi for RExampleSim {
 
             self.entities.insert(eid.clone(), model_instance);
 
-            let dict = CreateResult {
-                eid,
-                r#type: model_name.clone(),
-                ..Default::default()
-            };
+            let dict = CreateResult::new(eid, model_name.clone());
             result.push(dict);
         }
 

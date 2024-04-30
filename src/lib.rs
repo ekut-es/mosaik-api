@@ -91,7 +91,7 @@ pub trait DefaultMosaikApi: ApiHelpers {
             self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
             let out_entity = CreateResult {
                 eid,
-                r#type: model_name.clone(),
+                model_type: model_name.clone(),
                 rel: None,
                 children: self.add_model(model_params.clone()),
                 extra_info: None,

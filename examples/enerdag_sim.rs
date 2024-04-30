@@ -129,9 +129,10 @@ impl MosaikApi for HouseholdBatterySim {
             self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
             let out_entity = CreateResult {
                 eid,
-                r#type: model.clone(),
+                model_type: model.clone(),
                 children: self.add_model(model_params.clone()),
-                ..Default::default()
+                rel: None,
+                extra_info: None,
             };
             out_vector.push(out_entity);
         }
@@ -191,25 +192,24 @@ impl MosaikApi for HouseholdBatterySim {
 
 impl ApiHelpers for HouseholdBatterySim {
     fn meta() -> Meta {
-        let neighborhood = ModelDescription {
-            public: true,
-            params: vec![
+        let neighborhood = ModelDescription::new(
+            true,
+            vec![
                 MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION.to_string(),
                 MOSAIK_PARAM_START_TIME.to_string(),
             ],
-            attrs: vec![
+            vec![
                 "trades".to_string(),
                 "total".to_string(),
                 "total_disposable_energy".to_string(),
                 "grid_power_load".to_string(),
             ],
-            ..Default::default()
-        };
+        );
 
-        let consumer = ModelDescription {
-            public: false,
-            params: vec![],
-            attrs: vec![
+        let consumer = ModelDescription::new(
+            false,
+            vec![],
+            vec![
                 "p_mw_load".to_string(),
                 "energy_balance".to_string(),
                 "published_energy_balance".to_string(),
@@ -221,13 +221,12 @@ impl ApiHelpers for HouseholdBatterySim {
                 "published_p_mW_pv".to_string(),
                 "published_p_mW_load".to_string(),
             ],
-            ..Default::default()
-        };
+        );
 
-        let prosumer = ModelDescription {
-            public: false,
-            params: vec![],
-            attrs: vec![
+        let prosumer = ModelDescription::new(
+            false,
+            vec![],
+            vec![
                 "p_mw_load".to_string(),
                 "energy_balance".to_string(),
                 "published_energy_balance".to_string(),
@@ -240,18 +239,16 @@ impl ApiHelpers for HouseholdBatterySim {
                 "published_p_mW_pv".to_string(),
                 "published_p_mW_load".to_string(),
             ],
-            ..Default::default()
-        };
+        );
 
-        let pv = ModelDescription {
-            public: false,
-            params: vec![],
-            attrs: vec!["p_mw_pv".to_string(), "trades".to_string()],
-            ..Default::default()
-        };
+        let pv = ModelDescription::new(
+            false,
+            vec![],
+            vec!["p_mw_pv".to_string(), "trades".to_string()],
+        );
         let meta = Meta {
             api_version: "3.0",
-            type_: SimulatorType::TimeBased,
+            simulator_type: SimulatorType::TimeBased,
             models: {
                 let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
                 m.insert("Neighborhood".to_string(), neighborhood);
@@ -260,7 +257,7 @@ impl ApiHelpers for HouseholdBatterySim {
                 m.insert("PV".to_string(), pv);
                 m
             },
-            ..Default::default()
+            extra_methods: None,
         };
         meta
     }
@@ -462,11 +459,7 @@ impl Neighborhood {
         let mut child_descriptions: Vec<CreateResultChild> =
             Vec::with_capacity(self.households.len());
         for (eid, household) in self.households.iter() {
-            let child = CreateResultChild {
-                eid: eid.clone(),
-                r#type: household.household_type.clone(),
-                ..Default::default()
-            };
+            let child = CreateResultChild::new(eid.clone(), household.household_type.clone());
             child_descriptions.push(child);
         }
 
