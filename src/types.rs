@@ -261,7 +261,11 @@ mod tests {
         );
 
         meta.extra_methods = Some(vec!["foo".to_string(), "bar".to_string()]);
-        assert_eq!(meta.extra_methods.as_ref().unwrap().len(), 2, "Should have 2 extra methods.");
+        assert_eq!(
+            meta.extra_methods.as_ref().unwrap().len(),
+            2,
+            "Should have 2 extra methods."
+        );
 
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
