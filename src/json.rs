@@ -134,7 +134,7 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
     //id: usize,
     //payload: String,
     // FIXME is this function necessary? or check Result in handle_request directly
-    let response: Value = Value::Array(vec![json!(1), json!(id), content]);
+    let response: Value = json!([1, id, content]);
 
     match to_vec(&response) {
         // Make a u8 vector with the data
@@ -166,7 +166,7 @@ mod tests {
     use serde_json::{json, to_vec, Value};
 
     #[test]
-    fn parse_request_valid() -> Result<(), MosaikError> {
+    fn test_parse_valid_request() -> Result<(), MosaikError> {
         let valid_request = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
         let expected = Request {
             msg_id: 1,
@@ -179,10 +179,72 @@ mod tests {
                 map
             },
         };
-        assert_eq!(parse_json_request(valid_request)?, expected);
+        let result = parse_json_request(valid_request);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), expected);
 
         Ok(())
     }
+
+    #[test]
+    fn test_parse_invalid_request() -> Result<(), MosaikError> {
+        let data = r#"invalid request data"#;
+        let result = parse_json_request(data);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_success_reply() -> Result<(), MosaikError> {
+        let data = r#"[1, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
+        let result = parse_json_request(data);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_failure_reply() -> Result<(), MosaikError> {
+        let data = r#"[2, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
+        let result = parse_json_request(data);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_invalid_message_type() -> Result<(), MosaikError> {
+        let data = r#"["0", 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
+        let result = parse_json_request(data);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    // Tests for `handle_request`
+
+    /*#[test]
+    fn test_handle_request() -> Result<(), MosaikError> {
+        let mut mock_simulator = MockMosaikApi::new();
+
+        let mut models = Map::new();
+        models.insert("model_1".to_string(), json!(1)).unwrap();
+        models.insert("model_2".to_string(), json!(2)).unwrap();
+        models.insert("model_3".to_string(), json!(3)).unwrap();
+        mock_simulator
+            .expect_init()
+            .with(eq(1), eq(0.1), always())
+            .returning(|_, _, _| Meta::new("3.0", SimulatorType::default(), models));
+
+        let request = Request {
+            msg_id: 0,
+            method: "init".to_string(),
+            args: vec![json!("hello"), json!("world")],
+            kwargs: Map::new(),
+        };
+
+        let result = handle_request(&mut simulator, &request);
+        assert!(result.is_ok());
+        Ok(())
+    }*/
+    // ----
 
     #[test]
     fn parse_step_request() -> Result<(), MosaikError> {
@@ -208,10 +270,11 @@ mod tests {
             ],
             kwargs: Map::new(),
         };
-        let p = parse_json_request(valid_request)?;
-        println!("got until here");
-        let input: InputData = serde_json::from_value(p.args[1].clone())?;
-        println!("input: {:?}", input);
+        let result = parse_json_request(valid_request);
+        assert!(result.is_ok());
+
+        let request = result.unwrap();
+        let input: InputData = serde_json::from_value(request.args[1].clone())?;
 
         assert_eq!(
             input
@@ -223,7 +286,7 @@ mod tests {
                 .unwrap(),
             3
         );
-        assert_eq!(p, expected);
+        assert_eq!(request, expected);
         Ok(())
     }
 
