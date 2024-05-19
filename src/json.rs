@@ -37,11 +37,11 @@ pub enum Response {
     None,
 }
 
-pub fn parse_request(data: String) -> Result<Request, MosaikError> {
+pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
     let payload: MosaikPayload = serde_json::from_str(&data)?;
 
-    if payload.msg_type != 0 {
+    if payload.msg_type != MessageType::Request as u8 {
         return Err(MosaikError::ParseError(format!(
             "Payload is not a request: {:?}",
             payload
@@ -91,10 +91,10 @@ pub fn handle_request<T: MosaikApi>(
             simulator.stop();
             return Ok(Response::Stop);
         }
-        e => {
+        method => {
             error!(
-                "A different not yet implemented method {:?} got requested. Therefore the simulation should most likely stop now",
-                e
+                "Unimplemented method {:?} requested. Simulation should most likely stop now",
+                method
             );
             return Ok(Response::None); //TODO: see issue #2 but most likely it should stay as it is instead of return json!(null)
         }
@@ -103,11 +103,7 @@ pub fn handle_request<T: MosaikApi>(
     match to_vec_helper(content, request.msg_id) {
         Some(vec) => Ok(Response::Successful(vec)),
         None => {
-            let response: Value = Value::Array(vec![
-                json!(2),
-                json!(request.msg_id),
-                Value::String("Stack Trace/Error Message".to_string()),
-            ]);
+            let response = json!([2, request.msg_id, "Stack Trace/Error Message"]);
             Ok(Response::Failure(to_vec(&response).unwrap()))
         }
     }
@@ -135,12 +131,13 @@ fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
     }
 }
 
-//TODO: Clean this up and remove it?
-// enum MsgType {
-//     REQ,
-//     SUCCESS,
-//     ERROR,
-// }
+#[derive(PartialEq, Deserialize, Debug)]
+#[repr(u8)]
+enum MessageType {
+    Request = 0,
+    SuccessReply = 1,
+    FailureReply = 2,
+}
 
 #[cfg(test)]
 mod tests {
@@ -151,7 +148,7 @@ mod tests {
 
     #[test]
     fn parse_request_valid() -> Result<(), MosaikError> {
-        let valid_request = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#.to_string();
+        let valid_request = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
         let expected = Request {
             msg_id: 1,
             method: "my_func".to_string(),
@@ -163,7 +160,7 @@ mod tests {
                 map
             },
         };
-        assert_eq!(parse_request(valid_request)?, expected);
+        assert_eq!(parse_json_request(valid_request)?, expected);
 
         Ok(())
     }
@@ -180,8 +177,7 @@ mod tests {
                 200
                 ], {}
               ]
-        ]"#
-        .to_string();
+        ]"#;
 
         let expected = Request {
             msg_id: 1,
@@ -193,7 +189,7 @@ mod tests {
             ],
             kwargs: Map::new(),
         };
-        let p = parse_request(valid_request)?;
+        let p = parse_json_request(valid_request)?;
         println!("got until here");
         let input: InputData = serde_json::from_value(p.args[1].clone())?;
         println!("input: {:?}", input);
@@ -214,8 +210,7 @@ mod tests {
 
     #[test]
     fn parse_get_data_request() -> Result<(), MosaikError> {
-        let valid_request =
-            r#"[0, 1, ["get_data", [{"eid_1": ["attr_1", "attr_2"]}], {}]]"#.to_string();
+        let valid_request = r#"[0, 1, ["get_data", [{"eid_1": ["attr_1", "attr_2"]}], {}]]"#;
         let mut outputs = Map::new();
         outputs.insert("eid_1".to_string(), json!(vec!["attr_1", "attr_2"]));
         let expected = Request {
@@ -224,7 +219,7 @@ mod tests {
             args: vec![json!(outputs)],
             kwargs: Map::new(),
         };
-        assert_eq!(parse_request(valid_request)?, expected);
+        assert_eq!(parse_json_request(valid_request)?, expected);
         Ok(())
     }
 

@@ -253,7 +253,7 @@ async fn broker_loop<T: MosaikApi>(
             //The event that will happen the rest of the time, because the only connector is mosaik.
             Event::Request { full_data, name } => {
                 //parse the request
-                match json::parse_request(full_data) {
+                match json::parse_json_request(&full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
                         trace!("The request: {:?} from {name}", request);
