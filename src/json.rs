@@ -33,7 +33,7 @@ pub struct Request {
 pub enum Response {
     Successful(Vec<u8>),
     Failure(Vec<u8>),
-    Stop(Vec<u8>),
+    Stop,
     None,
 }
 
@@ -58,20 +58,22 @@ pub fn handle_request<T: MosaikApi>(
     simulator: &mut T,
 ) -> Result<Response, MosaikError> {
     let content: Value = match request.method.as_ref() {
-        "init" => simulator.init(
-            serde_json::from_value(request.args[0].clone())?,
-            request
-                .kwargs
-                .remove("time_resolution")
-                .and_then(|value| value.as_f64())
-                .unwrap_or(1.0f64),
-            request.kwargs,
-        ),
-        "create" => Value::from(simulator.create(
+        "init" => serde_json::to_value(
+            simulator.init(
+                serde_json::from_value(request.args[0].clone())?,
+                request
+                    .kwargs
+                    .remove("time_resolution")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(1.0f64),
+                request.kwargs,
+            ),
+        )?,
+        "create" => serde_json::to_value(simulator.create(
             serde_json::from_value(request.args[0].clone())?,
             serde_json::from_value(request.args[1].clone())?,
             request.kwargs,
-        )),
+        ))?,
         "step" => Value::from(simulator.step(
             serde_json::from_value(request.args[0].clone())?,
             serde_json::from_value(request.args[1].clone())?,
@@ -82,14 +84,12 @@ pub fn handle_request<T: MosaikApi>(
         )?,
         "setup_done" => {
             simulator.setup_done();
-            json!(null)
+            Value::Null
         }
         "stop" => {
+            debug!("Received stop command!");
             simulator.stop();
-            return match to_vec_helper(json!(null), request.msg_id) {
-                Some(vec) => Ok(Response::Stop(vec)),
-                None => Ok(Response::None),
-            };
+            return Ok(Response::Stop);
         }
         e => {
             error!(

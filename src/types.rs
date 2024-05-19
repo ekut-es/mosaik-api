@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-
 ///Time is represented as the number of simulation steps since the
 ///simulation started. One step represents `time_resolution` seconds.
 pub type Time = i64;
@@ -33,69 +33,288 @@ pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 ///The format of output data as return by ``get_data``
 pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
 
-// The below types are copied from the python implementation.
-// Not yet implemented in rust, mostly due to complex JSON handling.
+/// Description of a single model in `Meta`
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ModelDescription {
+    /// Whether the model can be created directly.
+    pub public: bool,
+    /// The parameters given during creating of this model.
+    pub params: Vec<String>,
+    /// The input and output attributes of this model.
+    pub attrs: Vec<Attr>,
+    /// Whether this model accepts inputs other than those specified in `attrs`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub any_inputs: Option<bool>,
+    /// The input attributes that trigger a step of the associated simulator.
+    /// (Non-trigger attributes are collected and supplied to the simulator when it
+    /// steps next.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trigger: Option<Vec<Attr>>,
+    /// The output attributes that are persistent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persistent: Option<Vec<Attr>>,
+}
 
-/*class ModelDescriptionOptionals(TypedDict, total=False):
-    any_inputs: bool
-    """Whether this model accepts inputs other than those specified in `attrs`."""
-    trigger: Iterable[Attr]
-    """The input attributes that trigger a step of the associated simulator.
+impl ModelDescription {
+    pub fn new(public: bool, params: Vec<String>, attrs: Vec<Attr>) -> Self {
+        Self {
+            public,
+            params,
+            attrs,
+            any_inputs: None,
+            trigger: None,
+            persistent: None,
+        }
+    }
+}
 
-    (Non-trigger attributes are collected and supplied to the simulator when it
-    steps next.)"""
-    persistent: Iterable[Attr]
-    """The output attributes that are persistent."""
+/// The meta-data for a simulator.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct Meta {
+    /// The API version that this simulator supports in the format "major.minor".
+    pub api_version: &'static str,
+    /// The simulator's stepping type.
+    #[serde(rename = "type")]
+    pub simulator_type: SimulatorType,
+    /// The descriptions of this simulator's models.
+    pub models: HashMap<ModelName, ModelDescription>,
+    /// The names of the extra methods this simulator supports.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_methods: Option<Vec<String>>,
+}
 
-class ModelDescription(ModelDescriptionOptionals):
-    """Description of a single model in `Meta`"""
-    public: bool
-    """Whether the model can be created directly."""
-    params: List[str]
-    """The parameters given during creating of this model."""
-    attrs: List[Attr]
-    """The input and output attributes of this model."""
+impl Meta {
+    pub fn new(
+        api_version: &'static str,
+        simulator_type: SimulatorType,
+        models: HashMap<ModelName, ModelDescription>,
+    ) -> Self {
+        Self {
+            api_version,
+            simulator_type,
+            models,
+            extra_methods: None,
+        }
+    }
+}
 
-class MetaOptionals(TypedDict, total=False):
-    extra_methods: List[str]
-    """The names of the extra methods this simulator supports."""
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SimulatorType {
+    TimeBased,
+    EventBased,
+    #[default]
+    Hybrid,
+}
 
-class Meta(MetaOptionals):
-    """The meta-data for a simulator."""
-    api_version: Literal["3.0"]
-    """The API version that this simulator supports in the format "major.minor"."""
-    type: Literal['time-based', 'event-based', 'hybrid']
-    """The simulator's stepping type."""
-    models: Dict[ModelName, ModelDescription]
-    """The descriptions of this simulator's models."""
-*/
+/// The type for elements of the list returned by `create` calls in the mosaik API.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct CreateResult {
+    /// The entity ID of this entity.
+    pub eid: EntityId,
+    /// The model name (as given in the simulator's meta) of this entity.
+    #[serde(rename = "type")]
+    pub model_type: ModelName,
+    /// The entity IDs of the entities of this simulator that are related to this entity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rel: Option<Vec<EntityId>>,
+    /// The child entities of this entity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<CreateResult>>,
+    /// Any additional information about the entity that the simulator wants to pass back to the scenario.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_info: Option<HashMap<String, String>>,
+}
 
-/*class CreateResultOptionals(TypedDict, total=False):
-    rel: List[EntityId]
-    """The entity IDs of the entities of this simulator that are
-    related to this entity."""
-    children: List[CreateResult]
-    """The child entities of this entity."""
-    extra_info: Any
-    """Any additional information about the entity that the simulator
-    wants to pass back to the scenario.
-    """
-
-
-class CreateResult(CreateResultOptionals):
-    """The type for elements of the list returned by `create` calls in
-    the mosaik API."""
-    eid: EntityId
-    """The entity ID of this entity."""
-    type: ModelName
-    """The model name (as given in the simulator's meta) of this entity.
-    """
+impl CreateResult {
+    pub fn new(eid: EntityId, model_type: ModelName) -> Self {
+        Self {
+            eid,
+            model_type,
+            rel: None,
+            children: None,
+            extra_info: None,
+        }
+    }
+}
 
 pub type CreateResultChild = CreateResult;
+
+/*
+// The below types are copied from the python implementation.
 
 class EntitySpec(TypedDict):
     type: ModelName
 
 class EntityGraph(TypedDict):
     nodes: Dict[FullId, EntitySpec]
-    edges: List[Tuple[FullId, FullId, Dict]]*/
+    edges: List[Tuple[FullId, FullId, Dict]]
+*/
+
+// tests for Meta
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_model_description_without_optionals() {
+        let mut model = ModelDescription::new(false, vec![], vec![]);
+
+        assert_eq!(model.public, false);
+        assert_eq!(model.params.len(), 0);
+        assert_eq!(model.attrs.len(), 0);
+        assert_eq!(model.any_inputs, None);
+        assert_eq!(model.trigger, None);
+        assert_eq!(model.persistent, None);
+
+        let model_json = serde_json::to_string(&model).unwrap();
+        assert_eq!(r#"{"public":false,"params":[],"attrs":[]}"#, model_json);
+
+        model.public = true;
+        model.params.push("init_reading".to_string());
+        model.attrs = vec!["trades".to_string(), "total".to_string()];
+
+        assert_eq!(model.public, true);
+        assert_eq!(model.params.len(), 1);
+        assert_eq!(model.attrs.len(), 2);
+
+        let model_json = serde_json::to_string(&model).unwrap();
+        assert_eq!(
+            r#"{"public":true,"params":["init_reading"],"attrs":["trades","total"]}"#,
+            model_json
+        )
+    }
+
+    #[test]
+    fn test_model_description_with_optionals() {
+        let mut model = ModelDescription::new(
+            true,
+            vec!["init_reading".to_string()],
+            vec!["p_mw_pv".to_string(), "p_mw_load".to_string()],
+        );
+        model.any_inputs = Some(true);
+        model.trigger = Some(vec!["trigger1".to_string()]);
+        model.persistent = Some(vec!["trades".to_string()]);
+
+        let model_json = serde_json::to_string(&model).unwrap();
+        assert_eq!(
+            r#"{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"any_inputs":true,"trigger":["trigger1"],"persistent":["trades"]}"#,
+            model_json
+        );
+
+        model.trigger = Some(vec!["trigger1".to_string()]);
+        model.any_inputs = None;
+        model.persistent = None;
+
+        let model_json = serde_json::to_string(&model).unwrap();
+        assert_eq!(
+            r#"{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"trigger":["trigger1"]}"#,
+            model_json
+        )
+    }
+
+    #[test]
+    fn test_meta() {
+        let mut meta = Meta::new("3.0", SimulatorType::default(), HashMap::new());
+        assert_eq!(meta.api_version, "3.0");
+        assert_eq!(
+            meta.simulator_type,
+            SimulatorType::Hybrid,
+            "Default type should be Hybrid"
+        );
+
+        let empty_meta_json = serde_json::to_string(&meta).unwrap();
+        assert_eq!(
+            r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, empty_meta_json,
+            "Empty meta should not have extra_methods and no empty models."
+        );
+
+        // TODO is this a bug in the python implementation?
+        meta.api_version = "3.1";
+        assert_eq!(meta.api_version, "3.1", "API version should be changeable");
+
+        assert!(meta.models.is_empty());
+        let model1 = ModelDescription::new(
+            true,
+            vec!["init_reading".to_string()],
+            vec!["trades".to_string(), "total".to_string()],
+        );
+        meta.models.insert("MarktplatzModel".to_string(), model1);
+        assert_eq!(meta.models.len(), 1, "Should have one model");
+
+        assert!(meta.extra_methods.is_none());
+        let meta_json = serde_json::to_string(&meta).unwrap();
+        assert_eq!(
+            r#"{"api_version":"3.1","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#,
+            meta_json,
+            "Meta should have one model and no extra methods."
+        )
+    }
+
+    #[test]
+    fn test_meta_optionals() {
+        let mut meta = Meta::new("3.0", SimulatorType::default(), HashMap::new());
+        let meta_json = serde_json::to_string(&meta).unwrap();
+        assert_eq!(
+            r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, meta_json,
+            "JSON String should contain no 'extra_methods'."
+        );
+
+        meta.extra_methods = Some(vec!["foo".to_string(), "bar".to_string()]);
+        assert_eq!(
+            meta.extra_methods.as_ref().unwrap().len(),
+            2,
+            "Should have 2 extra methods."
+        );
+
+        let meta_json = serde_json::to_string(&meta).unwrap();
+        assert_eq!(
+            r#"{"api_version":"3.0","type":"hybrid","models":{},"extra_methods":["foo","bar"]}"#,
+            meta_json,
+            "JSON String should contain 'foo' and 'bar' as extra methods."
+        )
+    }
+
+    #[test]
+    fn test_create_result_new() {
+        let create_result = CreateResult::new(String::from("eid_1"), String::from("model_name"));
+        assert_eq!(create_result.eid, "eid_1");
+        assert_eq!(create_result.model_type, "model_name");
+        assert!(create_result.rel.is_none());
+        assert!(create_result.children.is_none());
+        assert!(create_result.extra_info.is_none());
+
+        let create_result_json = serde_json::to_string(&create_result).unwrap();
+        assert_eq!(
+            r#"{"eid":"eid_1","type":"model_name"}"#, create_result_json,
+            "New CreateResult should not contain any optional fields"
+        )
+    }
+
+    #[test]
+    fn test_create_results_filled() {
+        let mut create_result = CreateResult::new("eid_1".to_string(), "model_name".to_string());
+
+        create_result.rel = Some(vec!["eid_2".to_string()]);
+        create_result.children = Some(vec![CreateResult::new(
+            "child_1".to_string(),
+            "child".to_string(),
+        )]);
+
+        assert_eq!(create_result.eid, "eid_1");
+        assert_eq!(create_result.model_type, "model_name");
+        assert_eq!(create_result.rel, Some(vec!["eid_2".to_string()]));
+        assert_eq!(create_result.children.is_some(), true);
+        if let Some(children) = &create_result.children {
+            assert_eq!(children.len(), 1);
+            assert_eq!(children[0].eid, "child_1");
+        }
+
+        let create_result_json = serde_json::to_string(&create_result).unwrap();
+        assert_eq!(
+            r#"{"eid":"eid_1","type":"model_name","rel":["eid_2"],"children":[{"eid":"child_1","type":"child"}]}"#,
+            create_result_json,
+            "Filled create result should contain optional fields without extra_info"
+        )
+    }
+}

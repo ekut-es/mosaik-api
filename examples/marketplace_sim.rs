@@ -1,5 +1,5 @@
 use log::*;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
@@ -8,7 +8,10 @@ use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
-    types::{Attr, InputData, OutputData, OutputRequest, SimId},
+    types::{
+        Attr, CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
+        SimulatorType,
+    },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 ///Read, if we get an address or not
@@ -51,12 +54,7 @@ impl MosaikApi for MarketplaceSim {
         &mut self
     }*/
 
-    fn init(
-        &mut self,
-        sid: SimId,
-        time_resolution: f64,
-        sim_params: Map<String, Value>,
-    ) -> mosaik_rust_api::Meta {
+    fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
     }
 
@@ -65,7 +63,7 @@ impl MosaikApi for MarketplaceSim {
         num: usize,
         model_name: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<Map<String, Value>> {
+    ) -> Vec<CreateResult> {
         DefaultMosaikApi::create(self, num, model_name, model_params)
     }
 
@@ -98,18 +96,25 @@ pub struct MarketplaceSim {
 
 //Implementation of the helpers defined in the library
 impl ApiHelpers for MarketplaceSim {
-    fn meta() -> Value {
-        json!({
-        "api_version": "3.0",
-        "type": "time-based",
-        "models":{
-            "MarktplatzModel":{
-                "public": true,
-                "params": ["init_reading"],
-                "attrs": ["p_mw_pv", "p_mw_load", "reading", "trades", "total"]
-                }
-            }
-        })
+    fn meta() -> Meta {
+        let model1 = ModelDescription::new(
+            true,
+            vec!["init_reading".to_string()],
+            vec![
+                "p_mw_pv".to_string(),
+                "p_mw_load".to_string(),
+                "reading".to_string(),
+                "trades".to_string(),
+                "total".to_string(),
+            ],
+        );
+
+        let meta = Meta::new("3.0", SimulatorType::TimeBased, {
+            let mut m = HashMap::new();
+            m.insert("MarktplatzModel".to_string(), model1);
+            m
+        });
+        meta
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
@@ -132,9 +137,9 @@ impl ApiHelpers for MarketplaceSim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
-            let /*mut*/ model:Model = Model::initmodel(init_reading);
+            let model = Model::initmodel(init_reading);
             self.models.push(model);
             self.data.push(vec![]); //Add list for simulation data
         }

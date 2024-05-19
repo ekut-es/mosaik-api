@@ -6,11 +6,14 @@ use std::{collections::HashMap, todo};
 
 use log::error;
 use mosaik_rust_api::{
-    types::{Attr, EntityId, InputData, OutputData, OutputRequest},
+    types::{
+        Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
+        SimulatorType,
+    },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use structopt::StructOpt;
 
 use mosaik_rust_api::{run_simulation, tcp::ConnectionDirection};
@@ -119,18 +122,22 @@ pub struct RExampleSim {
 }
 
 impl ApiHelpers for RExampleSim {
-    fn meta() -> Value {
-        json!({
-            "type": "hybrid",
-            "models": {
-                "ExampleModel": {
-                    "public": true,
-                    "params": ["init_val"],
-                    "attrs": ["delta", "val"],
-                    "trigger": ["delta"],
-                },
-            },
-        })
+    fn meta() -> Meta {
+        let example_model = ModelDescription {
+            public: true,
+            params: vec!["init_val".to_string()],
+            attrs: vec!["delta".to_string(), "val".to_string()],
+            trigger: Some(vec!["delta".to_string()]),
+            any_inputs: None,
+            persistent: None,
+        };
+
+        let meta = Meta::new("3.0", SimulatorType::TimeBased, {
+            let mut m = HashMap::new();
+            m.insert("ExampleModel".to_string(), example_model);
+            m
+        });
+        meta
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
@@ -153,7 +160,7 @@ impl ApiHelpers for RExampleSim {
         todo!()
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         let init_val = model_params.get("init_val").map(|v| v.as_f64().unwrap());
         self.simulator.models.push(RModel::new(init_val));
         None
@@ -179,7 +186,7 @@ impl ApiHelpers for RExampleSim {
 impl DefaultMosaikApi for RExampleSim {}
 
 impl MosaikApi for RExampleSim {
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Value {
+    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
     }
     fn create(
@@ -187,20 +194,17 @@ impl MosaikApi for RExampleSim {
         num: usize,
         model_name: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<Map<String, Value>> {
+    ) -> Vec<CreateResult> {
         let next_eid = self.entities.len();
-        let mut result: Vec<Map<String, Value>> = Vec::new();
+        let mut result: Vec<CreateResult> = Vec::new();
 
         for i in next_eid..(next_eid + num) {
-            let model_instance = RModel::new(None); // FIXME this is a String, but shouldn't this rather be a RModel?
+            let model_instance = RModel::new(None);
             let eid = format!("{}_{}", self.eid_prefix, i);
 
             self.entities.insert(eid.clone(), model_instance);
 
-            let mut dict = Map::new();
-            dict.insert("eid".to_string(), json!(eid));
-            dict.insert("type".to_string(), json!(model_name));
-
+            let dict = CreateResult::new(eid, model_name.clone());
             result.push(dict);
         }
 
@@ -210,23 +214,19 @@ impl MosaikApi for RExampleSim {
     }
 
     fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
-        /* FIXME: this is not yet compatible with new json typing
         self.time = time as u64;
-
+        // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
+        // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
         for (eid, model_instance) in &mut self.entities {
             if let Some(attrs) = inputs.get(eid) {
+                let mut new_delta = 0.0;
                 for (_, values) in attrs {
-                    if let Some(new_delta) = values
-                        .as_object()
-                        .map(|v| v.values().map(|val| val.as_f64().unwrap_or(0.0)).sum())
-                    {
-                        model_instance.delta = new_delta
-                    }
+                    new_delta = values.values().map(|v| v.as_f64().unwrap()).sum();
                 }
+                model_instance.delta = new_delta;
             }
-
             model_instance.step();
-        }*/
+        }
 
         return Some(time + 1); // Step size is 1 second
     }

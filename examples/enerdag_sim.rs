@@ -3,7 +3,7 @@
 //! by sending a list of JSON representations of [HouseholdDescription] to the [create] Method.
 //! The Mosaik-Interface is different from [marketplace_sim](marketplace_sim). The
 use log::*;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
@@ -17,7 +17,10 @@ use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
-    types::{Attr, FullId, InputData, OutputData, OutputRequest},
+    types::{
+        Attr, CreateResult, CreateResultChild, FullId, InputData, Meta, ModelDescription,
+        ModelName, OutputData, OutputRequest, SimulatorType,
+    },
     ApiHelpers, DefaultMosaikApi, MosaikApi,
 };
 use sled::Db;
@@ -104,7 +107,7 @@ impl DefaultMosaikApi for HouseholdBatterySim {}
 impl MosaikApi for HouseholdBatterySim {
     ///Create *num* instances of *model* using the provided *model_params*.
     /// *panics!* if more than one neighborhood is created.
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Value {
+    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
     }
 
@@ -113,29 +116,25 @@ impl MosaikApi for HouseholdBatterySim {
         num: usize,
         model: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<Map<String, Value>> {
+    ) -> Vec<CreateResult> {
         if num > 1 || self.neighborhood.is_some() {
             todo!("Create Support for more  than one Neighborhood");
         }
-        let mut out_entities: Map<String, Value>;
         let mut out_vector = Vec::with_capacity(1);
         let next_eid = self.get_mut_entities().len();
 
         for i in next_eid..(next_eid + num) {
-            out_entities = Map::new();
-
-            let children = self.add_model(model_params.clone());
             let nhdb = self.neighborhood.as_ref().unwrap();
             let eid = nhdb.eid.clone();
             self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-            out_entities.insert(String::from("eid"), json!(eid));
-            out_entities.insert(String::from("type"), json!(model.clone()));
-
-            if let Some(children) = children {
-                out_entities.insert(String::from("children"), children);
-            }
-
-            out_vector.push(out_entities);
+            let out_entity = CreateResult {
+                eid,
+                model_type: model.clone(),
+                children: self.add_model(model_params.clone()),
+                rel: None,
+                extra_info: None,
+            };
+            out_vector.push(out_entity);
         }
 
         debug!("the created model: {:?}", out_vector);
@@ -192,43 +191,76 @@ impl MosaikApi for HouseholdBatterySim {
 }
 
 impl ApiHelpers for HouseholdBatterySim {
-    fn meta() -> Value {
-        json!({
-        "api_version": "3.0",
-        "type": "time-based",
-        "models":{
-            "Neighborhood":{
-                "public": true,
-                "params": [MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
-                "attrs": ["trades", "total","total_disposable_energy", "grid_power_load"
-                        ]
-                },
-                "Consumer": {
-                    "public": false,
-                    "params": [],
-                    "attrs": ["p_mw_load", "energy_balance", "published_energy_balance", "trades",
-                        "battery_charge", "trades", "p2p_traded",
-                        "avg_p2p_price", "published_p_mW_pv", "published_p_mW_load"
-                    ]
-                },
-                "Prosumer": {
-                    "public": false,
-                    "params": [],
-                    "attrs": ["p_mw_load",  "energy_balance", "published_energy_balance", "p_mw_pv",
-                        "battery_charge", "trades", "disposable_energy", "p2p_traded",
-                        "avg_p2p_price", "published_p_mW_pv", "published_p_mW_load"
-                    ]
-                },
-                "PV": {
-                    "public": false,
-                    "params": [],
-                    "attrs": ["p_mw_pv", "trades"]
-                }
+    fn meta() -> Meta {
+        let neighborhood = ModelDescription::new(
+            true,
+            vec![
+                MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION.to_string(),
+                MOSAIK_PARAM_START_TIME.to_string(),
+            ],
+            vec![
+                "trades".to_string(),
+                "total".to_string(),
+                "total_disposable_energy".to_string(),
+                "grid_power_load".to_string(),
+            ],
+        );
 
-            }
-        })
+        let consumer = ModelDescription::new(
+            false,
+            vec![],
+            vec![
+                "p_mw_load".to_string(),
+                "energy_balance".to_string(),
+                "published_energy_balance".to_string(),
+                "trades".to_string(),
+                "battery_charge".to_string(),
+                "trades".to_string(),
+                "p2p_traded".to_string(),
+                "avg_p2p_price".to_string(),
+                "published_p_mW_pv".to_string(),
+                "published_p_mW_load".to_string(),
+            ],
+        );
+
+        let prosumer = ModelDescription::new(
+            false,
+            vec![],
+            vec![
+                "p_mw_load".to_string(),
+                "energy_balance".to_string(),
+                "published_energy_balance".to_string(),
+                "p_mw_pv".to_string(),
+                "battery_charge".to_string(),
+                "trades".to_string(),
+                "disposable_energy".to_string(),
+                "p2p_traded".to_string(),
+                "avg_p2p_price".to_string(),
+                "published_p_mW_pv".to_string(),
+                "published_p_mW_load".to_string(),
+            ],
+        );
+
+        let pv = ModelDescription::new(
+            false,
+            vec![],
+            vec!["p_mw_pv".to_string(), "trades".to_string()],
+        );
+        let meta = Meta {
+            api_version: "3.0",
+            simulator_type: SimulatorType::TimeBased,
+            models: {
+                let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
+                m.insert("Neighborhood".to_string(), neighborhood);
+                m.insert("Consumer".to_string(), consumer);
+                m.insert("Prosumer".to_string(), prosumer);
+                m.insert("PV".to_string(), pv);
+                m
+            },
+            extra_methods: None,
+        };
+        meta
     }
-
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
         self.eid_prefix = eid_prefix.to_string();
     }
@@ -249,7 +281,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Value> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>> {
         let household_configs = self.params_to_household_config(&model_params);
 
         let start_time = if !model_params.contains_key(MOSAIK_PARAM_START_TIME) {
@@ -423,17 +455,15 @@ impl Neighborhood {
     }
 
     /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
-    fn households_as_mosaik_children(&self) -> Value {
-        let mut child_descriptions: Vec<HashMap<String, String>> =
+    fn households_as_mosaik_children(&self) -> Vec<CreateResultChild> {
+        let mut child_descriptions: Vec<CreateResultChild> =
             Vec::with_capacity(self.households.len());
         for (eid, household) in self.households.iter() {
-            let mut hash_map = HashMap::with_capacity(2);
-            hash_map.insert("eid".to_string(), eid.clone());
-            hash_map.insert("type".to_string(), household.household_type.clone());
-            child_descriptions.push(hash_map);
+            let child = CreateResultChild::new(eid.clone(), household.household_type.clone());
+            child_descriptions.push(child);
         }
 
-        serde_json::to_value(child_descriptions).unwrap()
+        child_descriptions
     }
 
     /************************************************
