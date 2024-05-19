@@ -54,34 +54,14 @@ pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
 }
 
 pub fn handle_request<T: MosaikApi>(
-    mut request: Request,
+    request: Request,
     simulator: &mut T,
 ) -> Result<Response, MosaikError> {
     let content: Value = match request.method.as_ref() {
-        "init" => serde_json::to_value(
-            simulator.init(
-                serde_json::from_value(request.args[0].clone())?,
-                request
-                    .kwargs
-                    .remove("time_resolution")
-                    .and_then(|value| value.as_f64())
-                    .unwrap_or(1.0f64),
-                request.kwargs,
-            ),
-        )?,
-        "create" => serde_json::to_value(simulator.create(
-            serde_json::from_value(request.args[0].clone())?,
-            serde_json::from_value(request.args[1].clone())?,
-            request.kwargs,
-        ))?,
-        "step" => Value::from(simulator.step(
-            serde_json::from_value(request.args[0].clone())?,
-            serde_json::from_value(request.args[1].clone())?,
-            serde_json::from_value(request.args[2].clone())?,
-        )), // add handling of optional return
-        "get_data" => serde_json::to_value(
-            simulator.get_data(serde_json::from_value(request.args[0].clone())?),
-        )?,
+        "init" => handle_init(simulator, &request)?,
+        "create" => handle_create(simulator, &request)?,
+        "step" => handle_step(simulator, &request)?,
+        "get_data" => handle_get_data(simulator, &request)?,
         "setup_done" => {
             simulator.setup_done();
             Value::Null
@@ -107,6 +87,45 @@ pub fn handle_request<T: MosaikApi>(
             Ok(Response::Failure(to_vec(&response).unwrap()))
         }
     }
+}
+
+fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
+    Ok(serde_json::to_value(
+        simulator.init(
+            serde_json::from_value(request.args[0].clone())?,
+            request
+                .kwargs
+                .get("time_resolution")
+                .and_then(|value| value.as_f64())
+                .unwrap_or(1.0f64),
+            request.kwargs.clone(),
+        ),
+    )?)
+}
+
+fn handle_create<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
+    Ok(serde_json::to_value(simulator.create(
+        serde_json::from_value(request.args[0].clone())?,
+        serde_json::from_value(request.args[1].clone())?,
+        request.kwargs.clone(),
+    ))?)
+}
+
+fn handle_step<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
+    Ok(Value::from(simulator.step(
+        serde_json::from_value(request.args[0].clone())?,
+        serde_json::from_value(request.args[1].clone())?,
+        serde_json::from_value(request.args[2].clone())?,
+    ))) // add handling of optional return
+}
+
+fn handle_get_data<T: MosaikApi>(
+    simulator: &mut T,
+    request: &Request,
+) -> Result<Value, MosaikError> {
+    Ok(serde_json::to_value(simulator.get_data(
+        serde_json::from_value(request.args[0].clone())?,
+    ))?)
 }
 
 fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
