@@ -58,8 +58,8 @@ pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
 }
 
 pub fn handle_request<T: MosaikApi>(
-    request: Request,
     simulator: &mut T,
+    request: Request,
 ) -> Result<Response, MosaikError> {
     // TODO include error handling
     let content: Value = match request.method.as_ref() {
