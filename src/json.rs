@@ -21,16 +21,20 @@ pub struct MosaikPayload {
     content: Value,
 }
 
+type MessageID = u64;
+
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct Request {
     #[serde(skip)]
-    msg_id: u64,
+    msg_id: MessageID,
     method: String,
     args: Vec<Value>,
     kwargs: Map<String, Value>,
 }
 
+// type Reply = (MessageID, Value);
 pub enum Response {
+    // FIXME replace Vec<u8> with Reply and convert to Vec<u8> in tcp
     Successful(Vec<u8>),
     Failure(Vec<u8>),
     Stop,
@@ -57,6 +61,7 @@ pub fn handle_request<T: MosaikApi>(
     request: Request,
     simulator: &mut T,
 ) -> Result<Response, MosaikError> {
+    // TODO include error handling
     let content: Value = match request.method.as_ref() {
         "init" => handle_init(simulator, &request)?,
         "create" => handle_create(simulator, &request)?,
@@ -76,15 +81,22 @@ pub fn handle_request<T: MosaikApi>(
                 "Unimplemented method {:?} requested. Simulation should most likely stop now",
                 method
             );
+            // FIXME isn't this a Response::Failure? what is Response::None anyway?
             return Ok(Response::None); //TODO: see issue #2 but most likely it should stay as it is instead of return json!(null)
         }
     };
-
-    match to_vec_helper(content, request.msg_id) {
-        Some(vec) => Ok(Response::Successful(vec)),
-        None => {
-            let response = json!([2, request.msg_id, "Stack Trace/Error Message"]);
-            Ok(Response::Failure(to_vec(&response).unwrap()))
+    // FIXME see comment on helper function!
+    // maybe convert the response in tcp to reduce tasks of this function
+    // therefore we should just return Ok(Response::Successful((request.msg_id, content))) here
+    match serialize_response(MessageType::SuccessReply, request.msg_id, content) {
+        Ok(vec) => Ok(Response::Successful(vec)),
+        Err(e) => {
+            let response = json!([
+                MessageType::FailureReply as u8,
+                request.msg_id,
+                e.to_string()
+            ]);
+            Ok(Response::Failure(to_vec(&response).unwrap())) // NOTE unwrap here is the problem (error handling loop)
         }
     }
 }
@@ -128,26 +140,25 @@ fn handle_get_data<T: MosaikApi>(
     ))?)
 }
 
-fn to_vec_helper(content: Value, id: u64) -> Option<Vec<u8>> {
-    //struct Response:
-    //msg_type: MsgType,
-    //id: usize,
-    //payload: String,
-    // FIXME is this function necessary? or check Result in handle_request directly
-    let response: Value = json!([1, id, content]);
+fn serialize_response(
+    msg_type: MessageType,
+    msg_id: MessageID,
+    payload: Value,
+) -> Result<Vec<u8>, MosaikError> {
+    // FIXME maybe this should always return a Response instead of Result<Vec<u8>>
+    // by just converting an Error directly to a Response::FailureReply(Vec<u8>)
+    // to provide error handling inside
+    let response: Value = json!([msg_type as u8, msg_id, payload]);
+    let mut byte_vec_response = to_vec(&response).map_err(|e| {
+        MosaikError::ParseError(format!(
+            "Failed to create a vector from the response: {}",
+            e
+        ))
+    })?;
 
-    match to_vec(&response) {
-        // Make a u8 vector with the data
-        Ok(mut vect_unwrapped) => {
-            let mut big_endian = (vect_unwrapped.len() as u32).to_be_bytes().to_vec();
-            big_endian.append(&mut vect_unwrapped);
-            Some(big_endian) //return the final response
-        }
-        Err(e) => {
-            error!("Failed to create a vector with the response: {}", e);
-            None
-        }
-    }
+    let mut header = (byte_vec_response.len() as u32).to_be_bytes().to_vec();
+    header.append(&mut byte_vec_response);
+    Ok(header)
 }
 
 #[derive(PartialEq, Deserialize, Debug)]
