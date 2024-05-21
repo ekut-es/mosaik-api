@@ -261,7 +261,7 @@ async fn broker_loop<T: MosaikApi>(
                             Ok(Response::Successful((msg_id, content))) => {
                                 let response =
                                     json::serialize_mosaik_message(json::MosaikMessage {
-                                        msg_type: json::MessageType::SuccessReply as u8,
+                                        msg_type: json::MSG_TYPE_REPLY_SUCCESS,
                                         id: msg_id,
                                         content,
                                     });
@@ -276,7 +276,7 @@ async fn broker_loop<T: MosaikApi>(
                             Ok(Response::Failure((msg_id, error))) => {
                                 let response =
                                     json::serialize_mosaik_message(json::MosaikMessage {
-                                        msg_type: json::MessageType::FailureReply as u8,
+                                        msg_type: json::MSG_TYPE_REPLY_FAILURE,
                                         id: msg_id,
                                         content: json!(error),
                                     });

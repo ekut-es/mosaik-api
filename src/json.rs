@@ -21,6 +21,10 @@ pub struct MosaikMessage {
     pub content: Value,
 }
 
+pub const MSG_TYPE_REQUEST: u8 = 0;
+pub const MSG_TYPE_REPLY_SUCCESS: u8 = 1;
+pub const MSG_TYPE_REPLY_FAILURE: u8 = 2;
+
 type MessageID = u64;
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -44,7 +48,7 @@ pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
     let payload: MosaikMessage = serde_json::from_str(&data)?;
 
-    if payload.msg_type != MessageType::Request as u8 {
+    if payload.msg_type != MSG_TYPE_REQUEST {
         return Err(MosaikError::ParseError(format!(
             "Payload is not a request: {:?}",
             payload
@@ -151,19 +155,10 @@ pub fn serialize_mosaik_message(payload: MosaikMessage) -> Vec<u8> {
                 "Failed to serialize a vector from the response to MessageID {}",
                 payload.id
             );
-            let error_response =
-                json!([MessageType::FailureReply as u8, payload.id, error_message]);
+            let error_response = json!([MSG_TYPE_REPLY_FAILURE, payload.id, error_message]);
             to_vec(&error_response).unwrap() // FIXME unwrap should be safe, because we know the error message is a short enough string
         }
     }
-}
-
-#[derive(PartialEq, Deserialize, Debug)]
-#[repr(u8)]
-pub enum MessageType {
-    Request = 0,
-    SuccessReply = 1,
-    FailureReply = 2,
 }
 
 #[cfg(test)]
@@ -320,7 +315,7 @@ mod tests {
 
     #[test]
     fn test_serialize_response_success() {
-        let msg_type = MessageType::SuccessReply as u8;
+        let msg_type = MSG_TYPE_REPLY_SUCCESS;
         let id = 123u64;
         let content = json!("Success");
 
@@ -343,7 +338,7 @@ mod tests {
 
     #[test]
     fn test_serialize_response_failure() {
-        let msg_type = MessageType::FailureReply as u8;
+        let msg_type = MSG_TYPE_REPLY_FAILURE;
         let id = 456;
         let content = json!("Failure");
 
