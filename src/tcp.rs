@@ -1,12 +1,12 @@
 use crate::{json, MosaikApi};
+use json::Response;
+
 use async_std::{
     net::{TcpListener, TcpStream},
     prelude::*,
     task,
 };
-use futures::sink::SinkExt;
-use futures::FutureExt;
-use futures::{channel::mpsc, select};
+use futures::{channel::mpsc, select, sink::SinkExt, FutureExt};
 use log::{debug, error, info, trace};
 use std::{future::Future, net::SocketAddr, sync::Arc};
 
@@ -257,9 +257,8 @@ async fn broker_loop<T: MosaikApi>(
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
                         trace!("The request: {:?} from {name}", request);
-                        use json::Response::*;
                         match json::handle_request(request, &mut simulator) {
-                            Ok(Successful(response)) => {
+                            Ok(Response::Successful(response)) => {
                                 //get the second argument in the tuple of peer
                                 //-> send the message to mosaik channel receiver
                                 if let Err(e) = peer.1.send(response).await {
@@ -267,13 +266,13 @@ async fn broker_loop<T: MosaikApi>(
                                     // FIXME what to send in this case? Failure?
                                 }
                             }
-                            Ok(Failure(response)) => {
+                            Ok(Response::Failure(response)) => {
                                 if let Err(e) = peer.1.send(response).await {
                                     error!("error sending failure response to peer: {}", e);
                                 }
                                 todo!()
                             }
-                            Ok(Stop) => {
+                            Ok(Response::Stop) => {
                                 /*if let Err(e) = peer.1.send(response).await {
                                     error!("error sending response to peer: {}", e);
                                 }*/
@@ -282,7 +281,7 @@ async fn broker_loop<T: MosaikApi>(
                                 }
                                 break 'event_loop;
                             }
-                            Ok(None) => {
+                            Ok(Response::None) => {
                                 info!("Nothing to respond");
                             }
                             Err(_) => todo!(),
