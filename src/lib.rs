@@ -1,6 +1,8 @@
 pub mod json;
 pub mod tcp;
 pub mod types;
+#[cfg(test)]
+use mockall::automock;
 
 use crate::{
     tcp::{build_connection, ConnectionDirection},
@@ -153,6 +155,7 @@ pub trait DefaultMosaikApi: ApiHelpers {
 }
 
 ///the class for the "empty" API calls
+#[cfg_attr(test, automock)]
 pub trait MosaikApi: Send + 'static {
     /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik.
     /// Return the meta data meta.

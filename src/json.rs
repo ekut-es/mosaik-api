@@ -172,31 +172,16 @@ enum MessageType {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::types::{InputData, Meta, SimulatorType};
+    use crate::MockMosaikApi;
+
+    use mockall::predicate::*;
+    use serde_json::{json, to_vec, Value};
     use std::{
         any::{Any, TypeId},
         collections::HashMap,
     };
-
-    use crate::{
-        types::InputData, CreateResult, Meta, OutputData, OutputRequest, SimId, SimulatorType,
-    };
-
-    use super::*;
-    use mockall::predicate::*;
-    use mockall::*;
-    use serde_json::{json, to_vec, Value};
-
-    mock! {
-        pub MosaikApi {}
-        impl MosaikApi for MosaikApi {
-            fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta;
-            fn create(&mut self, num: usize, model_name: String, model_params: Map<String, Value>) -> Vec<CreateResult>;
-            fn setup_done(&self);
-            fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize>;
-            fn get_data(&mut self, outputs: OutputRequest) -> OutputData;
-            fn stop(&self);
-        }
-    }
 
     // Tests for `parse_json_request`
 
