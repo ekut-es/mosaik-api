@@ -33,6 +33,7 @@ pub struct Request {
 }
 
 // type Reply = (MessageID, Value);
+#[derive(Debug, PartialEq)]
 pub enum Response {
     // FIXME replace Vec<u8> with Reply and convert to Vec<u8> in tcp
     Successful(Vec<u8>),
@@ -171,10 +172,33 @@ enum MessageType {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::InputData;
+    use std::{
+        any::{Any, TypeId},
+        collections::HashMap,
+    };
+
+    use crate::{
+        types::InputData, CreateResult, Meta, OutputData, OutputRequest, SimId, SimulatorType,
+    };
 
     use super::*;
+    use mockall::predicate::*;
+    use mockall::*;
     use serde_json::{json, to_vec, Value};
+
+    mock! {
+        pub MosaikApi {}
+        impl MosaikApi for MosaikApi {
+            fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta;
+            fn create(&mut self, num: usize, model_name: String, model_params: Map<String, Value>) -> Vec<CreateResult>;
+            fn setup_done(&self);
+            fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize>;
+            fn get_data(&mut self, outputs: OutputRequest) -> OutputData;
+            fn stop(&self);
+        }
+    }
+
+    // Tests for `parse_json_request`
 
     #[test]
     fn test_parse_valid_request() -> Result<(), MosaikError> {
@@ -230,6 +254,149 @@ mod tests {
     }
 
     // Tests for `handle_request`
+
+    #[test]
+    fn test_handle_init_success() -> Result<(), MosaikError> {
+        let mut simulator = MockMosaikApi::new();
+        let request = Request {
+            msg_id: 789,
+            method: "init".to_string(),
+            args: vec![json!("simID-1")],
+            kwargs: Map::new(), // no other params
+        };
+
+        simulator
+            .expect_init()
+            .with(eq("simID-1".to_string()), eq(1.0), eq(Map::new()))
+            .returning(|_, _, _| Meta::new("2.0", SimulatorType::default(), HashMap::new()));
+
+        let expected_response = Response::Successful(vec![123, 45, 67]);
+        let actual_response = handle_request(&mut simulator, request);
+        assert!(actual_response.is_ok());
+
+        assert_eq!(actual_response.unwrap(), expected_response);
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_request_init() {
+        let mut kwargs = Map::new();
+        kwargs.insert("time_resolution".to_string(), json!(0.1));
+        kwargs.insert("step_size".to_string(), json!(60));
+        let request = Request {
+            msg_id: 123,
+            method: "init".to_string(),
+            args: vec![json!("PowerGridSim-0")],
+            kwargs: kwargs.clone(),
+        };
+
+        let mut mock_simulator = MockMosaikApi::new();
+        mock_simulator
+            .expect_init()
+            .with(eq("PowerGridSim-0".to_string()), eq(0.1), eq(kwargs))
+            .returning(|_, _, _| Meta::new("2.0", SimulatorType::default(), HashMap::default()));
+
+        let result = handle_request(&mut mock_simulator, request);
+        assert!(result.is_ok());
+        // check if response is of type SuccessReply
+        let response = result.unwrap();
+        assert_eq!(response.type_id(), TypeId::of::<Response>());
+    }
+
+    #[test]
+    fn test_handle_request_create() {
+        let mut map = Map::new();
+        map.insert("init_val".to_string(), json!(42))
+            .unwrap_or_default();
+
+        let request = Request {
+            msg_id: 1,
+            method: "create".to_string(),
+            args: vec![json!(2), json!("ExampleModel")],
+            kwargs: map.clone(),
+        };
+
+        let mut mock_simulator = MockMosaikApi::new();
+        mock_simulator.expect_create().with(
+            eq(2 as usize),
+            eq("ExampleModel".to_string()),
+            eq(map),
+        );
+
+        let result = handle_create(&mut mock_simulator, &request);
+        assert!(result.is_ok());
+    }
+
+    // Tests for `serialize_response`
+
+    #[test]
+    fn test_serialize_response_success() {
+        let msg_type = MessageType::SuccessReply;
+        let msg_id = 123;
+        let payload = json!("Success");
+
+        let expected_response = vec![
+            91, 49, 44, 49, 50, 51, 44, 34, 83, 117, 99, 99, 101, 115, 115, 34, 93,
+        ];
+        let actual_response = serialize_response(msg_type, msg_id, payload).unwrap();
+        // check first 4 bytes to match header
+        assert_eq!(
+            actual_response[0..4],
+            (expected_response.len() as u32).to_be_bytes()
+        );
+        assert_eq!(actual_response.len(), 4 + expected_response.len());
+        assert_eq!(actual_response[4..], expected_response);
+    }
+
+    #[test]
+    fn test_serialize_response_failure() -> Result<(), MosaikError> {
+        let msg_type = MessageType::FailureReply;
+        let msg_id = 456;
+        let payload = json!("Failure");
+
+        let expected_response = vec![
+            91, 50, 44, 52, 53, 54, 44, 34, 70, 97, 105, 108, 117, 114, 101, 34, 93,
+        ]; // == to_vec(&json!([2 as u8, msg_id, payload]))
+        let actual_response = serialize_response(msg_type, msg_id, payload)?;
+
+        assert_eq!(
+            actual_response[..4],
+            (expected_response.len() as u32).to_be_bytes()
+        );
+        assert_eq!(actual_response.len(), 4 + expected_response.len());
+        assert_eq!(actual_response[4..], expected_response);
+        Ok(())
+    }
+
+    // TODO test serialize Error, maybe give it own error type.
+    // Tests for `handle_request`
+
+    /*
+    #[test]
+    fn test_handle_init_failure() -> Result<(), MosaikError> {
+        let mut simulator = MockMosaikApi::new();
+        let request = Request {
+            msg_id: 789,
+            method: "init".to_string(),
+            args: vec![json!("arg1"), json!("arg2")],
+            kwargs: Map::new(),
+        };
+
+        simulator
+            .expect_init()
+            .with(eq(json!("arg1")), eq(1.0), eq(Map::new()))
+            .returning(|_, _, _| {
+                Err(MosaikError::ParseError(
+                    "Failed to initialize simulator".to_string(),
+                ))
+            });
+
+            let expected_response = Response::Failure(vec![70, 97, 105, 108, 101, 100]);
+            let actual_response = handle_request(&mut simulator, request)?;
+
+        assert_eq!(actual_response, expected_response);
+        Ok(())
+    }*/
 
     /*#[test]
     fn test_handle_request() -> Result<(), MosaikError> {
