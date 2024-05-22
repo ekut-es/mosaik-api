@@ -185,6 +185,7 @@ pub trait MosaikApi: Send + 'static {
 }
 
 ///Async API calls, not implemented!
+#[allow(dead_code)]
 #[async_trait]
 trait AsyncApi {
     async fn get_progress();
