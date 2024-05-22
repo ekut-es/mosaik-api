@@ -109,12 +109,11 @@ impl ApiHelpers for MarketplaceSim {
             ],
         );
 
-        let meta = Meta::new("3.0", SimulatorType::TimeBased, {
+        Meta::new("3.0", SimulatorType::TimeBased, {
             let mut m = HashMap::new();
             m.insert("MarktplatzModel".to_string(), model1);
             m
-        });
-        meta
+        })
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {

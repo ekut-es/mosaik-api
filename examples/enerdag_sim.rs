@@ -246,7 +246,8 @@ impl ApiHelpers for HouseholdBatterySim {
             vec![],
             vec!["p_mw_pv".to_string(), "trades".to_string()],
         );
-        let meta = Meta {
+
+        Meta {
             api_version: "3.0",
             simulator_type: SimulatorType::TimeBased,
             models: {
@@ -258,8 +259,7 @@ impl ApiHelpers for HouseholdBatterySim {
                 m
             },
             extra_methods: None,
-        };
-        meta
+        }
     }
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
         self.eid_prefix = eid_prefix.to_string();

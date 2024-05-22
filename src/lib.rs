@@ -57,7 +57,7 @@ pub trait ApiHelpers {
 }
 
 pub trait DefaultMosaikApi: ApiHelpers {
-    fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
+    fn init(&mut self, _sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
         if time_resolution <= 0.0 {
             debug!("Non positive time resolution was given!");
         }
@@ -106,7 +106,7 @@ pub trait DefaultMosaikApi: ApiHelpers {
         out_vector
     }
 
-    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
+    fn step(&mut self, time: usize, inputs: InputData, _max_advance: usize) -> Option<usize> {
         trace!("the inputs in step: {:?}", inputs);
         let mut deltas: Vec<(EntityId, u64, Map<Attr, Value>)> = Vec::new();
         for (eid, attrs) in inputs.into_iter() {

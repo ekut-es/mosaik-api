@@ -160,7 +160,7 @@ mod tests {
     fn test_model_description_without_optionals() {
         let mut model = ModelDescription::new(false, vec![], vec![]);
 
-        assert_eq!(model.public, false);
+        assert!(!model.public);
         assert_eq!(model.params.len(), 0);
         assert_eq!(model.attrs.len(), 0);
         assert_eq!(model.any_inputs, None);
@@ -174,7 +174,7 @@ mod tests {
         model.params.push("init_reading".to_string());
         model.attrs = vec!["trades".to_string(), "total".to_string()];
 
-        assert_eq!(model.public, true);
+        assert!(model.public);
         assert_eq!(model.params.len(), 1);
         assert_eq!(model.attrs.len(), 2);
 
@@ -304,7 +304,7 @@ mod tests {
         assert_eq!(create_result.eid, "eid_1");
         assert_eq!(create_result.model_type, "model_name");
         assert_eq!(create_result.rel, Some(vec!["eid_2".to_string()]));
-        assert_eq!(create_result.children.is_some(), true);
+        assert!(create_result.children.is_some());
         if let Some(children) = &create_result.children {
             assert_eq!(children.len(), 1);
             assert_eq!(children[0].eid, "child_1");

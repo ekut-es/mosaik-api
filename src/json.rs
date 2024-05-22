@@ -46,7 +46,7 @@ pub enum Response {
 
 pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
-    let payload: MosaikMessage = serde_json::from_str(&data)?;
+    let payload: MosaikMessage = serde_json::from_str(data)?;
 
     if payload.msg_type != MSG_TYPE_REQUEST {
         return Err(MosaikError::ParseError(format!(
@@ -66,10 +66,10 @@ pub fn handle_request<T: MosaikApi>(
 ) -> Result<Response, MosaikError> {
     // TODO include error handling
     let content: Value = match request.method.as_ref() {
-        "init" => handle_init(simulator, &request)?,
-        "create" => handle_create(simulator, &request)?,
-        "step" => handle_step(simulator, &request)?,
-        "get_data" => handle_get_data(simulator, &request)?,
+        "init" => handle_init(simulator, request)?,
+        "create" => handle_create(simulator, request)?,
+        "step" => handle_step(simulator, request)?,
+        "get_data" => handle_get_data(simulator, request)?,
         "setup_done" => {
             simulator.setup_done();
             Value::Null
@@ -138,7 +138,7 @@ fn handle_get_data<T: MosaikApi>(
 }
 
 pub fn serialize_mosaik_message(payload: MosaikMessage) -> Vec<u8> {
-    let response: Value = json!([payload.msg_type as u8, payload.id, payload.content]);
+    let response: Value = json!([payload.msg_type, payload.id, payload.content]);
     match to_vec(&response) {
         Ok(vec) => {
             let mut header = (vec.len() as u32).to_be_bytes().to_vec();
@@ -301,11 +301,9 @@ mod tests {
         };
 
         let mut mock_simulator = MockMosaikApi::new();
-        mock_simulator.expect_create().with(
-            eq(2 as usize),
-            eq("ExampleModel".to_string()),
-            eq(map),
-        );
+        mock_simulator
+            .expect_create()
+            .with(eq(2_usize), eq("ExampleModel".to_string()), eq(map));
 
         let result = handle_create(&mut mock_simulator, &request);
         assert!(result.is_ok());

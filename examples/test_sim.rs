@@ -132,12 +132,11 @@ impl ApiHelpers for RExampleSim {
             persistent: None,
         };
 
-        let meta = Meta::new("3.0", SimulatorType::TimeBased, {
+        Meta::new("3.0", SimulatorType::TimeBased, {
             let mut m = HashMap::new();
             m.insert("ExampleModel".to_string(), example_model);
             m
-        });
-        meta
+        })
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
@@ -193,7 +192,7 @@ impl MosaikApi for RExampleSim {
         &mut self,
         num: usize,
         model_name: String,
-        model_params: Map<Attr, Value>,
+        _model_params: Map<Attr, Value>,
     ) -> Vec<CreateResult> {
         let next_eid = self.entities.len();
         let mut result: Vec<CreateResult> = Vec::new();
@@ -213,22 +212,22 @@ impl MosaikApi for RExampleSim {
         result
     }
 
-    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
+    fn step(&mut self, time: usize, inputs: InputData, _max_advance: usize) -> Option<usize> {
         self.time = time as u64;
         // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
         for (eid, model_instance) in &mut self.entities {
             if let Some(attrs) = inputs.get(eid) {
                 let mut new_delta = 0.0;
-                for (_, values) in attrs {
-                    new_delta = values.values().map(|v| v.as_f64().unwrap()).sum();
+                for value in attrs.values() {
+                    new_delta = value.values().map(|v| v.as_f64().unwrap()).sum();
                 }
                 model_instance.delta = new_delta;
             }
             model_instance.step();
         }
 
-        return Some(time + 1); // Step size is 1 second
+        Some(time + 1) // Step size is 1 second
     }
 
     fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
