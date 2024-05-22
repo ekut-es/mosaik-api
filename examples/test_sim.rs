@@ -121,6 +121,19 @@ pub struct RExampleSim {
     simulator: RSimulator,
 }
 
+impl RExampleSim {
+    pub fn new() -> Self {
+        Self {
+            eid_prefix: "Model_".to_string(),
+            step_size: 1,
+            time: 0,
+            time_resolution: 1.0,
+            entities: HashMap::new(),
+            simulator: RSimulator::new(),
+        }
+    }
+}
+
 impl ApiHelpers for RExampleSim {
     fn meta() -> Meta {
         let example_model = ModelDescription {
@@ -240,18 +253,5 @@ impl MosaikApi for RExampleSim {
 
     fn stop(&self) {
         // Nothing to do
-    }
-}
-
-impl RExampleSim {
-    pub fn new() -> Self {
-        Self {
-            eid_prefix: "Model_".to_string(),
-            step_size: 1,
-            time: 0,
-            time_resolution: 1.0,
-            entities: HashMap::new(),
-            simulator: RSimulator::new(),
-        }
     }
 }
