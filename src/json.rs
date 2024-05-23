@@ -8,9 +8,10 @@ use crate::MosaikApi;
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
-    #[error("Parsing Mosaik Payload: {0}")]
+    // TODO separate error for handle_* functions?
+    #[error("Parsing JSON Request: {0}")]
     ParseError(String),
-    #[error("Parsing Error: {0}")]
+    #[error("Serde JSON Error: {0}")]
     Serde(#[from] serde_json::Error),
 }
 
