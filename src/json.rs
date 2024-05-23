@@ -1,5 +1,5 @@
 use log::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
@@ -24,6 +24,14 @@ pub struct MosaikMessage {
 
 impl MosaikMessage {
     pub fn serialize(&self) -> Vec<u8> {
+        // NOTE this method is currently not usable for Request types
+        // "Requests should not be sent by a simulator. Implement a graceful shutdown."
+        if self.msg_type == MSG_TYPE_REQUEST {
+            warn!(
+                "WARNING: MosaikMessage::serialize is not correctly implemented for Request types."
+            );
+            todo!();
+        }
         let response: Value = json!([self.msg_type, self.id, self.content]);
         match to_vec(&response) {
             Ok(vec) => {
@@ -55,7 +63,7 @@ pub const MSG_TYPE_REPLY_FAILURE: u8 = 2;
 
 type MessageID = u64;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Request {
     #[serde(skip)]
     msg_id: MessageID,
@@ -325,6 +333,23 @@ mod tests {
     }
 
     // Tests for `serialize`
+
+    #[test]
+    #[should_panic(expected = "not yet implemented")]
+    fn test_serialize_request() {
+        let request = Request {
+            msg_id: 123,
+            method: "my_func".to_string(),
+            args: vec![json!("hello"), json!("world")],
+            kwargs: Map::new(),
+        };
+        MosaikMessage {
+            msg_type: MSG_TYPE_REQUEST,
+            id: request.msg_id,
+            content: json!(request),
+        }
+        .serialize();
+    }
 
     #[test]
     fn test_serialize_response_success() {
