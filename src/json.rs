@@ -202,7 +202,7 @@ mod tests {
         };
         let result = parse_json_request(valid_request);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), expected);
+        assert_eq!(result?, expected);
 
         Ok(())
     }
@@ -211,6 +211,7 @@ mod tests {
     fn test_parse_invalid_request() -> Result<(), MosaikError> {
         let data = r#"invalid request data"#;
         let result = parse_json_request(data);
+        // TODO expect MosaikError::Serde
         assert!(result.is_err());
         Ok(())
     }
@@ -219,6 +220,7 @@ mod tests {
     fn test_parse_success_reply() -> Result<(), MosaikError> {
         let data = r#"[1, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
         let result = parse_json_request(data);
+        // TODO expect MosaikError::ParseError
         assert!(result.is_err());
         Ok(())
     }
@@ -227,6 +229,7 @@ mod tests {
     fn test_parse_failure_reply() -> Result<(), MosaikError> {
         let data = r#"[2, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
         let result = parse_json_request(data);
+        // TODO expect MosaikError::ParseError
         assert!(result.is_err());
         Ok(())
     }
@@ -235,6 +238,7 @@ mod tests {
     fn test_parse_invalid_message_type() -> Result<(), MosaikError> {
         let data = r#"["0", 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
         let result = parse_json_request(data);
+        // TODO expect MosaikError::Serde
         assert!(result.is_err());
         Ok(())
     }
