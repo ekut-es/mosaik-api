@@ -258,13 +258,8 @@ async fn broker_loop<T: MosaikApi>(
                         //Handle the request -> simulations calls etc.
                         trace!("The request: {:?} from {name}", request);
                         match json::handle_request(&mut simulator, &request) {
-                            Ok(Response::Successful((msg_id, content))) => {
-                                let response =
-                                    json::serialize_mosaik_message(json::MosaikMessage {
-                                        msg_type: json::MSG_TYPE_REPLY_SUCCESS,
-                                        id: msg_id,
-                                        content,
-                                    });
+                            Response::Reply(mosaik_msg) => {
+                                let response = json::serialize_mosaik_message(mosaik_msg);
 
                                 //get the second argument in the tuple of peer
                                 //-> send the message to mosaik channel receiver
@@ -273,29 +268,15 @@ async fn broker_loop<T: MosaikApi>(
                                     // FIXME what to send in this case? Failure?
                                 }
                             }
-                            Ok(Response::Failure((msg_id, error))) => {
-                                let response =
-                                    json::serialize_mosaik_message(json::MosaikMessage {
-                                        msg_type: json::MSG_TYPE_REPLY_FAILURE,
-                                        id: msg_id,
-                                        content: json!(error),
-                                    });
-
-                                if let Err(e) = peer.1.send(response).await {
-                                    error!("error sending failure response to peer: {}", e);
-                                }
-                                todo!()
-                            }
-                            Ok(Response::Stop) => {
+                            Response::Stop => {
                                 if let Err(e) = connection_shutdown_sender.send(true).await {
                                     error!("error sending to the shutdown channel: {}", e);
                                 }
                                 break 'event_loop;
                             }
-                            Ok(Response::NoReply) => {
+                            Response::NoReply => {
                                 info!("Nothing to respond");
                             }
-                            Err(_) => todo!(),
                         }
                     }
                     Err(e) => {

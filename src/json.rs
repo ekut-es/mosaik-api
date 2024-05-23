@@ -14,13 +14,14 @@ pub enum MosaikError {
     Serde(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct MosaikMessage {
     pub msg_type: u8,
     pub id: MessageID,
     pub content: Value,
 }
 
+// TODO can we use this as an enum for msg_type without casting it to u8 all the time?
 pub const MSG_TYPE_REQUEST: u8 = 0;
 pub const MSG_TYPE_REPLY_SUCCESS: u8 = 1;
 pub const MSG_TYPE_REPLY_FAILURE: u8 = 2;
@@ -38,8 +39,7 @@ pub struct Request {
 
 #[derive(Debug, PartialEq)]
 pub enum Response {
-    Successful((MessageID, Value)),
-    Failure((MessageID, String)),
+    Reply(MosaikMessage),
     Stop,
     NoReply,
 }
@@ -60,42 +60,49 @@ pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
     Ok(request)
 }
 
-pub fn handle_request<T: MosaikApi>(
-    simulator: &mut T,
-    request: &Request,
-) -> Result<Response, MosaikError> {
-    // TODO include error handling
-    let content: Value = match request.method.as_ref() {
-        "init" => handle_init(simulator, request)?,
-        "create" => handle_create(simulator, request)?,
-        "step" => handle_step(simulator, request)?,
-        "get_data" => handle_get_data(simulator, request)?,
+pub fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Response {
+    let handle_result = match request.method.as_ref() {
+        "init" => handle_init(simulator, request),
+        "create" => handle_create(simulator, request),
+        "step" => handle_step(simulator, request),
+        "get_data" => handle_get_data(simulator, request),
         "setup_done" => {
             simulator.setup_done();
-            Value::Null
+            Ok(Value::Null)
         }
         "stop" => {
             debug!("Received stop command!");
             simulator.stop();
-            return Ok(Response::Stop);
+            return Response::Stop;
         }
         method => {
             error!(
                 "Unimplemented method {:?} requested. Simulation should most likely stop now",
                 method
             );
-            return Ok(Response::Failure((
-                request.msg_id,
-                format!(
+            return Response::Reply(MosaikMessage {
+                msg_type: MSG_TYPE_REPLY_FAILURE,
+                id: request.msg_id,
+                content: json!(format!(
                     "Unimplemented method {:?} requested. Simulation should most likely stop now",
                     method
-                ),
-                // TODO: see issue #2, maybe we should stop the API here
-            )));
+                )),
+            });
         }
     };
 
-    Ok(Response::Successful((request.msg_id, content)))
+    match handle_result {
+        Ok(content) => Response::Reply(MosaikMessage {
+            msg_type: MSG_TYPE_REPLY_SUCCESS,
+            id: request.msg_id,
+            content,
+        }),
+        Err(mosaik_error) => Response::Reply(MosaikMessage {
+            msg_type: MSG_TYPE_REPLY_FAILURE,
+            id: request.msg_id,
+            content: json!(mosaik_error.to_string()),
+        }),
+    }
 }
 
 fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
@@ -249,10 +256,13 @@ mod tests {
 
         let payload = json!(Meta::new("3.0", SimulatorType::default(), HashMap::new()));
         let actual_response = handle_request(&mut simulator, &request);
-        assert!(actual_response.is_ok());
         assert_eq!(
-            actual_response.unwrap(),
-            Response::Successful((request.msg_id, payload))
+            actual_response,
+            Response::Reply(MosaikMessage {
+                msg_type: MSG_TYPE_REPLY_SUCCESS,
+                id: request.msg_id,
+                content: payload
+            })
         );
 
         Ok(())
@@ -279,10 +289,8 @@ mod tests {
         );
         // TODO check if it returns a Meta object.
         // FIXME .returning(|_, _, _| Meta::new("3.0", SimulatorType::default(), models)); does not work - don't know why
-        let result = handle_request(&mut mock_simulator, &request);
-        assert!(result.is_ok());
+        let response = handle_request(&mut mock_simulator, &request);
         // TODO check if response is of type SuccessReply
-        let response = result.unwrap();
         assert_eq!(response.type_id(), TypeId::of::<Response>());
     }
 
