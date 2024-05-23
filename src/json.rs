@@ -22,6 +22,32 @@ pub struct MosaikMessage {
     pub content: Value,
 }
 
+impl MosaikMessage {
+    pub fn serialize(&self) -> Vec<u8> {
+        let response: Value = json!([self.msg_type, self.id, self.content]);
+        match to_vec(&response) {
+            Ok(vec) => {
+                let mut header = (vec.len() as u32).to_be_bytes().to_vec();
+                header.append(&mut vec.clone());
+                header
+            }
+            Err(e) => {
+                // return a FailureReply with the error message
+                error!(
+                    "Failed to serialize response to MessageID {}: {}",
+                    self.id, e
+                );
+                let error_message = format!(
+                    "Failed to serialize a vector from the response to MessageID {}",
+                    self.id
+                );
+                let error_response = json!([MSG_TYPE_REPLY_FAILURE, self.id, error_message]);
+                to_vec(&error_response).unwrap() // FIXME unwrap should be safe, because we know the error message is a short enough string
+            }
+        }
+    }
+}
+
 // TODO can we use this as an enum for msg_type without casting it to u8 all the time?
 pub const MSG_TYPE_REQUEST: u8 = 0;
 pub const MSG_TYPE_REPLY_SUCCESS: u8 = 1;
@@ -143,30 +169,6 @@ fn handle_get_data<T: MosaikApi>(
     Ok(serde_json::to_value(simulator.get_data(
         serde_json::from_value(request.args[0].clone())?,
     ))?)
-}
-
-pub fn serialize_mosaik_message(payload: MosaikMessage) -> Vec<u8> {
-    let response: Value = json!([payload.msg_type, payload.id, payload.content]);
-    match to_vec(&response) {
-        Ok(vec) => {
-            let mut header = (vec.len() as u32).to_be_bytes().to_vec();
-            header.append(&mut vec.clone());
-            header
-        }
-        Err(e) => {
-            // return a FailureReply with the error message
-            error!(
-                "Failed to serialize response to MessageID {}: {}",
-                payload.id, e
-            );
-            let error_message = format!(
-                "Failed to serialize a vector from the response to MessageID {}",
-                payload.id
-            );
-            let error_response = json!([MSG_TYPE_REPLY_FAILURE, payload.id, error_message]);
-            to_vec(&error_response).unwrap() // FIXME unwrap should be safe, because we know the error message is a short enough string
-        }
-    }
 }
 
 #[cfg(test)]
@@ -318,7 +320,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // Tests for `serialize_response`
+    // Tests for `serialize`
 
     #[test]
     fn test_serialize_response_success() {
@@ -329,11 +331,12 @@ mod tests {
         let expected_response = vec![
             91, 49, 44, 49, 50, 51, 44, 34, 83, 117, 99, 99, 101, 115, 115, 34, 93,
         ];
-        let actual_response = serialize_mosaik_message(MosaikMessage {
+        let actual_response = MosaikMessage {
             msg_type,
             id,
             content,
-        });
+        }
+        .serialize();
         // check first 4 bytes to match header
         assert_eq!(
             actual_response[0..4],
@@ -352,11 +355,12 @@ mod tests {
         let expected_response = vec![
             91, 50, 44, 52, 53, 54, 44, 34, 70, 97, 105, 108, 117, 114, 101, 34, 93,
         ]; // == to_vec(&json!([2 as u8, msg_id, payload]))
-        let actual_response = serialize_mosaik_message(MosaikMessage {
+        let actual_response = MosaikMessage {
             msg_type,
             id,
             content,
-        });
+        }
+        .serialize();
 
         assert_eq!(
             actual_response[..4],
