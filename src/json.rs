@@ -717,6 +717,10 @@ mod tests {
 
     // ------------------------------------------------------------------------
 
+    // NOTE this mosaik example from the official documentation is wrong formatting
+    // -- example definition in the paragraph above is correct
+    // test was fixed using InputData (see types.rs) format instead of Array
+
     // Request:
 
     // [
@@ -726,7 +730,8 @@ mod tests {
     //         {
     //               "node_1": {"P": [20, 3.14], "Q": [3, -2.5]},
     //               "node_2": {"P": [42], "Q": [-23.2]},
-    //         }
+    //         },
+    //         3600
     //     ],
     //     {}
     // ]
@@ -734,6 +739,40 @@ mod tests {
     // Reply:
 
     // 120
+
+    #[test]
+    fn test_handle_request_step() {
+        let request = Request {
+            msg_id: 1,
+            method: "step".to_string(),
+            args: vec![
+                json!(60),
+                json!({"node_1": {"P": {"full_id1":20, "full_id2":3.14}, "Q": {"full_id1":3,"full_id2": -2.5}},
+                       "node_2": {"P": {"full_id1":42}, "Q": {"full_id1":-23.2}}}),
+                json!(3600),
+            ],
+            kwargs: Map::new(),
+        };
+
+        let expect = MosaikMessage {
+            msg_type: MSG_TYPE_REPLY_SUCCESS,
+            id: request.msg_id,
+            content: json!(120),
+        };
+        let mut mock_simulator = MockMosaikApi::new();
+        mock_simulator
+            .expect_step()
+            .once()
+            .with(
+                eq(60),
+                eq(serde_json::from_value::<InputData>(request.args[1].clone()).unwrap()),
+                eq(3600),
+            )
+            .returning(move |_, _, _| Some(120));
+
+        let result = handle_request(&mut mock_simulator, &request);
+        assert_eq!(result, Response::Reply(expect));
+    }
 
     // Request:
 
