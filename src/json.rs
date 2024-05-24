@@ -771,6 +771,8 @@ mod tests {
         assert_eq!(result, Response::Reply(expect));
     }
 
+    // ------------------------------------------------------------------------
+
     // Request:
 
     // ["get_data", [{"branch_0": ["I"]}], {}]
@@ -806,13 +808,17 @@ mod tests {
             )
             .unwrap()))
             .returning(move |_| {
-                serde_json::from_value::<OutputData>(json!({"branch_0": {"I": 42.5}, "time": "123"}))
-                    .unwrap()
+                serde_json::from_value::<OutputData>(
+                    json!({"branch_0": {"I": 42.5}, "time": "123"}),
+                )
+                .unwrap()
             });
 
         let result = handle_request(&mut mock_simulator, &request);
         assert_eq!(result, Response::Reply(expect));
     }
+
+    // ------------------------------------------------------------------------
 
     // Request:
 
@@ -821,6 +827,28 @@ mod tests {
     // Reply:
 
     //     no reply required
+
+    // expecting Stop signal for tcp
+
+    #[test]
+    fn test_handle_request_stop() {
+        let request = Request {
+            msg_id: 1,
+            method: "stop".to_string(),
+            args: vec![],
+            kwargs: Map::new(),
+        };
+
+        let mut mock_simulator = MockMosaikApi::new();
+        mock_simulator
+            .expect_stop()
+            .once()
+            .with()
+            .returning(move || ());
+
+        let result = handle_request(&mut mock_simulator, &request);
+        assert_eq!(result, Response::Stop);
+    }
 
     // ------------------------------------------------------------------------
 
