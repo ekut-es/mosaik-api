@@ -251,6 +251,88 @@ mod tests {
         Ok(())
     }
 
+    // Tests for `serialize`
+
+    #[test]
+    #[should_panic(expected = "not yet implemented")]
+    fn test_serialize_request() {
+        let request = Request {
+            msg_id: 123,
+            method: "my_func".to_string(),
+            args: vec![json!("hello"), json!("world")],
+            kwargs: Map::new(),
+        };
+        MosaikMessage {
+            msg_type: MSG_TYPE_REQUEST,
+            id: request.msg_id,
+            content: json!(request),
+        }
+        .serialize();
+    }
+
+    #[test]
+    fn test_serialize_response_success() {
+        let msg_type = MSG_TYPE_REPLY_SUCCESS;
+        let id = 1u64;
+        let content = json!("the return value");
+
+        let expected_response = to_vec(&json!([1 as u8, id, content])).unwrap();
+        let actual_response = MosaikMessage {
+            msg_type,
+            id,
+            content,
+        }
+        .serialize();
+
+        // NOTE mosaik tutorial is wrong and has 2 bytes too many (should be 24B)
+        assert_eq!(actual_response[0..4], vec![0x00, 0x00, 0x00, 0x18]);
+        assert_eq!(actual_response.len(), 4 + 0x18);
+        assert_eq!(actual_response[4..], expected_response);
+    }
+
+    #[test]
+    fn test_serialize_response_failure() {
+        let msg_type = MSG_TYPE_REPLY_FAILURE;
+        let id = 1;
+        let content = json!("Error in your code line 23: ...");
+
+        let expected_response = to_vec(&json!([2 as u8, id, content])).unwrap();
+        let actual_response = MosaikMessage {
+            msg_type,
+            id,
+            content,
+        }
+        .serialize();
+
+        // NOTE mosaik Tutorial has 2 bytes too many (should be 39B)
+        assert_eq!(actual_response[..4], vec![0x00, 0x00, 0x00, 0x27]);
+        assert_eq!(actual_response.len(), 4 + 0x27);
+        assert_eq!(actual_response[4..], expected_response);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_serialize_response_error() {
+        let expect = to_vec(&json!([
+            MSG_TYPE_REPLY_FAILURE,
+            123,
+            "Failed to serialize a vector from the response to MessageID 123"
+        ]))
+        .unwrap();
+        let mut map = HashMap::new();
+        map.insert(12, "some failing value");
+        let actual = MosaikMessage {
+            msg_type: MSG_TYPE_REPLY_SUCCESS,
+            id: 123,
+            content: json!(map),
+            // FIXME json!(vec![0u64; usize::MAX]), // this Error occurs before the handling and will panic!
+        }
+        .serialize();
+        // TODO how to test for serialize Error?
+        assert_eq!(actual.len(), 4 + expect.len());
+        assert_eq!(actual[4..], expect);
+    }
+
     // Tests for `handle_request`
 
     #[test]
@@ -330,94 +412,6 @@ mod tests {
 
         let result = handle_create(&mut mock_simulator, &request);
         assert!(result.is_ok());
-    }
-
-    // Tests for `serialize`
-
-    #[test]
-    #[should_panic(expected = "not yet implemented")]
-    fn test_serialize_request() {
-        let request = Request {
-            msg_id: 123,
-            method: "my_func".to_string(),
-            args: vec![json!("hello"), json!("world")],
-            kwargs: Map::new(),
-        };
-        MosaikMessage {
-            msg_type: MSG_TYPE_REQUEST,
-            id: request.msg_id,
-            content: json!(request),
-        }
-        .serialize();
-    }
-
-    #[test]
-    fn test_serialize_response_success() {
-        let msg_type = MSG_TYPE_REPLY_SUCCESS;
-        let id = 123u64;
-        let content = json!("Success");
-
-        let expected_response = vec![
-            91, 49, 44, 49, 50, 51, 44, 34, 83, 117, 99, 99, 101, 115, 115, 34, 93,
-        ];
-        let actual_response = MosaikMessage {
-            msg_type,
-            id,
-            content,
-        }
-        .serialize();
-        // check first 4 bytes to match header
-        assert_eq!(
-            actual_response[0..4],
-            (expected_response.len() as u32).to_be_bytes()
-        );
-        assert_eq!(actual_response.len(), 4 + expected_response.len());
-        assert_eq!(actual_response[4..], expected_response);
-    }
-
-    #[test]
-    fn test_serialize_response_failure() {
-        let msg_type = MSG_TYPE_REPLY_FAILURE;
-        let id = 456;
-        let content = json!("Stack Trace/Error Message");
-
-        let expected_response = to_vec(&json!([2 as u8, id, content])).unwrap();
-        let actual_response = MosaikMessage {
-            msg_type,
-            id,
-            content,
-        }
-        .serialize();
-
-        assert_eq!(
-            actual_response[..4],
-            (expected_response.len() as u32).to_be_bytes()
-        );
-        assert_eq!(actual_response.len(), 4 + expected_response.len());
-        assert_eq!(actual_response[4..], expected_response);
-    }
-
-    #[test]
-    #[ignore]
-    fn test_serialize_response_error() {
-        let expect = to_vec(&json!([
-            MSG_TYPE_REPLY_FAILURE,
-            123,
-            "Failed to serialize a vector from the response to MessageID 123"
-        ]))
-        .unwrap();
-        let mut map = HashMap::new();
-        map.insert(12, "some failing value");
-        let actual = MosaikMessage {
-            msg_type: MSG_TYPE_REPLY_SUCCESS,
-            id: 123,
-            content: json!(map),
-            // FIXME json!(vec![0u64; usize::MAX]), // this Error occurs before the handling and will panic!
-        }
-        .serialize();
-        // TODO how to test for serialize Error?
-        assert_eq!(actual.len(), 4 + expect.len());
-        assert_eq!(actual[4..], expect);
     }
 
     // Tests for `handle_request`
