@@ -161,7 +161,10 @@ impl MosaikApi for HouseholdBatterySim {
     /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
     /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
     fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
-        let mut data: OutputData = HashMap::new();
+        let mut data = OutputData {
+            requests: HashMap::new(),
+            time: None, // TODO get time from simulator
+        };
 
         if let Some(nbhd) = &mut self.neighborhood {
             nbhd.add_output_values(&outputs, &mut data);
@@ -497,7 +500,7 @@ impl Neighborhood {
                 requested_values.insert(attr.clone(), value);
             }
 
-            output_data.insert(eid.clone(), requested_values);
+            output_data.requests.insert(eid.clone(), requested_values);
         }
     }
 

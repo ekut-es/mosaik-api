@@ -798,7 +798,7 @@ mod tests {
         let expect = MosaikMessage {
             msg_type: MSG_TYPE_REPLY_SUCCESS,
             id: request.msg_id,
-            content: json!({"branch_0": {"I": 42.5}}),
+            content: json!({"branch_0": {"I": 42.5}, "time": 123}),
         };
         let mut mock_simulator = MockMosaikApi::new();
         mock_simulator
@@ -809,13 +809,7 @@ mod tests {
             )
             .unwrap()))
             .returning(move |_| {
-                let mut outer = HashMap::new();
-                outer.insert("branch_0".to_string(), {
-                    let mut inner = HashMap::new();
-                    inner.insert("I".to_string(), json!(42.5));
-                    inner
-                });
-                outer
+                serde_json::from_value::<OutputData>(json!({"branch_0": {"I": 42.5}, "time": 123})).unwrap()
             });
 
         let result = handle_request(&mut mock_simulator, &request);

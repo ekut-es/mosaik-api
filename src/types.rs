@@ -31,7 +31,13 @@ pub type InputData = HashMap<EntityId, HashMap<Attr, Map<FullId, Value>>>;
 pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 
 ///The format of output data as return by ``get_data``
-pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OutputData {
+    #[serde(flatten)]
+    pub requests: HashMap<EntityId, HashMap<Attr, Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<String>,
+}
 
 /// Description of a single model in `Meta`
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -155,6 +161,30 @@ class EntityGraph(TypedDict):
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_output_data() {
+        // Example JSON data
+        let json_data = r#"{"eid_1": {"attr_1": "val_1", "attr_2": "val_2"},
+        "eid_2": {
+            "attr_1": "val_3",
+            "attr_2": "val_4"
+        },
+        "time": "2024-05-24T12:00:00Z"
+    }
+    "#
+        .replace("\n", "")
+        .replace(" ", "");
+
+        // Deserialize JSON to OutputData struct
+        let data: OutputData = serde_json::from_str(&json_data).unwrap();
+        assert_ne!(data.requests, HashMap::new());
+        assert_ne!(data.time, None);
+
+        // Serialize EventData struct to JSON
+        let serialized_json = serde_json::to_string(&data).unwrap();
+        assert_eq!(serialized_json.contains("requests"), false);
+    }
 
     #[test]
     fn test_model_description_without_optionals() {

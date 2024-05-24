@@ -148,7 +148,10 @@ pub trait DefaultMosaikApi: ApiHelpers {
             }
             data.insert(eid, attribute_values);
         }
-        data
+        OutputData {
+            requests: data,
+            time: None,
+        }
         // TODO https://mosaik.readthedocs.io/en/latest/mosaik-api/low-level.html#get-data
         // api-v3 needs optional 'time' entry in output map for event-based and hybrid Simulators
     }
