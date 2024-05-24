@@ -5,7 +5,7 @@ use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
 
-use crate::{MosaikApi, SimId};
+use crate::MosaikApi;
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
@@ -228,10 +228,7 @@ mod tests {
 
     use mockall::predicate::*;
     use serde_json::{json, to_vec, Value};
-    use std::{
-        any::{Any, TypeId},
-        collections::HashMap,
-    };
+    use std::collections::HashMap;
 
     // -------------------------------------------------------------------------
     // Tests for `parse_json_request`
@@ -798,7 +795,7 @@ mod tests {
         let expect = MosaikMessage {
             msg_type: MSG_TYPE_REPLY_SUCCESS,
             id: request.msg_id,
-            content: json!({"branch_0": {"I": 42.5}, "time": 123}),
+            content: json!({"branch_0": {"I": 42.5}, "time": "123"}),
         };
         let mut mock_simulator = MockMosaikApi::new();
         mock_simulator
@@ -809,7 +806,8 @@ mod tests {
             )
             .unwrap()))
             .returning(move |_| {
-                serde_json::from_value::<OutputData>(json!({"branch_0": {"I": 42.5}, "time": 123})).unwrap()
+                serde_json::from_value::<OutputData>(json!({"branch_0": {"I": 42.5}, "time": "123"}))
+                    .unwrap()
             });
 
         let result = handle_request(&mut mock_simulator, &request);
