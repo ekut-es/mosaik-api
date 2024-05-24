@@ -333,8 +333,69 @@ mod tests {
             expect
         );
     }
+    // TODO maybe the next two tests are redundant
+    #[test]
+    fn test_parse_step_request() -> Result<(), MosaikError> {
+        let valid_step_request = r#"
+        [0, 1, ["step",
+                [1,
+                 {"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4},
+                            "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}
+                            }
+                },
+                200
+                ], {}
+              ]
+        ]"#;
 
+        let expected = Request {
+            msg_id: 1,
+            method: "step".to_string(),
+            args: vec![
+                json!(1),
+                json!({"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4}, "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}}}),
+                json!(200),
+            ],
+            kwargs: Map::new(),
+        };
+        let result = parse_json_request(valid_step_request);
+        assert!(result.is_ok());
+
+        let request = result.unwrap();
+        let input: InputData = serde_json::from_value(request.args[1].clone())?;
+
+        assert_eq!(
+            input
+                .get("eid_1")
+                .unwrap()
+                .get("attr_2")
+                .unwrap()
+                .get("src_full_id_1")
+                .unwrap(),
+            3
+        );
+        assert_eq!(request, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_get_data_request() -> Result<(), MosaikError> {
+        let valid_request = r#"[0, 1, ["get_data", [{"eid_1": ["attr_1", "attr_2"]}], {}]]"#;
+        let mut outputs = Map::new();
+        outputs.insert("eid_1".to_string(), json!(vec!["attr_1", "attr_2"]));
+        let expected = Request {
+            msg_id: 1,
+            method: "get_data".to_string(),
+            args: vec![json!(outputs)],
+            kwargs: Map::new(),
+        };
+        assert_eq!(parse_json_request(valid_request)?, expected);
+        Ok(())
+    }
+
+    // ------------------------------------------------------------------------
     // Tests for `serialize`
+    // ------------------------------------------------------------------------
 
     #[test]
     fn test_serialize_request() {
@@ -367,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_response_success() {
+    fn test_serialize_response_success_to_vec() {
         let msg_type = MSG_TYPE_REPLY_SUCCESS;
         let id = 1u64;
         let content = json!("the return value");
@@ -387,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_response_failure() {
+    fn test_serialize_response_failure_to_vec() {
         let msg_type = MSG_TYPE_REPLY_FAILURE;
         let id = 1;
         let content = json!("Error in your code line 23: ...");
@@ -408,7 +469,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_serialize_response_error() {
+    fn test_serialize_response_error_to_vec() {
         let expect = to_vec(&json!([
             MSG_TYPE_REPLY_FAILURE,
             123,
@@ -573,65 +634,6 @@ mod tests {
         Ok(())
     }*/
     // ----
-
-    #[test]
-    fn parse_step_request() -> Result<(), MosaikError> {
-        let valid_request = r#"
-        [0, 1, ["step",
-                [1,
-                 {"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4},
-                            "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}
-                            }
-                },
-                200
-                ], {}
-              ]
-        ]"#;
-
-        let expected = Request {
-            msg_id: 1,
-            method: "step".to_string(),
-            args: vec![
-                json!(1),
-                json!({"eid_1": {"attr_1": {"src_full_id_1": 2, "src_full_id_2": 4}, "attr_2": {"src_full_id_1": 3, "src_full_id_2": 5}}}),
-                json!(200),
-            ],
-            kwargs: Map::new(),
-        };
-        let result = parse_json_request(valid_request);
-        assert!(result.is_ok());
-
-        let request = result.unwrap();
-        let input: InputData = serde_json::from_value(request.args[1].clone())?;
-
-        assert_eq!(
-            input
-                .get("eid_1")
-                .unwrap()
-                .get("attr_2")
-                .unwrap()
-                .get("src_full_id_1")
-                .unwrap(),
-            3
-        );
-        assert_eq!(request, expected);
-        Ok(())
-    }
-
-    #[test]
-    fn parse_get_data_request() -> Result<(), MosaikError> {
-        let valid_request = r#"[0, 1, ["get_data", [{"eid_1": ["attr_1", "attr_2"]}], {}]]"#;
-        let mut outputs = Map::new();
-        outputs.insert("eid_1".to_string(), json!(vec!["attr_1", "attr_2"]));
-        let expected = Request {
-            msg_id: 1,
-            method: "get_data".to_string(),
-            args: vec![json!(outputs)],
-            kwargs: Map::new(),
-        };
-        assert_eq!(parse_json_request(valid_request)?, expected);
-        Ok(())
-    }
 
     #[test]
     fn untyped_example() -> serde_json::Result<()> {
