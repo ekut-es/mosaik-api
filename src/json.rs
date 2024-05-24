@@ -16,7 +16,7 @@ pub enum MosaikError {
     Serde(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct MosaikMessage {
     pub msg_type: u8,
     pub id: MessageID,
@@ -49,10 +49,17 @@ impl MosaikMessage {
     }
 }
 
-// TODO can we use this as an enum for msg_type without casting it to u8 all the time?
+// TODO can we use this as an enum for msg_type without casting it to u8 all the time? Deserialization of MosaikMessage would get difficult. See test_deserialize_u8_to_enum
 pub const MSG_TYPE_REQUEST: u8 = 0;
 pub const MSG_TYPE_REPLY_SUCCESS: u8 = 1;
 pub const MSG_TYPE_REPLY_FAILURE: u8 = 2;
+// #[repr(u8)]
+// #[derive(Debug, PartialEq, Copy, Clone, Deserialize)]  // NOTE one could use this to check validity via MsgType::try_from(msg_type)
+// pub enum MsgType {
+//     Request = 0,
+//     ReplySuccess = 1,
+//     ReplyFailure = 2,
+// }
 
 type MessageID = u64;
 
@@ -896,4 +903,19 @@ mod tests {
     // Reply:
 
     // null
+
+    #[test]
+    #[ignore]
+    #[should_panic]
+    fn test_deserialize_u8_to_enum() {
+        #[repr(u8)]
+        #[derive(Deserialize, PartialEq, Debug)]
+        enum MyEnum {
+            A = 0,
+            B = 1,
+        }
+
+        let actual: MyEnum = serde_json::from_value(json!(0u8)).unwrap();
+        assert_eq!(actual, MyEnum::A);
+    }
 }
