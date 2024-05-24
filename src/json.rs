@@ -641,31 +641,40 @@ mod tests {
 
     #[test]
     fn test_handle_request_create() {
-        let mut map = Map::new();
-        map.insert("init_val".to_string(), json!(42))
-            .unwrap_or_default();
-
         let request = Request {
             msg_id: 1,
             method: "create".to_string(),
-            args: vec![json!(2), json!("ExampleModel")],
-            kwargs: map.clone(),
+            args: vec![json!(1), json!("Grid")],
+            kwargs: {
+                let mut map = Map::new();
+                map.insert("topology_file".to_string(), "data/grid.json".into());
+                map
+            },
         };
 
-        let content = vec![CreateResult::new(
-            "eid_1".to_string(),
-            "model_name".to_string(),
-        )];
+        let mut cr = CreateResult::new("Grid_1".to_string(), "Grid".to_string());
+        cr.children = Some(vec![
+            CreateResult::new("node_0".to_string(), "Node".to_string()),
+            CreateResult::new("node_1".to_string(), "Node".to_string()),
+            CreateResult {
+                eid: "branch_0".to_string(),
+                model_type: "Branch".to_string(),
+                rel: Some(vec!["node_0".to_string(), "node_1".to_string()]),
+                children: None,
+                extra_info: None,
+            },
+        ]);
         let expect = MosaikMessage {
             msg_type: MSG_TYPE_REPLY_SUCCESS,
             id: request.msg_id,
-            content: serde_json::to_value(&content.clone()).unwrap(),
+            content: serde_json::to_value(&vec![cr.clone()]).unwrap(),
         };
         let mut mock_simulator = MockMosaikApi::new();
         mock_simulator
             .expect_create()
-            .with(eq(2_usize), eq("ExampleModel".to_string()), eq(map))
-            .returning(move |_, _, _| content.clone());
+            .once()
+            .with(eq(1), eq("Grid".to_string()), eq(request.kwargs.clone()))
+            .returning(move |_, _, _| vec![cr.clone()]);
 
         let result = handle_request(&mut mock_simulator, &request);
         assert_eq!(result, Response::Reply(expect));
