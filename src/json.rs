@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn test_parse_invalid_request() -> Result<(), MosaikError> {
-        let data = r#"invalid request data"#;
+        let data = r#"invalid request format"#;
         let result = parse_json_request(data);
         // TODO expect MosaikError::Serde
         assert!(result.is_err());
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn test_parse_success_reply() -> Result<(), MosaikError> {
-        let data = r#"[1, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
+        let data = r#"[1, 1, "return value"]"#;
         let result = parse_json_request(data);
         // TODO expect MosaikError::ParseError
         assert!(result.is_err());
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_parse_failure_reply() -> Result<(), MosaikError> {
-        let data = r#"[2, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
+        let data = r#"[2, 1, "Error in your code line 23: ..."]"#;
         let result = parse_json_request(data);
         // TODO expect MosaikError::ParseError
         assert!(result.is_err());
