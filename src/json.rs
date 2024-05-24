@@ -217,7 +217,7 @@ fn handle_get_data<T: MosaikApi>(
 mod tests {
     use super::*;
     use crate::types::{InputData, Meta, SimulatorType};
-    use crate::MockMosaikApi;
+    use crate::{CreateResult, MockMosaikApi};
 
     use mockall::predicate::*;
     use serde_json::{json, to_vec, Value};
@@ -226,7 +226,9 @@ mod tests {
         collections::HashMap,
     };
 
+    // -------------------------------------------------------------------------
     // Tests for `parse_json_request`
+    // -------------------------------------------------------------------------
 
     #[test]
     fn test_parse_valid_request() -> Result<(), MosaikError> {
@@ -427,7 +429,9 @@ mod tests {
         assert_eq!(actual[4..], expect);
     }
 
+    // ------------------------------------------------------------------------
     // Tests for `handle_request`
+    // ------------------------------------------------------------------------
 
     #[test]
     fn test_handle_init_success() -> Result<(), MosaikError> {
@@ -486,7 +490,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_handle_request_create() {
         let mut map = Map::new();
         map.insert("init_val".to_string(), json!(42))
@@ -499,16 +502,24 @@ mod tests {
             kwargs: map.clone(),
         };
 
+        let content = vec![CreateResult::new(
+            "eid_1".to_string(),
+            "model_name".to_string(),
+        )];
+        let expect = MosaikMessage {
+            msg_type: MSG_TYPE_REPLY_SUCCESS,
+            id: request.msg_id,
+            content: serde_json::to_value(&content.clone()).unwrap(),
+        };
         let mut mock_simulator = MockMosaikApi::new();
         mock_simulator
             .expect_create()
-            .with(eq(2_usize), eq("ExampleModel".to_string()), eq(map));
+            .with(eq(2_usize), eq("ExampleModel".to_string()), eq(map))
+            .returning(move |_, _, _| content.clone());
 
-        let result = handle_create(&mut mock_simulator, &request);
-        assert!(result.is_ok());
+        let result = handle_request(&mut mock_simulator, &request);
+        assert_eq!(result, Response::Reply(expect));
     }
-
-    // Tests for `handle_request`
 
     /*
     #[test]
