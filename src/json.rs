@@ -5,7 +5,7 @@ use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
 
-use crate::MosaikApi;
+use crate::{MosaikApi, SimId};
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
@@ -164,9 +164,20 @@ pub fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Res
 }
 
 fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
+    /* TODO do we want this?
+    let sid: SimId = match serde_json::from_value(request.args[0].clone()) {
+        Ok(sid) => sid,
+        Err(e) => {
+            return Err(MosaikError::ParseError(format!(
+                "Could not parse Simulator ID from Mosaik Message args: {}",
+                e
+            )))
+        }
+    };*/
+
     Ok(serde_json::to_value(
         simulator.init(
-            serde_json::from_value(request.args[0].clone())?,
+            serde_json::from_value(request.args[0].clone())?, // sid,
             request
                 .kwargs
                 .get("time_resolution")
