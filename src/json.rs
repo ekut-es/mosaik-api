@@ -845,6 +845,7 @@ mod tests {
     //     }
     // }
 
+    // DEPRECATED!
     // Request:
 
     // ["get_data", [{"grid_sim_0.branch_0": ["I"]}], {}]
@@ -857,6 +858,7 @@ mod tests {
     //     }
     // }
 
+    // DEPRECATED!
     // Request:
 
     // [
