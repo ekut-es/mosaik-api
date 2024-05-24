@@ -252,10 +252,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_invalid_mosaik_message() -> Result<(), MosaikError> {
+    fn test_parse_invalid_mosaik_message() {
         let data = r#"invalid request format"#;
         let result = parse_json_request(data);
-        // TODO expect MosaikError::ParseError("Payload is not a valid Mosaik Message: {}",
         assert!(result.is_err());
         let expect = MosaikError::ParseError("Payload is not a valid Mosaik Message:".to_string());
         let actual = result.unwrap_err();
@@ -266,7 +265,6 @@ mod tests {
             actual,
             expect
         );
-        Ok(())
     }
 
     #[test]
@@ -495,7 +493,7 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn test_handle_init_success() -> Result<(), MosaikError> {
+    fn test_handle_request_init_success() -> Result<(), MosaikError> {
         let mut simulator = MockMosaikApi::new();
         let request = Request {
             msg_id: 789,
@@ -525,29 +523,29 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_handle_request_init() {
+    fn test_handle_request_init_failure() {
+        // TODO should Simulator functions return Results to make Error Handling available to Users? -> SimulatorError Type?
         let mut kwargs = Map::new();
         kwargs.insert("time_resolution".to_string(), json!(0.1));
         kwargs.insert("step_size".to_string(), json!(60));
         let request = Request {
             msg_id: 123,
             method: "init".to_string(),
-            args: vec![json!("PowerGridSim-0")],
+            args: vec![json!(0)], // invalid SimId
             kwargs: kwargs.clone(),
         };
 
         let mut mock_simulator = MockMosaikApi::new();
-        mock_simulator.expect_init().once().with(
-            eq("PowerGridSim-0".to_string()),
-            eq(0.1),
-            eq(kwargs),
-        );
-        // TODO check if it returns a Meta object.
-        // FIXME .returning(|_, _, _| Meta::new("3.0", SimulatorType::default(), models)); does not work - don't know why
-        let response = handle_request(&mut mock_simulator, &request);
-        // TODO check if response is of type SuccessReply
-        assert_eq!(response.type_id(), TypeId::of::<Response>());
+        mock_simulator.expect_init().never();
+
+        let actual = handle_request(&mut mock_simulator, &request);
+        let expected = Response::Reply(MosaikMessage {
+            msg_type: MSG_TYPE_REPLY_FAILURE,
+            id: request.msg_id,
+            content: json!("Serde JSON Error: invalid type: integer `0`, expected a string"),
+        });
+        // TODO do we want a more concise Error message here?
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -637,6 +635,7 @@ mod tests {
 
     #[test]
     fn untyped_example() -> serde_json::Result<()> {
+        // FIXME christoph, what is this code testing?
         // Some JSON input data as a &str. Maybe this comes from the user.
         let data = r#"
         [0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
