@@ -224,7 +224,7 @@ fn handle_get_data<T: MosaikApi>(
 mod tests {
     use super::*;
     use crate::types::{InputData, Meta, SimulatorType};
-    use crate::{CreateResult, MockMosaikApi};
+    use crate::{CreateResult, MockMosaikApi, OutputData, OutputRequest};
 
     use mockall::predicate::*;
     use serde_json::{json, to_vec, Value};
@@ -785,6 +785,42 @@ mod tests {
     //         "I": 42.5
     //     }
     // }
+
+    #[test]
+    fn test_handle_request_get_data() {
+        let request = Request {
+            msg_id: 1,
+            method: "get_data".to_string(),
+            args: vec![json!({"branch_0": ["I"]})],
+            kwargs: Map::new(),
+        };
+
+        let expect = MosaikMessage {
+            msg_type: MSG_TYPE_REPLY_SUCCESS,
+            id: request.msg_id,
+            content: json!({"branch_0": {"I": 42.5}}),
+        };
+        let mut mock_simulator = MockMosaikApi::new();
+        mock_simulator
+            .expect_get_data()
+            .once()
+            .with(eq(serde_json::from_value::<OutputRequest>(
+                request.args[0].clone(),
+            )
+            .unwrap()))
+            .returning(move |_| {
+                let mut outer = HashMap::new();
+                outer.insert("branch_0".to_string(), {
+                    let mut inner = HashMap::new();
+                    inner.insert("I".to_string(), json!(42.5));
+                    inner
+                });
+                outer
+            });
+
+        let result = handle_request(&mut mock_simulator, &request);
+        assert_eq!(result, Response::Reply(expect));
+    }
 
     // Request:
 
