@@ -1,5 +1,6 @@
 use log::*;
-use serde::{Deserialize, Serialize};
+use serde::ser::{Serialize, SerializeTuple, Serializer};
+use serde::Deserialize;
 use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
@@ -23,15 +24,7 @@ pub struct MosaikMessage {
 }
 
 impl MosaikMessage {
-    pub fn serialize(&self) -> Vec<u8> {
-        // NOTE this method is currently not usable for Request types
-        // "Requests should not be sent by a simulator. Implement a graceful shutdown."
-        if self.msg_type == MSG_TYPE_REQUEST {
-            warn!(
-                "WARNING: MosaikMessage::serialize is not correctly implemented for Request types."
-            );
-            todo!();
-        }
+    pub fn serialize_to_vec(&self) -> Vec<u8> {
         let response: Value = json!([self.msg_type, self.id, self.content]);
         match to_vec(&response) {
             Ok(vec) => {
@@ -63,13 +56,27 @@ pub const MSG_TYPE_REPLY_FAILURE: u8 = 2;
 
 type MessageID = u64;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Request {
     #[serde(skip)]
     msg_id: MessageID,
     method: String,
     args: Vec<Value>,
     kwargs: Map<String, Value>,
+}
+
+impl Serialize for Request {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serializing the request to the array needed for the MosaikMessage content
+        let mut tup = serializer.serialize_tuple(3)?;
+        tup.serialize_element(&self.method)?;
+        tup.serialize_element(&self.args)?;
+        tup.serialize_element(&self.kwargs)?;
+        tup.end()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -254,20 +261,33 @@ mod tests {
     // Tests for `serialize`
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]
     fn test_serialize_request() {
         let request = Request {
             msg_id: 123,
             method: "my_func".to_string(),
             args: vec![json!("hello"), json!("world")],
-            kwargs: Map::new(),
+            kwargs: {
+                let mut map = Map::new();
+                map.insert("times".to_string(), json!(23))
+                    .unwrap_or_default();
+                map
+            },
         };
-        MosaikMessage {
+        let ser_request = json!(request);
+        let expect_content = json!(["my_func", ["hello", "world"], {"times": 23}]);
+        assert_eq!(ser_request, expect_content);
+
+        let actual = MosaikMessage {
             msg_type: MSG_TYPE_REQUEST,
             id: request.msg_id,
             content: json!(request),
         }
-        .serialize();
+        .serialize_to_vec();
+        let expect = json!([MSG_TYPE_REQUEST as u8, request.msg_id, expect_content]);
+        assert_eq!(
+            serde_json::from_slice::<Value>(&actual[4..]).unwrap(),
+            expect
+        );
     }
 
     #[test]
@@ -282,7 +302,7 @@ mod tests {
             id,
             content,
         }
-        .serialize();
+        .serialize_to_vec();
 
         // NOTE mosaik tutorial is wrong and has 2 bytes too many (should be 24B)
         assert_eq!(actual_response[0..4], vec![0x00, 0x00, 0x00, 0x18]);
@@ -302,7 +322,7 @@ mod tests {
             id,
             content,
         }
-        .serialize();
+        .serialize_to_vec();
 
         // NOTE mosaik Tutorial has 2 bytes too many (should be 39B)
         assert_eq!(actual_response[..4], vec![0x00, 0x00, 0x00, 0x27]);
@@ -327,7 +347,7 @@ mod tests {
             content: json!(map),
             // FIXME json!(vec![0u64; usize::MAX]), // this Error occurs before the handling and will panic!
         }
-        .serialize();
+        .serialize_to_vec();
         // TODO how to test for serialize Error?
         assert_eq!(actual.len(), 4 + expect.len());
         assert_eq!(actual[4..], expect);
