@@ -88,16 +88,32 @@ pub enum Response {
 
 pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
-    let payload: MosaikMessage = serde_json::from_str(data)?;
+    let payload: MosaikMessage = match serde_json::from_str(data) {
+        Ok(payload) => payload,
+        Err(e) => {
+            return Err(MosaikError::ParseError(format!(
+                "Payload is not a valid Mosaik Message: {}",
+                e
+            )));
+        }
+    };
 
     if payload.msg_type != MSG_TYPE_REQUEST {
         return Err(MosaikError::ParseError(format!(
-            "Payload is not a request: {:?}",
+            "The Mosaik Message is not a request: {:?}",
             payload
         )));
     }
 
-    let mut request: Request = serde_json::from_value(payload.content)?;
+    let mut request: Request = match serde_json::from_value(payload.content) {
+        Ok(request) => request,
+        Err(e) => {
+            return Err(MosaikError::ParseError(format!(
+                "The Mosaik Message has no valid Request content: {}",
+                e
+            )));
+        }
+    };
     request.msg_id = payload.id;
     Ok(request)
 }
@@ -223,39 +239,86 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_invalid_request() -> Result<(), MosaikError> {
+    fn test_parse_invalid_mosaik_message() -> Result<(), MosaikError> {
         let data = r#"invalid request format"#;
         let result = parse_json_request(data);
-        // TODO expect MosaikError::Serde
+        // TODO expect MosaikError::ParseError("Payload is not a valid Mosaik Message: {}",
         assert!(result.is_err());
+        let expect = MosaikError::ParseError("Payload is not a valid Mosaik Message:".to_string());
+        let actual = result.unwrap_err();
+        assert_eq!(
+            actual.to_string().starts_with(&expect.to_string()),
+            true,
+            "{} does not start with {}",
+            actual,
+            expect
+        );
         Ok(())
     }
 
     #[test]
-    fn test_parse_success_reply() -> Result<(), MosaikError> {
+    fn test_parse_success_reply() {
         let data = r#"[1, 1, "return value"]"#;
         let result = parse_json_request(data);
-        // TODO expect MosaikError::ParseError
         assert!(result.is_err());
-        Ok(())
+        let expect = MosaikError::ParseError("The Mosaik Message is not a request:".to_string());
+        let actual = result.unwrap_err();
+        assert_eq!(
+            actual.to_string().starts_with(&expect.to_string()),
+            true,
+            "{} does not start with {}",
+            actual,
+            expect
+        );
     }
 
     #[test]
-    fn test_parse_failure_reply() -> Result<(), MosaikError> {
+    fn test_parse_failure_reply() {
         let data = r#"[2, 1, "Error in your code line 23: ..."]"#;
         let result = parse_json_request(data);
-        // TODO expect MosaikError::ParseError
         assert!(result.is_err());
-        Ok(())
+        let expect = MosaikError::ParseError("The Mosaik Message is not a request:".to_string());
+        let actual = result.unwrap_err();
+        assert_eq!(
+            actual.to_string().starts_with(&expect.to_string()),
+            true,
+            "{} does not start with {}",
+            actual,
+            expect
+        );
     }
 
     #[test]
-    fn test_parse_invalid_message_type() -> Result<(), MosaikError> {
+    fn test_parse_invalid_message_type() {
         let data = r#"["0", 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
         let result = parse_json_request(data);
-        // TODO expect MosaikError::Serde
         assert!(result.is_err());
-        Ok(())
+        let expect = MosaikError::ParseError("Payload is not a valid Mosaik Message:".to_string());
+        let actual = result.unwrap_err();
+        assert_eq!(
+            actual.to_string().starts_with(&expect.to_string()),
+            true,
+            "{} does not start with {}",
+            actual,
+            expect
+        );
+    }
+
+    #[test]
+    fn test_parse_invalid_request_format() {
+        let data = r#"[0, 1, ["my_func", {"hello": "world"}, {"times": 23}]]"#;
+        let result = parse_json_request(data);
+        assert!(result.is_err());
+        let expect =
+            MosaikError::ParseError("The Mosaik Message has no valid Request content:".to_string());
+        let actual = result.unwrap_err();
+        assert_eq!(
+            actual.to_string().starts_with(&expect.to_string()),
+            true,
+            "{} does not start with {}",
+            actual,
+            expect
+        );
     }
 
     // Tests for `serialize`
