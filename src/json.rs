@@ -690,6 +690,33 @@ mod tests {
 
     // null
 
+    #[test]
+    fn test_handle_request_setup_done() {
+        let request = Request {
+            msg_id: 1,
+            method: "setup_done".to_string(),
+            args: vec![],
+            kwargs: Map::new(),
+        };
+
+        let expect = MosaikMessage {
+            msg_type: MSG_TYPE_REPLY_SUCCESS,
+            id: request.msg_id,
+            content: serde_json::Value::Null,
+        };
+        let mut mock_simulator = MockMosaikApi::new();
+        mock_simulator
+            .expect_setup_done()
+            .once()
+            .with()
+            .returning(move || ());
+
+        let result = handle_request(&mut mock_simulator, &request);
+        assert_eq!(result, Response::Reply(expect));
+    }
+
+    // ------------------------------------------------------------------------
+
     // Request:
 
     // [
