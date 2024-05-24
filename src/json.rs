@@ -499,6 +499,33 @@ mod tests {
     // Tests for `handle_request`
     // ------------------------------------------------------------------------
 
+    //     Request:
+
+    // ["init", ["PowerGridSim-0"], {"step_size": 60}]
+
+    // Reply:
+
+    // {
+    //    "api_version": "2.2",
+    //    "models": {
+    //         "Grid": {
+    //             "public": true,
+    //             "params": ["topology_file"],
+    //             "attrs": []
+    //         },
+    //         "Node": {
+    //             "public": false,
+    //             "params": [],
+    //             "attrs": ["P", "Q"]
+    //         },
+    //         "Branch": {
+    //             "public": false,
+    //             "params": [],
+    //             "attrs": ["I", "I_max"]
+    //         }
+    //     }
+    // }
+
     #[test]
     fn test_handle_request_init_success() -> Result<(), MosaikError> {
         let mut simulator = MockMosaikApi::new();
@@ -531,7 +558,6 @@ mod tests {
 
     #[test]
     fn test_handle_request_init_failure() {
-        // TODO should Simulator functions return Results to make Error Handling available to Users? -> SimulatorError Type?
         let mut kwargs = Map::new();
         kwargs.insert("time_resolution".to_string(), json!(0.1));
         kwargs.insert("step_size".to_string(), json!(60));
@@ -554,6 +580,64 @@ mod tests {
         // TODO do we want a more concise Error message here?
         assert_eq!(actual, expected);
     }
+
+    /* TODO should Simulator functions return Results to make Error Handling available to Users? -> SimulatorError Type?
+    #[test]
+    fn test_handle_request_init_failure_sim() -> Result<(), MosaikError> {
+        let mut simulator = MockMosaikApi::new();
+        let request = Request {
+            msg_id: 789,
+            method: "init".to_string(),
+            args: vec![json!("arg1"), json!("arg2")],
+            kwargs: Map::new(),
+        };
+
+        simulator
+            .expect_init()
+            .with(eq("arg1".to_string()), eq(1.0), eq(Map::new()))
+            .returning(|_, _, _| {
+                Err(MosaikError::ParseError(
+                    "Failed to initialize simulator".to_string(),
+                ))
+            });
+
+        let expected_response = Response::Failure(vec![70, 97, 105, 108, 101, 100]);
+        let actual_response = handle_request(&mut simulator, request)?;
+
+        assert_eq!(actual_response, expected_response);
+        Ok(())
+    }*/
+
+    // ------------------------------------------------------------------------
+
+    // Request:
+
+    // ["create", [1, "Grid"], {"topology_file": "data/grid.json"}]
+
+    // Reply:
+
+    // [
+    //     {
+    //         "eid": "Grid_1",
+    //         "type": "Grid",
+    //         "rel": [],
+    //         "children": [
+    //             {
+    //                 "eid": "node_0",
+    //                 "type": "Node",
+    //             },
+    //             {
+    //                 "eid": "node_1",
+    //                 "type": "Node",
+    //             },
+    //             {
+    //                 "eid": "branch_0",
+    //                 "type": "Branch",
+    //                 "rel": ["node_0", "node_1"]
+    //             }
+    //         ]
+    //     }
+    // ]
 
     #[test]
     fn test_handle_request_create() {
@@ -587,58 +671,55 @@ mod tests {
         assert_eq!(result, Response::Reply(expect));
     }
 
-    /*
-    #[test]
-    fn test_handle_init_failure() -> Result<(), MosaikError> {
-        let mut simulator = MockMosaikApi::new();
-        let request = Request {
-            msg_id: 789,
-            method: "init".to_string(),
-            args: vec![json!("arg1"), json!("arg2")],
-            kwargs: Map::new(),
-        };
+    // ------------------------------------------------------------------------
 
-        simulator
-            .expect_init()
-            .with(eq(json!("arg1")), eq(1.0), eq(Map::new()))
-            .returning(|_, _, _| {
-                Err(MosaikError::ParseError(
-                    "Failed to initialize simulator".to_string(),
-                ))
-            });
+    // Request:
 
-            let expected_response = Response::Failure(vec![70, 97, 105, 108, 101, 100]);
-            let actual_response = handle_request(&mut simulator, request)?;
+    // ["setup_done", [], {}]
 
-        assert_eq!(actual_response, expected_response);
-        Ok(())
-    }*/
+    // Reply:
 
-    /*#[test]
-    fn test_handle_request() -> Result<(), MosaikError> {
-        let mut mock_simulator = MockMosaikApi::new();
+    // null
 
-        let mut models = Map::new();
-        models.insert("model_1".to_string(), json!(1)).unwrap();
-        models.insert("model_2".to_string(), json!(2)).unwrap();
-        models.insert("model_3".to_string(), json!(3)).unwrap();
-        mock_simulator
-            .expect_init()
-            .with(eq(1), eq(0.1), always())
-            .returning(|_, _, _| Meta::new("3.0", SimulatorType::default(), models));
+    // Request:
 
-        let request = Request {
-            msg_id: 0,
-            method: "init".to_string(),
-            args: vec![json!("hello"), json!("world")],
-            kwargs: Map::new(),
-        };
+    // [
+    //     "step",
+    //     [
+    //         60,
+    //         {
+    //               "node_1": {"P": [20, 3.14], "Q": [3, -2.5]},
+    //               "node_2": {"P": [42], "Q": [-23.2]},
+    //         }
+    //     ],
+    //     {}
+    // ]
 
-        let result = handle_request(&mut simulator, &request);
-        assert!(result.is_ok());
-        Ok(())
-    }*/
-    // ----
+    // Reply:
+
+    // 120
+
+    // Request:
+
+    // ["get_data", [{"branch_0": ["I"]}], {}]
+
+    // Reply:
+
+    // {
+    //     "branch_0": {
+    //         "I": 42.5
+    //     }
+    // }
+
+    // Request:
+
+    // ["stop", [], {}]
+
+    // Reply:
+
+    //     no reply required
+
+    // ------------------------------------------------------------------------
 
     #[test]
     fn untyped_example() -> serde_json::Result<()> {
@@ -738,117 +819,6 @@ mod tests {
 
         todo!()
     }
-
-    #[test]
-    #[ignore]
-    fn init() {
-        let _data = r#"[2, 1, "Error in your code line 23: ..."]"#;
-        let _full_data = r#"\x00\x00\x00\x29[2, 1, "Error in your code line 23: ..."]"#;
-
-        todo!()
-    }
-
-    //     Request:
-
-    // ["init", ["PowerGridSim-0"], {"step_size": 60}]
-
-    // Reply:
-
-    // {
-    //    "api_version": "2.2",
-    //    "models": {
-    //         "Grid": {
-    //             "public": true,
-    //             "params": ["topology_file"],
-    //             "attrs": []
-    //         },
-    //         "Node": {
-    //             "public": false,
-    //             "params": [],
-    //             "attrs": ["P", "Q"]
-    //         },
-    //         "Branch": {
-    //             "public": false,
-    //             "params": [],
-    //             "attrs": ["I", "I_max"]
-    //         }
-    //     }
-    // }
-
-    // Request:
-
-    // ["create", [1, "Grid"], {"topology_file": "data/grid.json"}]
-
-    // Reply:
-
-    // [
-    //     {
-    //         "eid": "Grid_1",
-    //         "type": "Grid",
-    //         "rel": [],
-    //         "children": [
-    //             {
-    //                 "eid": "node_0",
-    //                 "type": "Node",
-    //             },
-    //             {
-    //                 "eid": "node_1",
-    //                 "type": "Node",
-    //             },
-    //             {
-    //                 "eid": "branch_0",
-    //                 "type": "Branch",
-    //                 "rel": ["node_0", "node_1"]
-    //             }
-    //         ]
-    //     }
-    // ]
-
-    // Request:
-
-    // ["setup_done", [], {}]
-
-    // Reply:
-
-    // null
-
-    // Request:
-
-    // [
-    //     "step",
-    //     [
-    //         60,
-    //         {
-    //               "node_1": {"P": [20, 3.14], "Q": [3, -2.5]},
-    //               "node_2": {"P": [42], "Q": [-23.2]},
-    //         }
-    //     ],
-    //     {}
-    // ]
-
-    // Reply:
-
-    // 120
-
-    // Request:
-
-    // ["get_data", [{"branch_0": ["I"]}], {}]
-
-    // Reply:
-
-    // {
-    //     "branch_0": {
-    //         "I": 42.5
-    //     }
-    // }
-
-    // Request:
-
-    // ["stop", [], {}]
-
-    // Reply:
-
-    //     no reply required
 
     // Asynchronous requests
     //     Request:
