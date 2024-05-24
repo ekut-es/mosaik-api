@@ -36,7 +36,7 @@ pub struct OutputData {
     #[serde(flatten)]
     pub requests: HashMap<EntityId, HashMap<Attr, Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub time: Option<String>,  // FIXME should this be DateTime or something else?
+    pub time: Option<String>, // FIXME should this be DateTime or something else?
 }
 
 /// Description of a single model in `Meta`
