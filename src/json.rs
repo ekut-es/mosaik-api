@@ -923,33 +923,6 @@ mod tests {
 
         //info!("The length of the array: {}", length);*/
     }
-    #[test]
-    #[ignore]
-    fn request_example() {
-        let _data = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
-        let _full_data =
-            r#"\x00\x00\x00\x36[1, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
-
-        todo!();
-    }
-
-    #[test]
-    #[ignore]
-    fn return_success() {
-        let _data = r#"[1, 1, "the return value"]"#;
-        let _full_data = r#"\x00\x00\x00\x1a[1, 1, "the return value"]"#;
-
-        todo!();
-    }
-
-    #[test]
-    #[ignore]
-    fn return_error() {
-        let _data = r#"[2, 1, "Error in your code line 23: ..."]"#;
-        let _full_data = r#"\x00\x00\x00\x29[2, 1, "Error in your code line 23: ..."]"#;
-
-        todo!()
-    }
 
     // Asynchronous requests
     //     Request:
