@@ -165,11 +165,8 @@ mod tests {
     #[test]
     fn test_output_data() {
         // Example JSON data
-        let json_data = r#"{"eid_1": {"attr_1": "val_1", "attr_2": "val_2"},
-        "eid_2": {
-            "attr_1": "val_3",
-            "attr_2": "val_4"
-        },
+        let json_data = r#"{
+        "eid_1": {"attr_1": "val_1"},
         "time": "2024-05-24T12:00:00Z"
     }
     "#
@@ -184,6 +181,9 @@ mod tests {
         // Serialize EventData struct to JSON
         let serialized_json = serde_json::to_string(&data).unwrap();
         assert_eq!(serialized_json.contains("requests"), false);
+        assert_eq!(serialized_json.contains("time"), true);
+
+        assert_eq!(serialized_json, json_data);
     }
 
     #[test]
