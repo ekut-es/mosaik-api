@@ -43,7 +43,8 @@ impl MosaikMessage {
                     self.id
                 );
                 let error_response = json!([MSG_TYPE_REPLY_FAILURE, self.id, error_message]);
-                to_vec(&error_response).unwrap() // FIXME unwrap should be safe, because we know the error message is a short enough string
+                to_vec(&error_response)
+                    .expect("should not fail, because the error message is a short enough string")
             }
         }
     }
