@@ -14,6 +14,8 @@ pub enum MosaikError {
     ParseError(String),
     #[error("Serde JSON Error: {0}")]
     Serde(#[from] serde_json::Error),
+    #[error("Method not found: {0}")]
+    MethodNotFound(String),
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -163,20 +165,7 @@ pub fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Res
             simulator.stop();
             return Response::Stop;
         }
-        method => {
-            error!(
-                "Unimplemented method {:?} requested. Simulation should most likely stop now",
-                method
-            );
-            return Response::Reply(MosaikMessage {
-                msg_type: MsgType::ReplyFailure,
-                id: request.msg_id,
-                content: json!(format!(
-                    "Unimplemented method {:?} requested. Simulation should most likely stop now",
-                    method
-                )),
-            });
-        }
+        method => simulator.extra_method(method, &request.args, &request.kwargs),
     };
 
     match handle_result {

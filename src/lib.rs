@@ -185,6 +185,15 @@ pub trait MosaikApi: Send + 'static {
 
     ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon as the function returns.
     fn stop(&self);
+
+    fn extra_method(
+        &mut self,
+        method: &str,
+        args: &Vec<Value>,
+        kwargs: &Map<String, Value>,
+    ) -> Result<Value, crate::json::MosaikError> {
+        Err(crate::json::MosaikError::MethodNotFound(method.to_string()))
+    }
 }
 
 ///Async API calls, not implemented!
