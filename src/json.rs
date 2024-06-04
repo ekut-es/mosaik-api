@@ -461,7 +461,7 @@ mod tests {
             expect
         );
     }
-    // TODO maybe the next two tests are redundant
+
     #[test]
     fn test_parse_step_request() -> Result<(), MosaikError> {
         let valid_step_request = r#"
@@ -902,78 +902,6 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-
-    #[test]
-    fn untyped_example() -> serde_json::Result<()> {
-        // FIXME christoph, what is this code testing?
-        // Some JSON input data as a &str. Maybe this comes from the user.
-        let data = r#"
-        [0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
-
-        // Parse the string of data into serde_json::Value.
-        let payload = match serde_json::from_str(data)? {
-            Value::Array(vecs) if vecs.len() >= 3 => vecs,
-            _ => panic!("error!"),
-        };
-
-        assert_eq!(payload[0], 0);
-        let id: u64 = payload[1].as_u64().unwrap();
-        assert_eq!(id, 1);
-        if let Value::Array(call) = &payload[2] {
-            let method: &str = call[0].as_str().unwrap();
-            assert_eq!("my_func", method);
-            if let Value::Array(args) = &call[1] {
-                assert_eq!(args, &vec!["hello".to_string(), "world".to_string()]);
-            }
-            if let Value::Object(kwargs) = &call[2] {
-                let map = json!({"times": 23});
-                info!("{:?}", map);
-                assert_eq!(*kwargs.get("times").unwrap(), map["times"]);
-            }
-        }
-
-        // Access parts of the data by indexing with square brackets.
-        // info!(
-        //     "Please call {} at the number {}",
-        //     payload["name"], payload["phones"][0]
-        // );
-
-        Ok(())
-    }
-
-    #[test]
-    fn to_bytes() {
-        let _v = json!(["an", "array"]);
-        let _data1 = r#"[1, 1,
-        {
-            "api_version": "3.0",
-            "type": "time-based",
-            "models":{
-                "ExampleModel":{
-                    "public": true,
-                    "params": ["init_p_mw_pv"],
-                    "attrs": ["val", "kw"]
-                    }
-                }
-            }]"#;
-
-        let data = r#"[1, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
-        let data_value: Value = serde_json::from_str(data).unwrap();
-        let vect = to_vec(&data_value);
-        let vect_unwrapped = vect.unwrap();
-        let vect_unwrapped_length = vect_unwrapped.len();
-        let length_u32 = vect_unwrapped_length as u32;
-        let _big_endian = length_u32.to_be_bytes();
-
-        debug!("the length of r#: {}", data.len());
-        debug!("r# as string: {:?}", vect_unwrapped);
-        debug!("number of bytes: {}", vect_unwrapped_length);
-        /*let data_bytes = data.bytes();
-        let data_bytes_len = data_bytes.len();
-
-
-        //info!("The length of the array: {}", length);*/
-    }
 
     // Asynchronous requests
     //     Request:
