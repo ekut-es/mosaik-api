@@ -16,13 +16,13 @@ thiserror = "1.0.22"
 
 
 [dev-dependencies]
-enerdag-core = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-core = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
 
-enerdag-crypto = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
-enerdag-marketplace = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
-enerdag-time = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
-enerdag-currency = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
-enerdag-utils = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-crypto = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-marketplace = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-time = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-currency = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-utils = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
 chrono = { version = "0.4.11"}#, features = ["serde"] }
 #test_utilities = {path = "../enerdag/enerdag-core/test-utilities"}
 # enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
