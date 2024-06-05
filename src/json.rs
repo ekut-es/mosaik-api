@@ -9,7 +9,7 @@ use crate::MosaikApi;
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
-    // TODO separate error for handle_* functions?
+    // TODO separate errors for handle_* functions
     #[error("Parsing JSON Request: {0}")]
     ParseError(String),
     #[error("Serde JSON Error: {0}")]
@@ -183,7 +183,7 @@ pub fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Res
 }
 
 fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
-    /* TODO do we want this?
+    /* TODO fine granular error handling
     let sid: SimId = match serde_json::from_value(request.args[0].clone()) {
         Ok(sid) => sid,
         Err(e) => {
@@ -239,7 +239,7 @@ mod tests {
     use crate::{CreateResult, MockMosaikApi, OutputData, OutputRequest};
 
     use mockall::predicate::*;
-    use serde_json::{json, to_vec, Value};
+    use serde_json::json;
     use std::collections::HashMap;
 
     // --------------------------------------------------------------------------
@@ -625,7 +625,6 @@ mod tests {
             id: request.msg_id,
             content: json!("Serde JSON Error: invalid type: integer `0`, expected a string"),
         });
-        // TODO do we want a more concise Error message here?
         assert_eq!(actual, expected);
     }
 
