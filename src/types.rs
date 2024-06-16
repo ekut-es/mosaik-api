@@ -40,7 +40,7 @@ pub struct OutputData {
 }
 
 /// Description of a single model in `Meta`
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct ModelDescription {
     /// Whether the model can be created directly.
     pub public: bool,
@@ -75,7 +75,7 @@ impl ModelDescription {
 }
 
 /// The meta-data for a simulator.
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Meta {
     /// The API version that this simulator supports in the format "major.minor".
     pub api_version: &'static str,
@@ -104,7 +104,7 @@ impl Meta {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum SimulatorType {
     TimeBased,

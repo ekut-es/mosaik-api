@@ -15,13 +15,14 @@ use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
+    default_impl::{self, ApiHelpers},
     run_simulation,
     tcp::ConnectionDirection,
     types::{
         Attr, CreateResult, CreateResultChild, FullId, InputData, Meta, ModelDescription,
         ModelName, OutputData, OutputRequest, SimulatorType,
     },
-    ApiHelpers, DefaultMosaikApi, MosaikApi,
+    MosaikApi,
 };
 use sled::Db;
 
@@ -102,99 +103,8 @@ pub struct HouseholdBatterySim {
     time_resolution: f64,
 }
 
-impl DefaultMosaikApi for HouseholdBatterySim {}
-
-impl MosaikApi for HouseholdBatterySim {
-    ///Create *num* instances of *model* using the provided *model_params*.
-    /// *panics!* if more than one neighborhood is created.
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
-        DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
-    }
-
-    fn create(
-        &mut self,
-        num: usize,
-        model: String,
-        model_params: Map<Attr, Value>,
-    ) -> Vec<CreateResult> {
-        if num > 1 || self.neighborhood.is_some() {
-            todo!("Create Support for more  than one Neighborhood");
-        }
-        let mut out_vector = Vec::with_capacity(1);
-        let next_eid = self.get_mut_entities().len();
-
-        for i in next_eid..(next_eid + num) {
-            let nhdb = self.neighborhood.as_ref().unwrap();
-            let eid = nhdb.eid.clone();
-            self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-            let out_entity = CreateResult {
-                eid,
-                model_type: model.clone(),
-                children: self.add_model(model_params.clone()),
-                rel: None,
-                extra_info: None,
-            };
-            out_vector.push(out_entity);
-        }
-
-        debug!("the created model: {:?}", out_vector);
-        out_vector
-    }
-
-    fn setup_done(&self) {
-        info!("Setup done!")
-        //todo!()
-    }
-
-    /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
-    /// Just gives the inputs to [Neighborhood::step].
-    fn step(&mut self, time: usize, inputs: InputData, _max_advance: usize) -> Option<usize> {
-        // info!("Inputs; {:?}", inputs);
-
-        if let Some(nbhd) = &mut self.neighborhood {
-            nbhd.step(time, inputs);
-        }
-
-        Some(time + self.step_size as usize)
-    }
-
-    /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
-    /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
-    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
-        let mut data = OutputData {
-            requests: HashMap::new(),
-            time: None, // TODO get time from simulator
-        };
-
-        if let Some(nbhd) = &mut self.neighborhood {
-            nbhd.add_output_values(&outputs, &mut data);
-        }
-
-        data
-    }
-
-    fn stop(&self) {
-        warn!("Clearing all the Databases of the simulation!");
-        if let Some(nbhd) = &(self.neighborhood) {
-            for (_, household) in nbhd.households.iter() {
-                let hh_db = &household.db;
-                let trees = hh_db.tree_names();
-                for tree in trees {
-                    if let Ok(tree) = hh_db.open_tree(tree) {
-                        if let Err(e) = tree.clear() {
-                            warn!("Error clearing db {e}");
-                        }
-                    }
-                }
-            }
-        }
-
-        info!("Simulation has stopped!")
-    }
-}
-
 impl ApiHelpers for HouseholdBatterySim {
-    fn meta() -> Meta {
+    fn meta(&self) -> Meta {
         let neighborhood = ModelDescription::new(
             true,
             vec![
@@ -303,7 +213,7 @@ impl ApiHelpers for HouseholdBatterySim {
             enerdag_time::TimePeriod::create_period(date)
         };
 
-        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(self.get_next_neighborhood_eid(), start_time, household_configs, self.step_size);
+        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(self.get_next_neighborhood_eid(), start_time, household_configs, self.get_step_size());
 
         let mosaik_children = model.households_as_mosaik_children();
 
@@ -328,6 +238,95 @@ impl ApiHelpers for HouseholdBatterySim {
 
     fn set_time_resolution(&mut self, time_resolution: f64) {
         self.time_resolution = time_resolution;
+    }
+}
+
+impl MosaikApi for HouseholdBatterySim {
+    ///Create *num* instances of *model* using the provided *model_params*.
+    /// *panics!* if more than one neighborhood is created.
+    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
+        default_impl::default_init(self, sid, time_resolution, sim_params)
+    }
+
+    fn create(
+        &mut self,
+        num: usize,
+        model: String,
+        model_params: Map<Attr, Value>,
+    ) -> Vec<CreateResult> {
+        if num > 1 || self.neighborhood.is_some() {
+            todo!("Create Support for more  than one Neighborhood");
+        }
+        let mut out_vector = Vec::with_capacity(1);
+        let next_eid = self.entities.len();
+
+        for i in next_eid..(next_eid + num) {
+            let nhdb = self.neighborhood.as_ref().unwrap();
+            let eid = nhdb.eid.clone();
+            self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+            let out_entity = CreateResult {
+                eid,
+                model_type: model.clone(),
+                children: self.add_model(model_params.clone()),
+                rel: None,
+                extra_info: None,
+            };
+            out_vector.push(out_entity);
+        }
+
+        debug!("the created model: {:?}", out_vector);
+        out_vector
+    }
+
+    fn setup_done(&self) {
+        info!("Setup done!")
+        //todo!()
+    }
+
+    /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
+    /// Just gives the inputs to [Neighborhood::step].
+    fn step(&mut self, time: usize, inputs: InputData, _max_advance: usize) -> Option<usize> {
+        // info!("Inputs; {:?}", inputs);
+
+        if let Some(nbhd) = &mut self.neighborhood {
+            nbhd.step(time, inputs);
+        }
+
+        Some(time + self.step_size as usize)
+    }
+
+    /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
+    /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
+    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
+        let mut data = OutputData {
+            requests: HashMap::new(),
+            time: None, // TODO get time from simulator
+        };
+
+        if let Some(nbhd) = &mut self.neighborhood {
+            nbhd.add_output_values(&outputs, &mut data);
+        }
+
+        data
+    }
+
+    fn stop(&self) {
+        warn!("Clearing all the Databases of the simulation!");
+        if let Some(nbhd) = &(self.neighborhood) {
+            for (_, household) in nbhd.households.iter() {
+                let hh_db = &household.db;
+                let trees = hh_db.tree_names();
+                for tree in trees {
+                    if let Ok(tree) = hh_db.open_tree(tree) {
+                        if let Err(e) = tree.clear() {
+                            warn!("Error clearing db {e}");
+                        }
+                    }
+                }
+            }
+        }
+
+        info!("Simulation has stopped!")
     }
 }
 

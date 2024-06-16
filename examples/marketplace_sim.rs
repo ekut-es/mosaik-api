@@ -6,13 +6,13 @@ use structopt::StructOpt;
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use mosaik_rust_api::{
-    run_simulation,
+    default_impl, run_simulation,
     tcp::ConnectionDirection,
     types::{
         Attr, CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
         SimulatorType,
     },
-    ApiHelpers, DefaultMosaikApi, MosaikApi,
+    MosaikApi,
 };
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -47,15 +47,9 @@ pub fn main() /*-> Result<()>*/
     }
 }
 
-impl DefaultMosaikApi for MarketplaceSim {}
-
 impl MosaikApi for MarketplaceSim {
-    /*fn get_mut_params<T: ApiHelpers>(&mut self) -> &mut T {
-        &mut self
-    }*/
-
     fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
-        DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
+        default_impl::default_init(self, sid, time_resolution, sim_params)
     }
 
     fn create(
@@ -64,7 +58,7 @@ impl MosaikApi for MarketplaceSim {
         model_name: String,
         model_params: Map<Attr, Value>,
     ) -> Vec<CreateResult> {
-        DefaultMosaikApi::create(self, num, model_name, model_params)
+        default_impl::default_create(self, num, model_name, model_params)
     }
 
     fn setup_done(&self) {
@@ -73,11 +67,11 @@ impl MosaikApi for MarketplaceSim {
     }
 
     fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
-        DefaultMosaikApi::step(self, time, inputs, max_advance)
+        default_impl::default_step(self, time, inputs, max_advance)
     }
 
     fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
-        DefaultMosaikApi::get_data(self, outputs)
+        default_impl::default_get_data(self, outputs)
     }
 
     fn stop(&self) {
@@ -95,8 +89,8 @@ pub struct MarketplaceSim {
 }
 
 //Implementation of the helpers defined in the library
-impl ApiHelpers for MarketplaceSim {
-    fn meta() -> Meta {
+impl default_impl::ApiHelpers for MarketplaceSim {
+    fn meta(&self) -> Meta {
         let model1 = ModelDescription::new(
             true,
             vec!["init_reading".to_string()],
@@ -138,9 +132,11 @@ impl ApiHelpers for MarketplaceSim {
 
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
-            let model = Model::initmodel(init_reading);
+            let model = Model::new(init_reading);
             self.models.push(model);
             self.data.push(vec![]); //Add list for simulation data
+        } else {
+            error!("No init_reading given for model.");
         }
         None
     }
@@ -233,7 +229,7 @@ pub struct Model {
 }
 
 impl Model {
-    fn initmodel(init_reading: f64) -> Model {
+    fn new(init_reading: f64) -> Model {
         Model {
             households: HashMap::new(),
             trades: 0,
