@@ -6,7 +6,7 @@ use std::{collections::HashMap, todo};
 
 use log::error;
 use mosaik_rust_api::{
-    default_impl::{self, ApiHelpers},
+    default_api::{self, ApiHelpers},
     types::{
         Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
         SimulatorType,
@@ -198,7 +198,7 @@ impl ApiHelpers for RExampleSim {
 
 impl MosaikApi for RExampleSim {
     fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
-        default_impl::default_init(self, sid, time_resolution, sim_params)
+        default_api::default_init(self, sid, time_resolution, sim_params)
     }
     fn create(
         &mut self,
@@ -243,7 +243,7 @@ impl MosaikApi for RExampleSim {
     }
 
     fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
-        default_impl::default_get_data(self, outputs)
+        default_api::default_get_data(self, outputs)
     }
 
     fn setup_done(&self) {

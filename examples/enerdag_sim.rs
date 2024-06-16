@@ -15,7 +15,7 @@ use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
-    default_impl::{self, ApiHelpers},
+    default_api::{self, ApiHelpers},
     run_simulation,
     tcp::ConnectionDirection,
     types::{
@@ -245,7 +245,7 @@ impl MosaikApi for HouseholdBatterySim {
     ///Create *num* instances of *model* using the provided *model_params*.
     /// *panics!* if more than one neighborhood is created.
     fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
-        default_impl::default_init(self, sid, time_resolution, sim_params)
+        default_api::default_init(self, sid, time_resolution, sim_params)
     }
 
     fn create(
