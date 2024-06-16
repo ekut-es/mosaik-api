@@ -1,7 +1,7 @@
+pub mod default_api;
 pub mod json;
 pub mod tcp;
 pub mod types;
-pub mod default_api;
 
 #[cfg(test)]
 use mockall::automock;
