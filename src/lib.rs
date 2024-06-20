@@ -22,15 +22,15 @@ pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> 
     task::block_on(build_connection(addr, simulator))
 }
 
-///the class for the "empty" API calls
 #[cfg_attr(test, automock)]
+/// The MosaikApi trait defines the interface for a Mosaik simulator API.
 pub trait MosaikApi: Send + 'static {
-    /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik.
-    /// Return the meta data meta.
+    /// Initialize the simulator with the specified ID (`sid`), time resolution (`time_resolution`), and additional parameters (`sim_params`).
+    /// Returns the meta data (`Meta`) of the simulator.
     fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta;
 
-    ///Create *num* instances of *model* using the provided *model_params*.
-    /// Returned list must have the same length as *num*
+    /// Create `num` instances of the specified `model_name` using the provided `model_params`.
+    /// The returned list must have the same length as `num`.
     fn create(
         &mut self,
         num: usize,
@@ -38,19 +38,24 @@ pub trait MosaikApi: Send + 'static {
         model_params: Map<Attr, Value>,
     ) -> Vec<CreateResult>;
 
-    ///The function mosaik calls, if the init() and create() calls are done. Return Null
+    /// This function is called by Mosaik when the `init()` and `create()` calls are done.
+    /// Returns `Null`.
     fn setup_done(&self);
 
-    /// Perform the next simulation step at time and return the new simulation time (the time at which step should be called again)
-    ///  or null if the simulator doesn’t need to step itself.
+    /// Perform the next simulation step at `time` and return the new simulation time (the time at which `step` should be called again),
+    /// or `None` if the simulator doesn't need to step itself.
     fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize>;
 
-    //collect data from the simulation and return a nested Vector containing the information
+    /// Collect data from the simulation and return a nested vector (`OutputData`) containing the information.
     fn get_data(&mut self, outputs: OutputRequest) -> OutputData;
 
-    ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon as the function returns.
+    /// This function is called by Mosaik when the simulation is finished.
+    /// Returns `Null`. The simulation API stops as soon as the function returns.
     fn stop(&self);
 
+    /// A wrapper for extra methods that can be implemented by the simulator.
+    /// This method is not required by the Mosaik API, but can be used for additional functionality.
+    /// Returns a `Result` containing the result of the method call or a `MosaikError` if the method is not found.
     fn extra_method(
         &mut self,
         method: &str,
