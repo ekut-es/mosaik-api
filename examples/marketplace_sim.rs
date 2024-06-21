@@ -84,9 +84,8 @@ impl MosaikApi for MarketplaceSim {
         default_api::default_get_data(self, outputs)
     }
 
-    fn stop(&self) -> Result<(), String> {
+    fn stop(&self) {
         info!("Simulation has stopped! Nothing to clean up.");
-        Ok(())
     }
 }
 pub struct MarketplaceSim {

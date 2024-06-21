@@ -4,10 +4,9 @@ use log::*;
 use serde::ser::{Serialize, SerializeTuple, Serializer};
 use serde::{Deserialize, Deserializer};
 use serde_json::{json, map::Map, to_vec, Value};
-
 use thiserror::Error;
 
-use crate::{Meta, MosaikApi, SimId};
+use crate::MosaikApi;
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
@@ -161,7 +160,11 @@ pub fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Res
         "step" => handle_step(simulator, request),
         "get_data" => handle_get_data(simulator, request),
         "setup_done" => handle_setup_done(simulator),
-        "stop" => handle_stop(simulator),
+        "stop" => {
+            debug!("Received stop request");
+            simulator.stop();
+            return Response::Stop;
+        }
         method => simulator.extra_method(method, &request.args, &request.kwargs),
     };
 
@@ -238,13 +241,6 @@ fn handle_get_data<T: MosaikApi>(
 
 fn handle_setup_done<T: MosaikApi>(simulator: &mut T) -> Result<Value, MosaikError> {
     match simulator.setup_done() {
-        Ok(_) => Ok(json!(null)),
-        Err(e) => Err(MosaikError::UserError(e)),
-    }
-}
-
-fn handle_stop<T: MosaikApi>(simulator: &mut T) -> Result<Value, MosaikError> {
-    match simulator.stop() {
         Ok(_) => Ok(json!(null)),
         Err(e) => Err(MosaikError::UserError(e)),
     }
@@ -641,7 +637,7 @@ mod tests {
         let expected = Response::Reply(MosaikMessage {
             msg_type: MsgType::ReplyFailure,
             id: request.msg_id,
-            content: json!("Serde JSON Error: invalid type: integer `0`, expected a string"),
+            content: json!("Parsing JSON Request: Failed to parse SimId: invalid type: integer `0`, expected a string"),
         });
         assert_eq!(actual, expected);
     }
@@ -912,7 +908,7 @@ mod tests {
             .expect_stop()
             .once()
             .with()
-            .returning(move || Ok(()));
+            .returning(move || ());
 
         let result = handle_request(&mut mock_simulator, &request);
         assert_eq!(result, Response::Stop);

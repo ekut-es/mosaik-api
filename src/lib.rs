@@ -61,7 +61,7 @@ pub trait MosaikApi: Send + 'static {
 
     /// This function is called by Mosaik when the simulation is finished.
     /// Returns `Null`. The simulation API stops as soon as the function returns.
-    fn stop(&self) -> Result<(), String>;
+    fn stop(&self);
 
     /// A wrapper for extra methods that can be implemented by the simulator.
     /// This method is not required by the Mosaik API, but can be used for additional functionality.

@@ -1,3 +1,5 @@
+//! The async TCP-Manager for the communication between Mosaik and the simulators.
+
 use crate::{json, MosaikApi};
 use json::Response;
 
@@ -9,10 +11,6 @@ use async_std::{
 use futures::{channel::mpsc, select, sink::SinkExt, FutureExt};
 use log::{debug, error, info, trace};
 use std::{future::Future, net::SocketAddr, sync::Arc};
-
-//------------------------------------------------------------------
-// Here begins the async TCP-Manager
-//------------------------------------------------------------------
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 //channels needed for the communication in the async tcp
