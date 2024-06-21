@@ -205,15 +205,21 @@ impl ApiHelpers for RExampleSim {
 }
 
 impl MosaikApi for RExampleSim {
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
+    fn init(
+        &mut self,
+        sid: String,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<Meta, String> {
         default_api::default_init(self, sid, time_resolution, sim_params)
     }
+
     fn create(
         &mut self,
         num: usize,
         model_name: String,
         _model_params: Map<Attr, Value>,
-    ) -> Vec<CreateResult> {
+    ) -> Result<Vec<CreateResult>, String> {
         let next_eid = self.entities.len();
         let mut result: Vec<CreateResult> = Vec::new();
 
@@ -229,10 +235,15 @@ impl MosaikApi for RExampleSim {
 
         // entities must have length of num
         assert_eq!(result.len(), num); // TODO improve error handling
-        result
+        Ok(result)
     }
 
-    fn step(&mut self, time: Time, inputs: InputData, _max_advance: usize) -> Option<Time> {
+    fn step(
+        &mut self,
+        time: Time,
+        inputs: InputData,
+        _max_advance: Time,
+    ) -> Result<Option<i64>, String> {
         self.time = time;
         // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
@@ -247,18 +258,20 @@ impl MosaikApi for RExampleSim {
             model_instance.step();
         }
 
-        Some(time + 1) // Step size is 1 second
+        Ok(Some(time + 1)) // Step size is 1 second
     }
 
-    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
+    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
         default_api::default_get_data(self, outputs)
     }
 
-    fn setup_done(&self) {
+    fn setup_done(&self) -> Result<(), String> {
         // Nothing to do
+        Ok(())
     }
 
-    fn stop(&self) {
+    fn stop(&self) -> Result<(), String> {
         // Nothing to do
+        Ok(())
     }
 }

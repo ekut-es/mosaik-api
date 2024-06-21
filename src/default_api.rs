@@ -96,7 +96,7 @@ pub fn default_init<T: ApiHelpers>(
     sid: SimId,
     time_resolution: f64,
     sim_params: Map<String, Value>,
-) -> Meta {
+) -> Result<Meta, String> {
     if time_resolution <= 0.0 {
         debug!("Non positive time resolution was given!");
     }
@@ -111,8 +111,9 @@ pub fn default_init<T: ApiHelpers>(
                 if let Some(step_size) = step_size.as_i64() {
                     simulator.set_step_size(step_size);
                 } else {
-                    error!("Step size is not a valid number: {:?}", step_size);
-                    // TODO return error
+                    let e = format!("Step size is not a valid number: {:?}", step_size);
+                    error!("{}", e);
+                    return Err(e);
                 }
             }
             _ => {
@@ -121,7 +122,7 @@ pub fn default_init<T: ApiHelpers>(
         }
     }
 
-    simulator.meta()
+    Ok(simulator.meta())
 }
 
 /// The default implementation for the create function.
@@ -131,7 +132,7 @@ pub fn default_create<T: ApiHelpers>(
     num: usize,
     model_name: ModelName,
     model_params: Map<Attr, Value>,
-) -> Vec<CreateResult> {
+) -> Result<Vec<CreateResult>, String> {
     let next_eid = simulator.get_mut_entities().len();
     let mut out_vector = Vec::new();
     for i in next_eid..(next_eid + num) {
@@ -152,7 +153,7 @@ pub fn default_create<T: ApiHelpers>(
     }
 
     debug!("the created entities: {:?}", out_vector);
-    out_vector
+    Ok(out_vector)
 }
 
 /// The default implementation for the step function.
@@ -161,8 +162,8 @@ pub fn default_step<T: ApiHelpers>(
     simulator: &mut T,
     time: Time,
     inputs: InputData,
-    _max_advance: usize,
-) -> Option<Time> {
+    _max_advance: Time,
+) -> Result<Option<Time>, String> {
     trace!("the inputs in step: {:?}", inputs);
     simulator.set_time(time);
     // Check for new delta and do step for each model instance:
@@ -182,12 +183,15 @@ pub fn default_step<T: ApiHelpers>(
     }
     simulator.sim_step(deltas);
 
-    Some(time + simulator.get_step_size())
+    Ok(Some(time + simulator.get_step_size()))
 }
 
 /// The default implementation for the get_data function.
 /// Allows to get `attr` values of the model instances.
-pub fn default_get_data<T: ApiHelpers>(simulator: &mut T, outputs: OutputRequest) -> OutputData {
+pub fn default_get_data<T: ApiHelpers>(
+    simulator: &mut T,
+    outputs: OutputRequest,
+) -> Result<OutputData, String> {
     let mut data: HashMap<String, HashMap<Attr, Value>> = HashMap::new();
     for (eid, attrs) in outputs.into_iter() {
         let model_idx = simulator
@@ -213,8 +217,8 @@ pub fn default_get_data<T: ApiHelpers>(simulator: &mut T, outputs: OutputRequest
         }
         data.insert(eid, attribute_values);
     }
-    OutputData {
+    Ok(OutputData {
         requests: data,
         time: Some(simulator.get_time()),
-    }
+    })
 }

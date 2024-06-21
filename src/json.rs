@@ -7,7 +7,7 @@ use serde_json::{json, map::Map, to_vec, Value};
 
 use thiserror::Error;
 
-use crate::MosaikApi;
+use crate::{Meta, MosaikApi, SimId};
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
@@ -18,6 +18,8 @@ pub enum MosaikError {
     Serde(#[from] serde_json::Error),
     #[error("Method not found: {0}")]
     MethodNotFound(String),
+    #[error("User generated Error: {0}")]
+    UserError(String),
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -158,15 +160,8 @@ pub fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Res
         "create" => handle_create(simulator, request),
         "step" => handle_step(simulator, request),
         "get_data" => handle_get_data(simulator, request),
-        "setup_done" => {
-            simulator.setup_done();
-            Ok(Value::Null)
-        }
-        "stop" => {
-            debug!("Received stop command!");
-            simulator.stop();
-            return Response::Stop;
-        }
+        "setup_done" => handle_setup_done(simulator),
+        "stop" => handle_stop(simulator),
         method => simulator.extra_method(method, &request.args, &request.kwargs),
     };
 
@@ -185,53 +180,74 @@ pub fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Res
 }
 
 fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
-    /* TODO fine granular error handling
-    let sid: SimId = match serde_json::from_value(request.args[0].clone()) {
-        Ok(sid) => sid,
-        Err(e) => {
-            return Err(MosaikError::ParseError(format!(
-                "Could not parse Simulator ID from Mosaik Message args: {}",
-                e
-            )))
-        }
-    };*/
+    let sid = serde_json::from_value(request.args[0].clone())
+        .map_err(|err| MosaikError::ParseError(format!("Failed to parse SimId: {}", err)))?;
+    let time_resolution = request
+        .kwargs
+        .get("time_resolution")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(1.0f64);
+    let sim_params = request.kwargs.clone();
 
-    Ok(serde_json::to_value(
-        simulator.init(
-            serde_json::from_value(request.args[0].clone())?, // sid,
-            request
-                .kwargs
-                .get("time_resolution")
-                .and_then(|value| value.as_f64())
-                .unwrap_or(1.0f64),
-            request.kwargs.clone(),
-        ),
-    )?)
+    match simulator.init(sid, time_resolution, sim_params) {
+        Ok(meta) => Ok(serde_json::to_value(meta)?),
+        Err(e) => Err(MosaikError::UserError(e)),
+    }
 }
 
 fn handle_create<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
-    Ok(serde_json::to_value(simulator.create(
-        serde_json::from_value(request.args[0].clone())?,
-        serde_json::from_value(request.args[1].clone())?,
-        request.kwargs.clone(),
-    ))?)
+    let num = serde_json::from_value(request.args[0].clone()).map_err(|e| {
+        MosaikError::ParseError(format!("Failed to parse number of instances: {}", e))
+    })?;
+    let model_name = serde_json::from_value(request.args[1].clone())
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse model name: {}", e)))?;
+    let kwargs = request.kwargs.clone();
+
+    match simulator.create(num, model_name, kwargs) {
+        Ok(create_result) => Ok(serde_json::to_value(create_result)?),
+        Err(e) => Err(MosaikError::UserError(e)),
+    }
 }
 
 fn handle_step<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
-    Ok(Value::from(simulator.step(
-        serde_json::from_value(request.args[0].clone())?,
-        serde_json::from_value(request.args[1].clone())?,
-        serde_json::from_value(request.args[2].clone())?,
-    ))) // add handling of optional return
+    let time = serde_json::from_value(request.args[0].clone())
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse time: {}", e)))?;
+    let inputs = serde_json::from_value(request.args[1].clone())
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse inputs: {}", e)))?;
+    let max_advance = serde_json::from_value(request.args[2].clone())
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse max_advance: {}", e)))?;
+
+    match simulator.step(time, inputs, max_advance) {
+        Ok(value) => Ok(serde_json::to_value(value)?),
+        Err(e) => Err(MosaikError::UserError(e)),
+    }
 }
 
 fn handle_get_data<T: MosaikApi>(
     simulator: &mut T,
     request: &Request,
 ) -> Result<Value, MosaikError> {
-    Ok(serde_json::to_value(simulator.get_data(
-        serde_json::from_value(request.args[0].clone())?,
-    ))?)
+    let outputs = serde_json::from_value(request.args[0].clone())
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse output request: {}", e)))?;
+
+    match simulator.get_data(outputs) {
+        Ok(output_data) => Ok(serde_json::to_value(output_data)?),
+        Err(e) => Err(MosaikError::UserError(e)),
+    }
+}
+
+fn handle_setup_done<T: MosaikApi>(simulator: &mut T) -> Result<Value, MosaikError> {
+    match simulator.setup_done() {
+        Ok(_) => Ok(json!(null)),
+        Err(e) => Err(MosaikError::UserError(e)),
+    }
+}
+
+fn handle_stop<T: MosaikApi>(simulator: &mut T) -> Result<Value, MosaikError> {
+    match simulator.stop() {
+        Ok(_) => Ok(json!(null)),
+        Err(e) => Err(MosaikError::UserError(e)),
+    }
 }
 
 #[cfg(test)]
@@ -590,7 +606,7 @@ mod tests {
             .expect_init()
             .once()
             .with(eq("simID-1".to_string()), eq(1.0), eq(Map::new()))
-            .returning(|_, _, _| Meta::new("3.0", SimulatorType::default(), HashMap::new()));
+            .returning(|_, _, _| Ok(Meta::new("3.0", SimulatorType::default(), HashMap::new())));
 
         let payload = json!(Meta::new("3.0", SimulatorType::default(), HashMap::new()));
         let actual_response = handle_request(&mut simulator, &request);
@@ -723,7 +739,7 @@ mod tests {
             .expect_create()
             .once()
             .with(eq(1), eq("Grid".to_string()), eq(request.kwargs.clone()))
-            .returning(move |_, _, _| vec![cr.clone()]);
+            .returning(move |_, _, _| Ok(vec![cr.clone()]));
 
         let result = handle_request(&mut mock_simulator, &request);
         assert_eq!(result, Response::Reply(expect));
@@ -758,7 +774,7 @@ mod tests {
             .expect_setup_done()
             .once()
             .with()
-            .returning(move || ());
+            .returning(move || Ok(()));
 
         let result = handle_request(&mut mock_simulator, &request);
         assert_eq!(result, Response::Reply(expect));
@@ -817,7 +833,7 @@ mod tests {
                 eq(serde_json::from_value::<InputData>(request.args[1].clone()).unwrap()),
                 eq(3600),
             )
-            .returning(move |_, _, _| Some(120));
+            .returning(move |_, _, _| Ok(Some(120)));
 
         let result = handle_request(&mut mock_simulator, &request);
         assert_eq!(result, Response::Reply(expect));
@@ -860,8 +876,10 @@ mod tests {
             )
             .unwrap()))
             .returning(move |_| {
-                serde_json::from_value::<OutputData>(json!({"branch_0": {"I": 42.5}, "time": 123}))
-                    .unwrap()
+                Ok(serde_json::from_value::<OutputData>(
+                    json!({"branch_0": {"I": 42.5}, "time": 123}),
+                )
+                .unwrap())
             });
 
         let result = handle_request(&mut mock_simulator, &request);
@@ -894,7 +912,7 @@ mod tests {
             .expect_stop()
             .once()
             .with()
-            .returning(move || ());
+            .returning(move || Ok(()));
 
         let result = handle_request(&mut mock_simulator, &request);
         assert_eq!(result, Response::Stop);
