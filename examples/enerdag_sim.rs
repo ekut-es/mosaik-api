@@ -309,7 +309,7 @@ impl MosaikApi for HouseholdBatterySim {
     fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
         let mut data = OutputData {
             requests: HashMap::new(),
-            time: None, // TODO get time from simulator
+            time: Some(self.time),
         };
 
         if let Some(nbhd) = &mut self.neighborhood {

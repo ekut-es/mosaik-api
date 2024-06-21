@@ -317,7 +317,7 @@ mod tests {
             msg_type: MsgType::ReplySuccess,
             id: 123,
             content: json!(map),
-            // FIXME json!(vec![0u64; usize::MAX]), // this Error occurs before the handling and will panic!
+            // NOTE json!(vec![0u64; usize::MAX]), // this Error occurs before the handling and will panic!
         }
         .serialize_to_vec();
         // TODO how to test for serialize Error?
