@@ -7,46 +7,85 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 /// Some helper functions for the default API.
-/// [function_name] tells you where the function is used.
 pub trait ApiHelpers {
-    /// [init] Gets the meta from the simulator.
+    /// Retrieves the metadata associated with the current instance.
+    ///
+    /// # Used in:
+    /// - [default_init]
     fn meta(&self) -> Meta;
 
-    /// [init] Set the `eid_prefix` on the simulator, which we got from the interface.
+    /// Set the `eid_prefix` on the simulator, which we got from the interface.
+    ///
+    /// # Used in:
+    /// - [default_init]
     fn set_eid_prefix(&mut self, eid_prefix: &str);
 
-    /// [init] Set the step_size on the simulator, which we got from the interface.
+    /// Set the step_size on the simulator, which we got from the interface.
+    ///
+    /// # Used in:
+    /// - [default_init]
     fn set_step_size(&mut self, step_size: i64);
 
-    /// [create] Get the eid_prefix.
+    ///Get the eid_prefix.
+    ///
+    /// # Used in:
+    /// - [default_create]
     fn get_eid_prefix(&self) -> &str;
 
-    /// [step] Get the step_size for the api call step().
+    /// Get the step_size in the api call step().
+    ///
+    /// # Used in:
+    /// - [default_step]
     fn get_step_size(&self) -> i64;
 
-    /// [create, step, get_data] Get the list containing the created entities.
+    /// Get the list containing the created entities.
+    ///
+    /// # Used in:
+    /// - [default_create]
+    /// - [default_get_data]
+    /// - [default_step]
     fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value>;
 
-    /// [create] Create a model instance (= entity) with an initial value. Returns the
+    /// Create a model instance (= entity) with an initial value. Returns the
     /// [types](CreateResultChild) representation of the children, if the entity has children.
+    ///
+    /// # Used in:
+    /// - [default_create]
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>>;
 
-    /// [get_data] Get the value from an entity.
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>; // FIXME: Should this be a Result?
+    /// Get the value from an entity.
+    ///
+    /// # Used in:
+    /// - [default_get_data]
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
 
-    /// [step] Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
+    /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
+    ///
+    /// # Used in:
+    /// - [default_step]
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
 
-    /// [nowhere] Get the time resolution of the Simulator.
+    /// Get the time resolution of the Simulator.
+    ///
+    /// # Used in:
+    ///
     fn get_time_resolution(&self) -> f64;
 
-    /// [init] Set the time resolution of the Simulator.
+    /// Set the time resolution of the Simulator.
+    ///
+    /// # Used in:
+    /// - [default_init]
     fn set_time_resolution(&mut self, time_resolution: f64);
 
-    /// [step] Set the time of the Simulator.
+    /// Set the time of the Simulator.
+    /// # Used in:
+    /// - [default_step]
     fn set_time(&mut self, time: Time);
 
-    /// [get_data] Get the time of the Simulator.
+    /// Get the time of the Simulator.
+    ///
+    /// # Used in:
+    /// - [default_get_data]
     fn get_time(&self) -> Time;
 }
 
