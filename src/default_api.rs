@@ -31,8 +31,8 @@ pub trait ApiHelpers {
     /// [types](CreateResultChild) representation of the children, if the entity has children.
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>>;
 
-    /// [get_data] Get the value from a entity.
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
+    /// [get_data] Get the value from an entity.
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>; // FIXME: Should this be a Result?
 
     /// [step] Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
@@ -63,16 +63,21 @@ pub fn default_init<T: ApiHelpers>(
     }
     simulator.set_time_resolution(time_resolution.abs());
 
-    for (key, value) in sim_params {
+    for (key, value) in sim_params.into_iter() {
         match (key.as_str(), value) {
             ("eid_prefix", Value::String(eid_prefix)) => {
                 simulator.set_eid_prefix(eid_prefix.as_str());
             }
             ("step_size", Value::Number(step_size)) => {
-                simulator.set_step_size(step_size.as_i64().unwrap());
+                if let Some(step_size) = step_size.as_i64() {
+                    simulator.set_step_size(step_size);
+                } else {
+                    error!("Step size is not a valid number: {:?}", step_size);
+                    // TODO return error
+                }
             }
             _ => {
-                info!("Unknown parameter: {}", key);
+                info!("Init: Unknown parameter: {}", key);
             }
         }
     }
@@ -80,19 +85,22 @@ pub fn default_init<T: ApiHelpers>(
     simulator.meta()
 }
 
+/// The default implementation for the create function.
+/// Adds the entities to the simulator and returns the [types](CreateResult) representation of the created entities.
 pub fn default_create<T: ApiHelpers>(
     simulator: &mut T,
     num: usize,
-    model_name: String,
+    model_name: ModelName,
     model_params: Map<Attr, Value>,
 ) -> Vec<CreateResult> {
-    let mut out_vector = Vec::new();
     let next_eid = simulator.get_mut_entities().len();
+    let mut out_vector = Vec::new();
     for i in next_eid..(next_eid + num) {
+        let model_instance = Value::from(i); // TODO check if this is correct
         let eid = format!("{}{}", simulator.get_eid_prefix(), i);
         simulator
             .get_mut_entities()
-            .insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+            .insert(eid.clone(), model_instance); // create a mapping from the entity ID to our model
         let out_entity = CreateResult {
             eid,
             model_type: model_name.clone(),
@@ -135,34 +143,39 @@ pub fn default_step<T: ApiHelpers>(
     }
     simulator.sim_step(deltas);
 
-    Some(time + (simulator.get_step_size() as usize))
+    Some(time + simulator.get_step_size())
 }
 
+/// The default implementation for the get_data function.
+/// Allows to get `attr` values of the model instances.
 pub fn default_get_data<T: ApiHelpers>(simulator: &mut T, outputs: OutputRequest) -> OutputData {
     let mut data: HashMap<String, HashMap<Attr, Value>> = HashMap::new();
     for (eid, attrs) in outputs.into_iter() {
-        let model_idx = match simulator.get_mut_entities().get(&eid) {
-            Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
-            _ => panic!("No correct model eid available."),
-        };
+        let model_idx = simulator
+            .get_mut_entities()
+            .get(&eid)
+            .and_then(|eid| eid.as_u64())
+            .expect("No correct model eid available.");
+
         let mut attribute_values: HashMap<Attr, Value> = HashMap::new();
         for attr in attrs.into_iter() {
             //Get the values of the model
-            if let Some(value) = simulator.get_model_value(model_idx, &attr) {
-                attribute_values.insert(attr, value);
-            } else {
-                error!(
-                    "No attribute called {} available in model {}",
-                    &attr, model_idx
-                );
+            match simulator.get_model_value(model_idx, &attr) {
+                Some(value) => {
+                    attribute_values.insert(attr, value);
+                }
+                None => {
+                    error!(
+                        "Unknown output attribute `{}` for model {}",
+                        &attr, model_idx
+                    );
+                }
             }
         }
         data.insert(eid, attribute_values);
     }
     OutputData {
         requests: data,
-        time: None,
+        time: Some(simulator.get_time()),
     }
-    // TODO https://mosaik.readthedocs.io/en/latest/mosaik-api/low-level.html#get-data
-    // api-v3 needs optional 'time' entry in output map for event-based and hybrid Simulators
 }
