@@ -36,7 +36,7 @@ pub struct OutputData {
     #[serde(flatten)]
     pub requests: HashMap<EntityId, HashMap<Attr, Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub time: Option<String>,
+    pub time: Option<Time>,
 }
 
 /// Description of a single model in `Meta`
@@ -167,7 +167,7 @@ mod tests {
         // Example JSON data
         let json_data = r#"{
         "eid_1": {"attr_1": "val_1"},
-        "time": "2024-05-24T12:00:00Z"
+        "time": 64
     }
     "#
         .replace("\n", "")
@@ -176,7 +176,7 @@ mod tests {
         // Deserialize JSON to OutputData struct
         let data: OutputData = serde_json::from_str(&json_data).unwrap();
         assert_ne!(data.requests, HashMap::new());
-        assert_eq!(data.time, Some("2024-05-24T12:00:00Z".to_string()));
+        assert_eq!(data.time, Some(64));
 
         // Serialize EventData struct to JSON
         let serialized_json = serde_json::to_string(&data).unwrap();

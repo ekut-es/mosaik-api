@@ -44,7 +44,7 @@ pub trait MosaikApi: Send + 'static {
 
     /// Perform the next simulation step at `time` and return the new simulation time (the time at which `step` should be called again),
     /// or `None` if the simulator doesn't need to step itself.
-    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize>;
+    fn step(&mut self, time: Time, inputs: InputData, max_advance: usize) -> Option<Time>; // TODO max_advance as Time? enerdag TimePeriod?
 
     /// Collect data from the simulation and return a nested vector (`OutputData`) containing the information.
     fn get_data(&mut self, outputs: OutputRequest) -> OutputData;

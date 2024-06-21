@@ -1,36 +1,57 @@
 //! This module contains some default implementations for the mosaik API functions.
 
 use crate::types::*;
+use core::panic;
 use log::{debug, error, info, trace};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
+/// Some helper functions for the default API.
+/// [function_name] tells you where the function is used.
 pub trait ApiHelpers {
-    /// Gets the meta from the simulator, needs to be implemented on the simulator side.
+    /// [init] Gets the meta from the simulator.
     fn meta(&self) -> Meta;
-    /// Set the eid\_prefix on the simulator, which we got from the interface.
+
+    /// [init] Set the `eid_prefix` on the simulator, which we got from the interface.
     fn set_eid_prefix(&mut self, eid_prefix: &str);
-    /// Set the step_size on the simulator, which we got from the interface.
+
+    /// [init] Set the step_size on the simulator, which we got from the interface.
     fn set_step_size(&mut self, step_size: i64);
-    /// Get the eid_prefix.
+
+    /// [create] Get the eid_prefix.
     fn get_eid_prefix(&self) -> &str;
-    /// Get the step_size for the api call step().
+
+    /// [step] Get the step_size for the api call step().
     fn get_step_size(&self) -> i64;
-    /// Get the list containing the created entities.
+
+    /// [create, step, get_data] Get the list containing the created entities.
     fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value>;
-    /// Create a model instance (= entity) with an initial value. Returns the
+
+    /// [create] Create a model instance (= entity) with an initial value. Returns the
     /// [types](CreateResultChild) representation of the children, if the entity has children.
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>>;
-    /// Get the value from a entity.
+
+    /// [get_data] Get the value from a entity.
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
-    /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
+
+    /// [step] Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
-    // Get the time resolution of the Simulator.
+
+    /// [nowhere] Get the time resolution of the Simulator.
     fn get_time_resolution(&self) -> f64;
-    // Set the time resolution of the Simulator.
+
+    /// [init] Set the time resolution of the Simulator.
     fn set_time_resolution(&mut self, time_resolution: f64);
+
+    /// [step] Set the time of the Simulator.
+    fn set_time(&mut self, time: Time);
+
+    /// [get_data] Get the time of the Simulator.
+    fn get_time(&self) -> Time;
 }
 
+/// The default implementation for the init function.
+/// This function sets the time resolution and sets eid prefix and step size if they are given in the `sim_params`.
 pub fn default_init<T: ApiHelpers>(
     simulator: &mut T,
     sid: SimId,
@@ -83,17 +104,21 @@ pub fn default_create<T: ApiHelpers>(
         out_vector.push(out_entity);
     }
 
-    debug!("the created model: {:?}", out_vector);
+    debug!("the created entities: {:?}", out_vector);
     out_vector
 }
 
+/// The default implementation for the step function.
+/// Gets the model deltas and calls the simulation step function on the simulator.
 pub fn default_step<T: ApiHelpers>(
     simulator: &mut T,
-    time: usize,
+    time: Time,
     inputs: InputData,
     _max_advance: usize,
-) -> Option<usize> {
+) -> Option<Time> {
     trace!("the inputs in step: {:?}", inputs);
+    simulator.set_time(time);
+    // Check for new delta and do step for each model instance:
     let mut deltas: Vec<(EntityId, u64, Map<Attr, Value>)> = Vec::new();
     for (eid, attrs) in inputs.into_iter() {
         for (attr, attr_values) in attrs.into_iter() {

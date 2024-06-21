@@ -20,7 +20,7 @@ use mosaik_rust_api::{
     tcp::ConnectionDirection,
     types::{
         Attr, CreateResult, CreateResultChild, FullId, InputData, Meta, ModelDescription,
-        ModelName, OutputData, OutputRequest, SimulatorType,
+        ModelName, OutputData, OutputRequest, SimulatorType, Time,
     },
     MosaikApi,
 };
@@ -101,6 +101,7 @@ pub struct HouseholdBatterySim {
     step_size: i64,
     entities: Map<String, Value>,
     time_resolution: f64,
+    time: Time,
 }
 
 impl ApiHelpers for HouseholdBatterySim {
@@ -239,6 +240,14 @@ impl ApiHelpers for HouseholdBatterySim {
     fn set_time_resolution(&mut self, time_resolution: f64) {
         self.time_resolution = time_resolution;
     }
+
+    fn set_time(&mut self, time: Time) {
+        self.time = time;
+    }
+
+    fn get_time(&self) -> Time {
+        self.time as Time
+    }
 }
 
 impl MosaikApi for HouseholdBatterySim {
@@ -285,14 +294,14 @@ impl MosaikApi for HouseholdBatterySim {
 
     /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
     /// Just gives the inputs to [Neighborhood::step].
-    fn step(&mut self, time: usize, inputs: InputData, _max_advance: usize) -> Option<usize> {
+    fn step(&mut self, time: Time, inputs: InputData, _max_advance: usize) -> Option<Time> {
         // info!("Inputs; {:?}", inputs);
-
+        self.time = time;
         if let Some(nbhd) = &mut self.neighborhood {
             nbhd.step(time, inputs);
         }
 
-        Some(time + self.step_size as usize)
+        Some(time + self.step_size)
     }
 
     /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
@@ -340,6 +349,7 @@ impl HouseholdBatterySim {
             entities: Map::new(),
             neighborhood: None,
             time_resolution: 1.0f64,
+            time: 0,
         }
     }
     fn params_array_into_vec<'a, B, F>(
@@ -528,7 +538,7 @@ impl Neighborhood {
     ***********************************************/
 
     ///perform a normal simulation step.
-    fn step(&mut self, _time: usize, inputs: InputData) {
+    fn step(&mut self, time: Time, inputs: InputData) {
         self.reset_prosumption();
         self.update_household_input_params(inputs);
 

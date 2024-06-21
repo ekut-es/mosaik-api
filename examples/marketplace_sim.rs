@@ -10,7 +10,7 @@ use mosaik_rust_api::{
     tcp::ConnectionDirection,
     types::{
         Attr, CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
-        SimulatorType,
+        SimulatorType, Time,
     },
     MosaikApi,
 };
@@ -66,7 +66,7 @@ impl MosaikApi for MarketplaceSim {
         //todo!()
     }
 
-    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
+    fn step(&mut self, time: Time, inputs: InputData, max_advance: usize) -> Option<Time> {
         default_api::default_step(self, time, inputs, max_advance)
     }
 
@@ -86,6 +86,7 @@ pub struct MarketplaceSim {
     step_size: i64,
     entities: Map<String, Value>,
     time_resolution: f64,
+    time: Time,
 }
 
 //Implementation of the helpers defined in the library
@@ -180,6 +181,14 @@ impl default_api::ApiHelpers for MarketplaceSim {
     fn set_time_resolution(&mut self, time_resolution: f64) {
         self.time_resolution = time_resolution;
     }
+
+    fn set_time(&mut self, time: Time) {
+        self.time = time;
+    }
+
+    fn get_time(&self) -> Time {
+        self.time
+    }
 }
 
 impl MarketplaceSim {
@@ -193,6 +202,7 @@ impl MarketplaceSim {
             models: vec![],
             data: vec![],
             time_resolution: 1.0f64,
+            time: 0,
         }
     }
 }

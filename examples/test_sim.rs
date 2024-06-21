@@ -2,14 +2,14 @@
 #![allow(dead_code)]
 #![cfg(not(test))]
 
-use std::{collections::HashMap, todo};
+use std::{collections::HashMap, todo, unimplemented};
 
 use log::error;
 use mosaik_rust_api::{
     default_api::{self, ApiHelpers},
     types::{
         Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
-        SimulatorType,
+        SimulatorType, Time,
     },
     MosaikApi,
 };
@@ -116,7 +116,7 @@ impl RSimulator {
 pub struct RExampleSim {
     eid_prefix: String,
     step_size: i64,
-    time: u64,
+    time: Time,
     time_resolution: f64,
     entities: HashMap<EntityId, RModel>,
     simulator: RSimulator,
@@ -180,11 +180,11 @@ impl ApiHelpers for RExampleSim {
     }
 
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
-        todo!("not implemented")
+        unimplemented!("not implemented")
     }
 
     fn sim_step(&mut self, deltas: Vec<(String, u64, serde_json::Map<String, Value>)>) {
-        todo!("not implemented")
+        unimplemented!("not implemented")
     }
 
     fn get_time_resolution(&self) -> f64 {
@@ -193,6 +193,14 @@ impl ApiHelpers for RExampleSim {
 
     fn set_time_resolution(&mut self, time_resolution: f64) {
         self.time_resolution = time_resolution;
+    }
+
+    fn set_time(&mut self, time: Time) {
+        self.time = time;
+    }
+
+    fn get_time(&self) -> Time {
+        self.time
     }
 }
 
@@ -224,8 +232,8 @@ impl MosaikApi for RExampleSim {
         result
     }
 
-    fn step(&mut self, time: usize, inputs: InputData, _max_advance: usize) -> Option<usize> {
-        self.time = time as u64;
+    fn step(&mut self, time: Time, inputs: InputData, _max_advance: usize) -> Option<Time> {
+        self.time = time;
         // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
         for (eid, model_instance) in &mut self.entities {
