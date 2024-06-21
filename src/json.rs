@@ -1,3 +1,5 @@
+//! JSON serialization and deserialization for Mosaik messages. And handling of Mosaik requests.
+
 use log::*;
 use serde::ser::{Serialize, SerializeTuple, Serializer};
 use serde::{Deserialize, Deserializer};
@@ -858,10 +860,8 @@ mod tests {
             )
             .unwrap()))
             .returning(move |_| {
-                serde_json::from_value::<OutputData>(
-                    json!({"branch_0": {"I": 42.5}, "time": 123}),
-                )
-                .unwrap()
+                serde_json::from_value::<OutputData>(json!({"branch_0": {"I": 42.5}, "time": 123}))
+                    .unwrap()
             });
 
         let result = handle_request(&mut mock_simulator, &request);
