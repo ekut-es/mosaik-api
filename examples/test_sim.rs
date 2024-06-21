@@ -270,8 +270,7 @@ impl MosaikApi for RExampleSim {
         Ok(())
     }
 
-    fn stop(&self) -> Result<(), String> {
+    fn stop(&self) {
         // Nothing to do
-        Ok(())
     }
 }

@@ -329,7 +329,7 @@ impl MosaikApi for HouseholdBatterySim {
         Ok(data)
     }
 
-    fn stop(&self) -> Result<(), String> {
+    fn stop(&self) {
         warn!("Clearing all the Databases of the simulation!");
         if let Some(nbhd) = &(self.neighborhood) {
             for (_, household) in nbhd.households.iter() {
@@ -346,7 +346,6 @@ impl MosaikApi for HouseholdBatterySim {
         }
 
         info!("Simulation has stopped!");
-        Ok(())
     }
 }
 
