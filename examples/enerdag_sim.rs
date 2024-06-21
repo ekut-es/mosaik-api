@@ -253,7 +253,12 @@ impl ApiHelpers for HouseholdBatterySim {
 impl MosaikApi for HouseholdBatterySim {
     ///Create *num* instances of *model* using the provided *model_params*.
     /// *panics!* if more than one neighborhood is created.
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
+    fn init(
+        &mut self,
+        sid: String,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<Meta, String> {
         default_api::default_init(self, sid, time_resolution, sim_params)
     }
 
@@ -262,7 +267,7 @@ impl MosaikApi for HouseholdBatterySim {
         num: usize,
         model: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<CreateResult> {
+    ) -> Result<Vec<CreateResult>, String> {
         if num > 1 || self.neighborhood.is_some() {
             todo!("Create Support for more  than one Neighborhood");
         }
@@ -284,29 +289,34 @@ impl MosaikApi for HouseholdBatterySim {
         }
 
         debug!("the created model: {:?}", out_vector);
-        out_vector
+        Ok(out_vector)
     }
 
-    fn setup_done(&self) {
-        info!("Setup done!")
-        //todo!()
+    fn setup_done(&self) -> Result<(), String> {
+        info!("Setup done! Nothing to clean up.");
+        Ok(())
     }
 
     /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
     /// Just gives the inputs to [Neighborhood::step].
-    fn step(&mut self, time: Time, inputs: InputData, _max_advance: usize) -> Option<Time> {
+    fn step(
+        &mut self,
+        time: Time,
+        inputs: InputData,
+        _max_advance: Time,
+    ) -> Result<Option<i64>, String> {
         // info!("Inputs; {:?}", inputs);
         self.time = time;
         if let Some(nbhd) = &mut self.neighborhood {
             nbhd.step(time, inputs);
         }
 
-        Some(time + self.step_size)
+        Ok(Some(time + self.step_size))
     }
 
     /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
     /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
-    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
+    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
         let mut data = OutputData {
             requests: HashMap::new(),
             time: Some(self.time),
@@ -316,10 +326,10 @@ impl MosaikApi for HouseholdBatterySim {
             nbhd.add_output_values(&outputs, &mut data);
         }
 
-        data
+        Ok(data)
     }
 
-    fn stop(&self) {
+    fn stop(&self) -> Result<(), String> {
         warn!("Clearing all the Databases of the simulation!");
         if let Some(nbhd) = &(self.neighborhood) {
             for (_, household) in nbhd.households.iter() {
@@ -335,7 +345,8 @@ impl MosaikApi for HouseholdBatterySim {
             }
         }
 
-        info!("Simulation has stopped!")
+        info!("Simulation has stopped!");
+        Ok(())
     }
 }
 

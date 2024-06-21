@@ -27,7 +27,12 @@ pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> 
 pub trait MosaikApi: Send + 'static {
     /// Initialize the simulator with the specified ID (`sid`), time resolution (`time_resolution`), and additional parameters (`sim_params`).
     /// Returns the meta data (`Meta`) of the simulator.
-    fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta;
+    fn init(
+        &mut self,
+        sid: SimId,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<Meta, String>;
 
     /// Create `num` instances of the specified `model_name` using the provided `model_params`.
     /// The returned list must have the same length as `num`.
@@ -36,22 +41,27 @@ pub trait MosaikApi: Send + 'static {
         num: usize,
         model_name: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<CreateResult>;
+    ) -> Result<Vec<CreateResult>, String>;
 
     /// This function is called by Mosaik when the `init()` and `create()` calls are done.
     /// Returns `Null`.
-    fn setup_done(&self);
+    fn setup_done(&self) -> Result<(), String>;
 
     /// Perform the next simulation step at `time` and return the new simulation time (the time at which `step` should be called again),
     /// or `None` if the simulator doesn't need to step itself.
-    fn step(&mut self, time: Time, inputs: InputData, max_advance: usize) -> Option<Time>; // TODO max_advance as Time? enerdag TimePeriod?
+    fn step(
+        &mut self,
+        time: Time,
+        inputs: InputData,
+        max_advance: Time,
+    ) -> Result<Option<Time>, String>;
 
     /// Collect data from the simulation and return a nested vector (`OutputData`) containing the information.
-    fn get_data(&mut self, outputs: OutputRequest) -> OutputData;
+    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String>;
 
     /// This function is called by Mosaik when the simulation is finished.
     /// Returns `Null`. The simulation API stops as soon as the function returns.
-    fn stop(&self);
+    fn stop(&self) -> Result<(), String>;
 
     /// A wrapper for extra methods that can be implemented by the simulator.
     /// This method is not required by the Mosaik API, but can be used for additional functionality.

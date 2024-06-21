@@ -48,7 +48,12 @@ pub fn main() /*-> Result<()>*/
 }
 
 impl MosaikApi for MarketplaceSim {
-    fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
+    fn init(
+        &mut self,
+        sid: SimId,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<Meta, std::string::String> {
         default_api::default_init(self, sid, time_resolution, sim_params)
     }
 
@@ -57,26 +62,31 @@ impl MosaikApi for MarketplaceSim {
         num: usize,
         model_name: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<CreateResult> {
+    ) -> Result<Vec<CreateResult>, String> {
         default_api::default_create(self, num, model_name, model_params)
     }
 
-    fn setup_done(&self) {
-        info!("Setup done!")
-        //todo!()
+    fn setup_done(&self) -> Result<(), String> {
+        info!("Setup done!");
+        Ok(())
     }
 
-    fn step(&mut self, time: Time, inputs: InputData, max_advance: usize) -> Option<Time> {
+    fn step(
+        &mut self,
+        time: Time,
+        inputs: InputData,
+        max_advance: Time,
+    ) -> Result<Option<i64>, String> {
         default_api::default_step(self, time, inputs, max_advance)
     }
 
-    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
+    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
         default_api::default_get_data(self, outputs)
     }
 
-    fn stop(&self) {
-        info!("Simulation has stopped!")
-        //todo!()
+    fn stop(&self) -> Result<(), String> {
+        info!("Simulation has stopped! Nothing to clean up.");
+        Ok(())
     }
 }
 pub struct MarketplaceSim {
