@@ -205,7 +205,7 @@ impl ApiHelpers for RExampleSim {
         None
     }
 
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Result<Value, String> {
         unimplemented!("not implemented")
     }
 

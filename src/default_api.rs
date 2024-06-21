@@ -57,7 +57,7 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_get_data]
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Result<Value, String>;
 
     /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
     ///
@@ -200,13 +200,13 @@ pub fn default_get_data<T: ApiHelpers>(simulator: &mut T, outputs: OutputRequest
         for attr in attrs.into_iter() {
             //Get the values of the model
             match simulator.get_model_value(model_idx, &attr) {
-                Some(value) => {
+                Ok(value) => {
                     attribute_values.insert(attr, value);
                 }
-                None => {
+                Err(e) => {
                     error!(
-                        "Unknown output attribute `{}` for model {}",
-                        &attr, model_idx
+                        "Unknown output attribute `{}` for model {} results in error: {}",
+                        &attr, model_idx, e
                     );
                 }
             }

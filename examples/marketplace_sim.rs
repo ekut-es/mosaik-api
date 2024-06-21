@@ -142,10 +142,14 @@ impl default_api::ApiHelpers for MarketplaceSim {
         None
     }
 
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Result<Value, String> {
         self.models
             .get(model_idx as usize)
-            .and_then(|x| x.get_value(attr))
+            .ok_or_else(|| format!("Model with index {} not found", model_idx))
+            .and_then(|x| {
+                x.get_value(attr)
+                    .ok_or_else(|| format!("Attribute '{}' not found in model {}", attr, model_idx))
+            })
     }
 
     //perform a simulation step and a auction of the marketplace
