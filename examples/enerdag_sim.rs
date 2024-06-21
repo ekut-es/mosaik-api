@@ -223,14 +223,14 @@ impl ApiHelpers for HouseholdBatterySim {
         Some(mosaik_children)
     }
 
-    fn get_model_value(&self, _model_idx: u64, _attr: &str) -> Option<Value> {
-        panic!("Not implemented for this instance")
+    fn get_model_value(&self, _model_idx: u64, _attr: &str) -> Result<Value, String> {
+        unimplemented!("Not implemented in this instance")
     }
 
     /// perform a simulation step and a auction of the marketplace for every neighborhood in
     /// the simulation
     fn sim_step(&mut self, _deltas: Vec<(String, u64, Map<String, Value>)>) {
-        panic!("Not implemented in this instance");
+        unimplemented!("Not implemented in this instance")
     }
 
     fn get_time_resolution(&self) -> f64 {
