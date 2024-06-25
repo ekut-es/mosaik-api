@@ -319,9 +319,7 @@ mod tests {
 
     #[test]
     fn test_serialize_response_error_to_vec() {
-        let expect = r#"[2,123,"User generated Error: some error"]"#
-            .as_bytes()
-            .to_vec();
+        let expect = r#"[2,123,"User generated Error: some error"]"#.as_bytes().to_vec();
         let error = MosaikError::UserError("some error".to_string());
         let actual = MosaikMessage {
             msg_type: MsgType::ReplyFailure,
@@ -634,7 +632,10 @@ mod tests {
         let expected = Response::Reply(MosaikMessage {
             msg_type: MsgType::ReplyFailure,
             id: request.msg_id,
-            content: json!(MosaikError::ParseError("Failed to parse SimId: invalid type: integer `0`, expected a string".to_string()).to_string()),
+            content: json!(MosaikError::ParseError(
+                "Failed to parse SimId: invalid type: integer `0`, expected a string".to_string()
+            )
+            .to_string()),
         });
         assert_eq!(actual, expected);
     }
