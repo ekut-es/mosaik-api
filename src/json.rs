@@ -318,18 +318,15 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_serialize_response_error_to_vec() {
-        let expect = r#"[2,123,"Failed to serialize a vector from the response to MessageID 123"]"#
+        let expect = r#"[2,123,"User generated Error: some error"]"#
             .as_bytes()
             .to_vec();
-        let mut map = HashMap::new();
-        map.insert(12, "some failing value");
+        let error = MosaikError::UserError("some error".to_string());
         let actual = MosaikMessage {
-            msg_type: MsgType::ReplySuccess,
+            msg_type: MsgType::ReplyFailure,
             id: 123,
-            content: json!(map),
-            // NOTE json!(vec![0u64; usize::MAX]), // this Error occurs before the handling and will panic!
+            content: json!(error.to_string()),
         }
         .serialize_to_vec();
         // TODO how to test for serialize Error?
@@ -637,14 +634,13 @@ mod tests {
         let expected = Response::Reply(MosaikMessage {
             msg_type: MsgType::ReplyFailure,
             id: request.msg_id,
-            content: json!("Parsing JSON Request: Failed to parse SimId: invalid type: integer `0`, expected a string"),
+            content: json!(MosaikError::ParseError("Failed to parse SimId: invalid type: integer `0`, expected a string".to_string()).to_string()),
         });
         assert_eq!(actual, expected);
     }
 
-    /* TODO should Simulator functions return Results to make Error Handling available to Users? -> SimulatorError Type?
     #[test]
-    fn test_handle_request_init_failure_sim() -> Result<(), MosaikError> {
+    fn test_handle_request_init_user_error() {
         let mut simulator = MockMosaikApi::new();
         let request = Request {
             msg_id: 789,
@@ -656,18 +652,17 @@ mod tests {
         simulator
             .expect_init()
             .with(eq("arg1".to_string()), eq(1.0), eq(Map::new()))
-            .returning(|_, _, _| {
-                Err(MosaikError::ParseError(
-                    "Failed to initialize simulator".to_string(),
-                ))
-            });
+            .returning(|_, _, _| Err("some custom error".to_string()));
 
-        let expected_response = Response::Failure(vec![70, 97, 105, 108, 101, 100]);
-        let actual_response = handle_request(&mut simulator, request)?;
+        let expected_response = Response::Reply(MosaikMessage {
+            msg_type: MsgType::ReplyFailure,
+            id: 789,
+            content: json!(MosaikError::UserError("some custom error".to_string()).to_string()),
+        });
+        let actual_response = handle_request(&mut simulator, &request);
 
         assert_eq!(actual_response, expected_response);
-        Ok(())
-    }*/
+    }
 
     // ------------------------------------------------------------------------
 
