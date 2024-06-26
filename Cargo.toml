@@ -1,5 +1,5 @@
 [package]
-authors = ["Jakob Pohl", "Christoph Gross"]
+authors = ["Jakob Pohl", "Christoph Gross", "Lukas Seehuber"]
 edition = "2021"
 name = "mosaik-rust-api"
 version = "0.1.0"
