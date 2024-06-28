@@ -30,6 +30,9 @@ pub type InputData = HashMap<EntityId, HashMap<Attr, Map<FullId, Value>>>;
 ///needed, the required attributes are listed.
 pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 
+///The compatible Mosaik version with this edition of the API
+pub const API_VERSION: &str = "3.0";
+
 ///The format of output data as return by ``get_data``
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutputData {
@@ -78,7 +81,7 @@ impl ModelDescription {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Meta {
     /// The API version that this simulator supports in the format "major.minor".
-    pub api_version: &'static str,
+    api_version: &'static str,
     /// The simulator's stepping type.
     #[serde(rename = "type")]
     pub simulator_type: SimulatorType,
@@ -91,14 +94,28 @@ pub struct Meta {
 
 impl Meta {
     pub fn new(
-        api_version: &'static str,
         simulator_type: SimulatorType,
         models: HashMap<ModelName, ModelDescription>,
+        extra_methods: Option<Vec<String>>,
     ) -> Self {
         Self {
-            api_version,
+            api_version: API_VERSION,
             simulator_type,
             models,
+            extra_methods,
+        }
+    }
+    pub fn get_version(&self) -> &str {
+        self.api_version
+    }
+}
+
+impl Default for Meta {
+    fn default() -> Self {
+        Self {
+            api_version: API_VERSION,
+            simulator_type: SimulatorType::default(),
+            models: HashMap::new(),
             extra_methods: None,
         }
     }
@@ -245,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_meta() {
-        let mut meta = Meta::new("3.0", SimulatorType::default(), HashMap::new());
+        let mut meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
         assert_eq!(meta.api_version, "3.0");
         assert_eq!(
             meta.simulator_type,
@@ -283,7 +300,7 @@ mod tests {
 
     #[test]
     fn test_meta_optionals() {
-        let mut meta = Meta::new("3.0", SimulatorType::default(), HashMap::new());
+        let mut meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
             r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, meta_json,
