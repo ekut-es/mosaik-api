@@ -10,7 +10,6 @@ use crate::MosaikApi;
 
 #[derive(Error, Debug)]
 pub enum MosaikError {
-    // TODO separate errors for handle_* functions
     #[error("Parsing JSON Request: {0}")]
     ParseError(String),
     #[error("Serde JSON Error: {0}")]
@@ -327,7 +326,6 @@ mod tests {
             content: json!(error.to_string()),
         }
         .serialize_to_vec();
-        // TODO how to test for serialize Error?
         assert_eq!(actual.len(), 4 + expect.len());
         assert_eq!(actual[4..], expect);
     }
@@ -597,9 +595,9 @@ mod tests {
             .expect_init()
             .once()
             .with(eq("simID-1".to_string()), eq(1.0), eq(Map::new()))
-            .returning(|_, _, _| Ok(Meta::new("3.0", SimulatorType::default(), HashMap::new())));
+            .returning(|_, _, _| Ok(Meta::new(SimulatorType::default(), HashMap::new(), None)));
 
-        let payload = json!(Meta::new("3.0", SimulatorType::default(), HashMap::new()));
+        let payload = json!(Meta::new(SimulatorType::default(), HashMap::new(), None));
         let actual_response = handle_request(&mut simulator, &request);
         assert_eq!(
             actual_response,

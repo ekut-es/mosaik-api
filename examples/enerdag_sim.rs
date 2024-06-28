@@ -160,20 +160,12 @@ impl ApiHelpers for HouseholdBatterySim {
             vec![],
             vec!["p_mw_pv".to_string(), "trades".to_string()],
         );
-
-        Meta {
-            api_version: "3.0",
-            simulator_type: SimulatorType::TimeBased,
-            models: {
-                let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
-                m.insert("Neighborhood".to_string(), neighborhood);
-                m.insert("Consumer".to_string(), consumer);
-                m.insert("Prosumer".to_string(), prosumer);
-                m.insert("PV".to_string(), pv);
-                m
-            },
-            extra_methods: None,
-        }
+        let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
+        m.insert("Neighborhood".to_string(), neighborhood);
+        m.insert("Consumer".to_string(), consumer);
+        m.insert("Prosumer".to_string(), prosumer);
+        m.insert("PV".to_string(), pv);
+        Meta::new(SimulatorType::TimeBased, m, None)
     }
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
         self.eid_prefix = eid_prefix.to_string();

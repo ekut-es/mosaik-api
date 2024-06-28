@@ -172,11 +172,15 @@ impl ApiHelpers for RExampleSim {
             persistent: None,
         };
 
-        Meta::new("3.0", SimulatorType::TimeBased, {
-            let mut m = HashMap::new();
-            m.insert("ExampleModel".to_string(), example_model);
-            m
-        })
+        Meta::new(
+            SimulatorType::TimeBased,
+            {
+                let mut m = HashMap::new();
+                m.insert("ExampleModel".to_string(), example_model);
+                m
+            },
+            None,
+        )
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
