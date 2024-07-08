@@ -37,14 +37,13 @@ impl MosaikMessage {
                 header
             }
             Err(e) => {
-                // return a FailureReply with the error message
                 error!(
                     "Failed to serialize response to MessageID {}: {}",
                     self.id, e
                 );
                 let error_message = format!(
                     "Failed to serialize a vector from the response to MessageID {}",
-                    self.id
+                    self.id // without Err(e) to maintain a small error msg size
                 );
                 let error_response = json!([MsgType::ReplyFailure, self.id, error_message]);
                 to_vec(&error_response)
@@ -188,7 +187,7 @@ fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Val
         .kwargs
         .get("time_resolution")
         .and_then(|value| value.as_f64())
-        .unwrap_or(1.0f64);
+        .unwrap_or(1.0f64); // FIXME do we want this. Or rather return an error?
     let sim_params = request.kwargs.clone();
 
     match simulator.init(sid, time_resolution, sim_params) {

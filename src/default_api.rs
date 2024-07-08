@@ -2,7 +2,6 @@
 
 use crate::types::*;
 
-use core::panic;
 use log::{debug, error, info, trace};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -170,15 +169,16 @@ pub fn default_step<T: ApiHelpers>(
     // Check for new delta and do step for each model instance:
     let mut deltas: Vec<(EntityId, u64, Map<Attr, Value>)> = Vec::new();
     for (eid, attrs) in inputs.into_iter() {
+        let model_idx = simulator
+            .get_mut_entities()
+            .get(&eid.clone())
+            .and_then(|eid| eid.as_u64())
+            .ok_or(format!(
+                "No correct model eid available. Input: {:?}, Entities: {:?}",
+                eid,
+                simulator.get_mut_entities(),
+            ))?;
         for (attr, attr_values) in attrs.into_iter() {
-            let model_idx = match simulator.get_mut_entities().get(&eid.clone()) {
-                Some(entity_val) if entity_val.is_u64() => entity_val.as_u64().unwrap(), //unwrap safe, because we check for u64
-                _ => panic!(
-                    "No correct model eid available. Input: {:?}, Entities: {:?}",
-                    eid,
-                    simulator.get_mut_entities()
-                ),
-            };
             deltas.push((attr, model_idx, attr_values));
         }
     }
@@ -199,7 +199,7 @@ pub fn default_get_data<T: ApiHelpers>(
             .get_mut_entities()
             .get(&eid)
             .and_then(|eid| eid.as_u64())
-            .expect("No correct model eid available.");
+            .ok_or("No correct model eid available.")?;
 
         let mut attribute_values: HashMap<Attr, Value> = HashMap::new();
         for attr in attrs.into_iter() {
