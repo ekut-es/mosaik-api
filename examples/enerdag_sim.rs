@@ -19,8 +19,8 @@ use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, CreateResult, CreateResultChild, FullId, InputData, Meta, ModelDescription,
-        ModelName, OutputData, OutputRequest, SimulatorType, Time,
+        Attr, CreateResult, FullId, InputData, Meta, ModelDescription, ModelName, OutputData,
+        OutputRequest, SimulatorType, Time,
     },
     MosaikApi,
 };
@@ -187,7 +187,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         let household_configs = self.params_to_household_config(&model_params);
 
         let start_time = if !model_params.contains_key(MOSAIK_PARAM_START_TIME) {
@@ -469,11 +469,10 @@ impl Neighborhood {
     }
 
     /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
-    fn households_as_mosaik_children(&self) -> Vec<CreateResultChild> {
-        let mut child_descriptions: Vec<CreateResultChild> =
-            Vec::with_capacity(self.households.len());
+    fn households_as_mosaik_children(&self) -> Vec<CreateResult> {
+        let mut child_descriptions: Vec<CreateResult> = Vec::with_capacity(self.households.len());
         for (eid, household) in self.households.iter() {
-            let child = CreateResultChild::new(eid.clone(), household.household_type.clone());
+            let child = CreateResult::new(eid.clone(), household.household_type.clone());
             child_descriptions.push(child);
         }
 

@@ -166,10 +166,9 @@ impl CreateResult {
     }
 }
 
-pub type CreateResultChild = CreateResult;
-
 /*
 // The below types are copied from the python implementation.
+// pub type CreateResultChild = CreateResult;
 
 class EntitySpec(TypedDict):
     type: ModelName

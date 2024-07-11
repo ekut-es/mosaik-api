@@ -48,11 +48,11 @@ pub trait ApiHelpers {
     fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value>;
 
     /// Create a model instance (= entity) with an initial value. Returns the
-    /// [types](CreateResultChild) representation of the children, if the entity has children.
+    /// [types](CreateResult) representation of the children, if the entity has children.
     ///
     /// # Used in:
     /// - [default_create]
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>>;
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>>;
 
     /// Get the value from an entity.
     ///
