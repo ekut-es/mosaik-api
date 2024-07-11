@@ -8,6 +8,14 @@ use thiserror::Error;
 
 use crate::MosaikApi;
 
+/// Collection of Error types to handle and differentiate errors in the Mosaik API.
+///
+/// # Variants
+///
+/// - `ParseError`: Error parsing a JSON request.
+/// - `Serde`: Error during JSON serialization/deserialization.
+/// - `MethodNotFound`: Specified method cannot be found. Used for [MosaikApi::extra_method].
+/// - `UserError`: Container for user generated errors.
 #[derive(Error, Debug)]
 pub enum MosaikError {
     #[error("Parsing JSON Request: {0}")]
@@ -21,10 +29,10 @@ pub enum MosaikError {
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
-pub struct MosaikMessage {
-    pub msg_type: MsgType,
-    pub id: MessageID,
-    pub content: Value,
+pub(crate) struct MosaikMessage {
+    msg_type: MsgType,
+    id: MessageID,
+    content: Value,
 }
 
 impl MosaikMessage {
@@ -56,7 +64,7 @@ impl MosaikMessage {
 
 #[repr(u8)]
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub enum MsgType {
+enum MsgType {
     Request = 0,
     ReplySuccess = 1,
     ReplyFailure = 2,
@@ -91,7 +99,7 @@ impl<'de> Deserialize<'de> for MsgType {
 type MessageID = u64;
 
 #[derive(Debug, Deserialize, PartialEq)]
-pub struct Request {
+pub(crate) struct Request {
     #[serde(skip)]
     msg_id: MessageID,
     method: String,
@@ -114,13 +122,13 @@ impl Serialize for Request {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Response {
+pub(crate) enum Response {
     Reply(MosaikMessage),
     Stop,
-    NoReply,
+    NoReply, // FIXME this is only used for `stop`-calls in the mosaik API description. Which are already handled here.
 }
 
-pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
+pub(crate) fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
     let payload: MosaikMessage = match serde_json::from_str(data) {
         Ok(payload) => payload,
@@ -152,7 +160,7 @@ pub fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
     Ok(request)
 }
 
-pub fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Response {
+pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Response {
     let handle_result = match request.method.as_ref() {
         "init" => handle_init(simulator, request),
         "create" => handle_create(simulator, request),

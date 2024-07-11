@@ -7,6 +7,7 @@ pub mod types;
 use mockall::automock;
 
 use crate::{
+    json::MosaikError,
     tcp::{build_connection, ConnectionDirection},
     types::*,
 };
@@ -71,8 +72,8 @@ pub trait MosaikApi: Send + 'static {
         method: &str,
         args: &Vec<Value>,
         kwargs: &Map<String, Value>,
-    ) -> Result<Value, crate::json::MosaikError> {
-        Err(crate::json::MosaikError::MethodNotFound(method.to_string()))
+    ) -> Result<Value, MosaikError> {
+        Err(MosaikError::MethodNotFound(method.to_string()))
     }
 }
 
