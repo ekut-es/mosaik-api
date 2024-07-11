@@ -98,7 +98,7 @@ pub struct HouseholdBatterySim {
     pub neighborhood: Option<Neighborhood>,
 
     eid_prefix: String,
-    step_size: i64,
+    step_size: u64,
     entities: Map<String, Value>,
     time_resolution: f64,
     time: Time,
@@ -171,7 +171,7 @@ impl ApiHelpers for HouseholdBatterySim {
         self.eid_prefix = eid_prefix.to_string();
     }
 
-    fn set_step_size(&mut self, step_size: i64) {
+    fn set_step_size(&mut self, step_size: u64) {
         self.step_size = step_size;
     }
 
@@ -179,7 +179,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &self.eid_prefix
     }
 
-    fn get_step_size(&self) -> i64 {
+    fn get_step_size(&self) -> u64 {
         self.step_size
     }
 
@@ -296,7 +296,7 @@ impl MosaikApi for HouseholdBatterySim {
         time: Time,
         inputs: InputData,
         _max_advance: Time,
-    ) -> Result<Option<i64>, String> {
+    ) -> Result<Option<Time>, String> {
         // info!("Inputs; {:?}", inputs);
         self.time = time;
         if let Some(nbhd) = &mut self.neighborhood {
@@ -403,7 +403,7 @@ pub struct Neighborhood {
     total: i64,
     time: TimePeriod,
     total_disposable_energy: i64,
-    step_size: i64,
+    step_size: u64,
     grid_power_load: i64,
 }
 
@@ -421,7 +421,7 @@ impl Neighborhood {
         time: TimePeriod,
         // init_reading: f64,
         descriptions: Vec<HouseholdDescription>,
-        step_size: i64,
+        step_size: u64,
     ) -> Neighborhood {
         //assert_eq!(step_size, 300, "One Simulation step per TradePeriod");
 

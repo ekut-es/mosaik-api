@@ -115,7 +115,7 @@ impl RSimulator {
 
 pub struct RExampleSim {
     eid_prefix: String,
-    step_size: i64,
+    step_size: u64,
     time: Time,
     time_resolution: f64,
     entities: HashMap<EntityId, RModel>,
@@ -165,11 +165,11 @@ impl ApiHelpers for RExampleSim {
         &self.eid_prefix
     }
 
-    fn get_step_size(&self) -> i64 {
+    fn get_step_size(&self) -> u64 {
         self.step_size
     }
 
-    fn set_step_size(&mut self, step_size: i64) {
+    fn set_step_size(&mut self, step_size: u64) {
         self.step_size = step_size;
     }
 
@@ -247,7 +247,7 @@ impl MosaikApi for RExampleSim {
         time: Time,
         inputs: InputData,
         _max_advance: Time,
-    ) -> Result<Option<i64>, String> {
+    ) -> Result<Option<Time>, String> {
         self.time = time;
         // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.

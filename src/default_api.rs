@@ -25,7 +25,7 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_init]
-    fn set_step_size(&mut self, step_size: i64);
+    fn set_step_size(&mut self, step_size: u64);
 
     ///Get the eid_prefix.
     ///
@@ -37,7 +37,7 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_step]
-    fn get_step_size(&self) -> i64;
+    fn get_step_size(&self) -> u64;
 
     /// Get the list containing the created entities.
     ///
@@ -109,7 +109,7 @@ pub fn default_init<T: ApiHelpers>(
                 simulator.set_eid_prefix(eid_prefix.as_str());
             }
             ("step_size", Value::Number(step_size)) => {
-                if let Some(step_size) = step_size.as_i64() {
+                if let Some(step_size) = step_size.as_u64() {
                     simulator.set_step_size(step_size);
                 } else {
                     let e = format!("Step size is not a valid number: {:?}", step_size);

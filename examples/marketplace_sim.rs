@@ -76,7 +76,7 @@ impl MosaikApi for MarketplaceSim {
         time: Time,
         inputs: InputData,
         max_advance: Time,
-    ) -> Result<Option<i64>, String> {
+    ) -> Result<Option<Time>, String> {
         default_api::default_step(self, time, inputs, max_advance)
     }
 
@@ -92,7 +92,7 @@ pub struct MarketplaceSim {
     pub models: Vec<Model>,
     data: Vec<Vec<Vec<f64>>>,
     eid_prefix: String,
-    step_size: i64,
+    step_size: u64,
     entities: Map<String, Value>,
     time_resolution: f64,
     time: Time,
@@ -128,7 +128,7 @@ impl default_api::ApiHelpers for MarketplaceSim {
         self.eid_prefix = eid_prefix.to_string();
     }
 
-    fn set_step_size(&mut self, step_size: i64) {
+    fn set_step_size(&mut self, step_size: u64) {
         self.step_size = step_size;
     }
 
@@ -136,7 +136,7 @@ impl default_api::ApiHelpers for MarketplaceSim {
         &self.eid_prefix
     }
 
-    fn get_step_size(&self) -> i64 {
+    fn get_step_size(&self) -> u64 {
         self.step_size
     }
 
