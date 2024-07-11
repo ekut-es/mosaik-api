@@ -22,6 +22,7 @@ enum Void {}
 
 /// The direction of the connection with the address of the socket.
 /// Either we listen on an address or we connect to an address.
+/// This is used in the `run_simulation` function.
 pub enum ConnectionDirection {
     ConnectToAddress(SocketAddr),
     ListenOnAddress(SocketAddr),
