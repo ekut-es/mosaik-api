@@ -18,7 +18,7 @@ use serde_json::{json, Map, Value};
 
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
+///Main calls this function with the simulator that should run and the direction with an address for the connection to mosaik.
 pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> AResult<()> {
     task::block_on(build_connection(addr, simulator))
 }

@@ -19,13 +19,19 @@ type Receiver<T> = mpsc::UnboundedReceiver<T>;
 
 #[derive(Debug)]
 enum Void {}
+
+/// The direction of the connection with the address of the socket.
+/// Either we listen on an address or we connect to an address.
 pub enum ConnectionDirection {
     ConnectToAddress(SocketAddr),
     ListenOnAddress(SocketAddr),
 }
 
 ///Build the connection between Mosaik and us. 2 cases, we connect to them or they connect to us.
-pub async fn build_connection<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> Result<()> {
+pub(crate) async fn build_connection<T: MosaikApi>(
+    addr: ConnectionDirection,
+    simulator: T,
+) -> Result<()> {
     debug!("accept loop debug");
     match addr {
         //Case: we need to listen for a possible connector
