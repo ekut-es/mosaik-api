@@ -14,6 +14,7 @@ use mosaik_rust_api::{
     },
     MosaikApi,
 };
+
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
 struct Opt {

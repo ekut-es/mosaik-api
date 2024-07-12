@@ -1,3 +1,4 @@
+#[cfg(feature = "default_api")]
 pub mod default_api;
 pub mod json;
 pub mod tcp;
