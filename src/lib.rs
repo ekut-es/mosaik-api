@@ -4,17 +4,15 @@ pub mod json;
 pub mod tcp;
 pub mod types;
 
-#[cfg(test)]
-use mockall::automock;
-
 use crate::{
-    json::MosaikError,
     tcp::{build_connection, ConnectionDirection},
     types::*,
 };
 
 use async_std::task;
 use async_trait::async_trait;
+#[cfg(test)]
+use mockall::automock;
 use serde_json::{json, Map, Value};
 
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -24,8 +22,8 @@ pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> 
     task::block_on(build_connection(addr, simulator))
 }
 
-#[cfg_attr(test, automock)]
 /// The MosaikApi trait defines the interface for a Mosaik simulator API.
+#[cfg_attr(test, automock)]
 pub trait MosaikApi: Send + 'static {
     /// Initialize the simulator with the specified ID (`sid`), time resolution (`time_resolution`), and additional parameters (`sim_params`).
     /// Returns the meta data (`Meta`) of the simulator.
@@ -86,4 +84,49 @@ trait AsyncApi {
     async fn get_related_entities();
     async fn get_data();
     async fn set_data();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::MockMosaikApi;
+    use mockall::predicate::*;
+
+    #[test]
+    fn test_extra_method_with_logic() {
+        let mut mock = MockMosaikApi::new();
+        let args = vec![json!(1), json!("hello")];
+        let kwargs = Map::new();
+
+        // Implement the logic for extra_method
+        let actual_method = |method: &str| match method {
+            "example_method" => Ok(Value::String("example result".to_string())),
+            _ => Err(format!("Method not found: {}", method)),
+        };
+
+        // Set up expectation
+        mock.expect_extra_method()
+            .with(
+                mockall::predicate::eq("example_method"),
+                mockall::predicate::eq(args.clone()),
+                mockall::predicate::eq(kwargs.clone()),
+            )
+            .returning(move |method, _, _| actual_method(method));
+
+        mock.expect_extra_method()
+            .with(
+                mockall::predicate::eq("unknown_method"),
+                mockall::predicate::eq(args.clone()),
+                mockall::predicate::eq(kwargs.clone()),
+            )
+            .returning(move |method, _, _| actual_method(method));
+
+        // Call the method and assert for known method
+        let result = mock.extra_method("example_method", &args, &kwargs);
+        assert_eq!(result, Ok(Value::String("example result".to_string())));
+
+        // Call the method and assert for unknown method
+        let result = mock.extra_method("unknown_method", &args, &kwargs);
+        assert_eq!(result, Err("Method not found: unknown_method".to_string()));
+    }
 }
