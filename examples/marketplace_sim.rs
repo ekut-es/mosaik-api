@@ -5,10 +5,8 @@ use structopt::StructOpt;
 
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
-#[cfg(feature = "default_api")]
-use mosaik_rust_api::default_api;
 use mosaik_rust_api::{
-    run_simulation,
+    default_api, run_simulation,
     tcp::ConnectionDirection,
     types::{
         Attr, CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
@@ -57,7 +55,6 @@ impl MosaikApi for MarketplaceSim {
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> Result<Meta, std::string::String> {
-        #[cfg(feature = "default_api")]
         default_api::default_init(self, sid, time_resolution, sim_params)
     }
 
@@ -67,12 +64,10 @@ impl MosaikApi for MarketplaceSim {
         model_name: String,
         model_params: Map<Attr, Value>,
     ) -> Result<Vec<CreateResult>, String> {
-        #[cfg(feature = "default_api")]
         default_api::default_create(self, num, model_name, model_params)
     }
 
     fn setup_done(&self) -> Result<(), String> {
-        #[cfg(feature = "default_api")]
         info!("Setup done!");
         Ok(())
     }
@@ -83,12 +78,10 @@ impl MosaikApi for MarketplaceSim {
         inputs: InputData,
         max_advance: Time,
     ) -> Result<Option<i64>, String> {
-        #[cfg(feature = "default_api")]
         default_api::default_step(self, time, inputs, max_advance)
     }
 
     fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
-        #[cfg(feature = "default_api")]
         default_api::default_get_data(self, outputs)
     }
 
@@ -107,7 +100,6 @@ pub struct MarketplaceSim {
 }
 
 //Implementation of the helpers defined in the library
-#[cfg(feature = "default_api")]
 impl default_api::ApiHelpers for MarketplaceSim {
     fn meta(&self) -> Meta {
         let model1 = ModelDescription::new(
