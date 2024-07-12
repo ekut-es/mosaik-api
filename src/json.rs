@@ -14,16 +14,13 @@ use crate::MosaikApi;
 ///
 /// - `ParseError`: Error parsing a JSON request.
 /// - `Serde`: Error during JSON serialization/deserialization.
-/// - `MethodNotFound`: Specified method cannot be found. Used for [MosaikApi::extra_method].
 /// - `UserError`: Container for user generated errors.
 #[derive(Error, Debug)]
-pub enum MosaikError {
+pub(crate) enum MosaikError {
     #[error("Parsing JSON Request: {0}")]
     ParseError(String),
     #[error("Serde JSON Error: {0}")]
     Serde(#[from] serde_json::Error),
-    #[error("Method not found: {0}")]
-    MethodNotFound(String),
     #[error("User generated Error: {0}")]
     UserError(String),
 }
@@ -172,7 +169,9 @@ pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request)
             simulator.stop();
             return Response::Stop;
         }
-        method => simulator.extra_method(method, &request.args, &request.kwargs),
+        method => simulator
+            .extra_method(method, &request.args, &request.kwargs)
+            .map_err(|e| MosaikError::UserError(e)),
     };
 
     match handle_result {

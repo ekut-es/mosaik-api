@@ -67,14 +67,14 @@ pub trait MosaikApi: Send + 'static {
 
     /// A wrapper for extra methods that can be implemented by the simulator.
     /// This method is not required by the Mosaik API, but can be used for additional functionality.
-    /// Returns a `Result` containing the result of the method call or a `MosaikError` if the method is not found.
+    /// Returns a `Result` containing the result of the method call or an error message if the method is not found.
     fn extra_method(
         &mut self,
         method: &str,
         args: &Vec<Value>,
         kwargs: &Map<String, Value>,
-    ) -> Result<Value, MosaikError> {
-        Err(MosaikError::MethodNotFound(method.to_string()))
+    ) -> Result<Value, String> {
+        Err(format!("Method not found: {}", method.to_string()))
     }
 }
 
