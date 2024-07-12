@@ -191,8 +191,7 @@ mod tests {
         "time": 64
     }
     "#
-        .replace("\n", "")
-        .replace(" ", "");
+        .replace(['\n', ' '], "");
 
         // Deserialize JSON to OutputData struct
         let data: OutputData = serde_json::from_str(&json_data).unwrap();
@@ -201,8 +200,8 @@ mod tests {
 
         // Serialize EventData struct to JSON
         let serialized_json = serde_json::to_string(&data).unwrap();
-        assert_eq!(serialized_json.contains("requests"), false);
-        assert_eq!(serialized_json.contains("time"), true);
+        assert!(!serialized_json.contains("requests"));
+        assert!(serialized_json.contains("time"));
 
         assert_eq!(serialized_json, json_data);
     }

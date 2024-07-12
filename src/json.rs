@@ -171,7 +171,7 @@ pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request)
         }
         method => simulator
             .extra_method(method, &request.args, &request.kwargs)
-            .map_err(|e| MosaikError::UserError(e)),
+            .map_err(MosaikError::UserError),
     };
 
     match handle_result {
@@ -402,9 +402,8 @@ mod tests {
         assert!(result.is_err());
         let expect = MosaikError::ParseError("Payload is not a valid Mosaik Message:".to_string());
         let actual = result.unwrap_err();
-        assert_eq!(
+        assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            true,
             "{} does not start with {}",
             actual,
             expect
@@ -418,9 +417,8 @@ mod tests {
         assert!(result.is_err());
         let expect = MosaikError::ParseError("The Mosaik Message is not a request:".to_string());
         let actual = result.unwrap_err();
-        assert_eq!(
+        assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            true,
             "{} does not start with {}",
             actual,
             expect
@@ -434,9 +432,8 @@ mod tests {
         assert!(result.is_err());
         let expect = MosaikError::ParseError("The Mosaik Message is not a request:".to_string());
         let actual = result.unwrap_err();
-        assert_eq!(
+        assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            true,
             "{} does not start with {}",
             actual,
             expect
@@ -450,9 +447,8 @@ mod tests {
         assert!(result.is_err());
         let expect = MosaikError::ParseError("Payload is not a valid Mosaik Message:".to_string());
         let actual = result.unwrap_err();
-        assert_eq!(
+        assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            true,
             "{} does not start with {}",
             actual,
             expect
@@ -467,9 +463,8 @@ mod tests {
         let expect =
             MosaikError::ParseError("The Mosaik Message has no valid Request content:".to_string());
         let actual = result.unwrap_err();
-        assert_eq!(
+        assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            true,
             "{} does not start with {}",
             actual,
             expect
@@ -729,7 +724,7 @@ mod tests {
         let expect = MosaikMessage {
             msg_type: MsgType::ReplySuccess,
             id: request.msg_id,
-            content: serde_json::to_value(&vec![cr.clone()]).unwrap(),
+            content: serde_json::to_value(vec![cr.clone()]).unwrap(),
         };
         let mut mock_simulator = MockMosaikApi::new();
         mock_simulator
