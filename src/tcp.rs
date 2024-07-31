@@ -279,9 +279,6 @@ async fn broker_loop<T: MosaikApi>(
                                 }
                                 break 'event_loop;
                             }
-                            Response::NoReply => {
-                                info!("Nothing to respond");
-                            }
                         }
                     }
                     Err(e) => {
