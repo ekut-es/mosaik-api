@@ -8,6 +8,7 @@ use thiserror::Error;
 
 use crate::MosaikApi;
 
+#[derive(Error, Debug)]
 /// Collection of Error types to handle and differentiate errors in the Mosaik API.
 ///
 /// # Variants
@@ -15,7 +16,6 @@ use crate::MosaikApi;
 /// - `ParseError`: Error parsing a JSON request.
 /// - `Serde`: Error during JSON serialization/deserialization.
 /// - `UserError`: Container for user generated errors.
-#[derive(Error, Debug)]
 pub(crate) enum MosaikError {
     #[error("Parsing JSON Request: {0}")]
     ParseError(String),
@@ -26,9 +26,13 @@ pub(crate) enum MosaikError {
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
+/// Payload of the Network Message in the low-level Mosaik API.
 pub(crate) struct MosaikMessage {
+    /// MsgType is used to decide how to handle the message.
     msg_type: MsgType,
+    /// unique ID for a message or message pair. Used to match a response to its request.
     id: MessageID,
+    /// a JSON Value of arbitrary length.
     content: Value,
 }
 
@@ -47,6 +51,7 @@ impl MosaikMessage {
                     "Failed to serialize response to MessageID {}: {}",
                     self.id, e
                 );
+                // build an error response without e variable to ensure fixed size of MosaikMessage
                 let error_message = format!(
                     "Failed to serialize a vector from the response to MessageID {}",
                     self.id
@@ -61,6 +66,7 @@ impl MosaikMessage {
 
 #[repr(u8)]
 #[derive(Debug, PartialEq, Copy, Clone)]
+/// Matching integers used in the Mosaik API marking Mosaik Message Types.
 enum MsgType {
     Request = 0,
     ReplySuccess = 1,
