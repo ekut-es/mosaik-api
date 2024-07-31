@@ -848,7 +848,7 @@ mod tests {
             method: "step".to_string(),
             args: vec![
                 json!(60),
-                json!({"node_1": {"P": {"full_id1":20, "full_id2":3.14}, "Q": {"full_id1":3,"full_id2": -2.5}},
+                json!({"node_1": {"P": {"full_id1":20, "full_id2":3.1}, "Q": {"full_id1":3,"full_id2": -2.5}},
                        "node_2": {"P": {"full_id1":42}, "Q": {"full_id1":-23.2}}}),
                 json!(3600),
             ],
