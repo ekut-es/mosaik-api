@@ -122,7 +122,6 @@ impl Serialize for Request {
 pub(crate) enum Response {
     Reply(MosaikMessage),
     Stop,
-    NoReply, // FIXME this is only used for `stop`-calls in the mosaik API description. Which are already handled here.
 }
 
 pub(crate) fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
