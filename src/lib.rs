@@ -73,7 +73,10 @@ pub trait MosaikApi: Send + 'static {
         args: &Vec<Value>,
         kwargs: &Map<String, Value>,
     ) -> Result<Value, String> {
-        Err(format!("Method not found: {}", method))
+        Err(format!(
+            "Method '{}' not found with args: {:?} and kwargs: {:?}",
+            method, args, kwargs
+        ))
     }
 }
 
