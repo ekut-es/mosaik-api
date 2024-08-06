@@ -94,7 +94,6 @@ pub trait ApiHelpers {
 /// This function sets the time resolution and sets eid prefix and step size if they are given in the `sim_params`.
 pub fn default_init<T: ApiHelpers>(
     simulator: &mut T,
-    _sid: SimId,
     time_resolution: f64,
     sim_params: Map<String, Value>,
 ) -> Result<Meta, String> {

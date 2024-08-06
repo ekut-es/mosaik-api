@@ -215,7 +215,7 @@ impl MosaikApi for RExampleSim {
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> Result<Meta, String> {
-        default_api::default_init(self, sid, time_resolution, sim_params)
+        default_api::default_init(self, time_resolution, sim_params)
     }
 
     fn create(
