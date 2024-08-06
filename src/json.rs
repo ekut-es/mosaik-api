@@ -219,11 +219,17 @@ pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request)
 fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
     let sid = serde_json::from_value(request.args[0].clone())
         .map_err(|err| MosaikError::ParseError(format!("Failed to parse SimId: {}", err)))?;
-    let time_resolution = request
+    let time_resolution = match request
         .kwargs
         .get("time_resolution")
         .and_then(|value| value.as_f64())
-        .unwrap_or(1.0f64);
+    {
+        Some(time_resolution) => time_resolution,
+        None => {
+            warn!("Invalid time resolution provided, defaulting to 1.0");
+            1.0f64
+        }
+    };
     let sim_params = request.kwargs.clone();
 
     match simulator.init(sid, time_resolution, sim_params) {
