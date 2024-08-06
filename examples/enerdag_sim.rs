@@ -15,13 +15,14 @@ use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use enerdag_time::TimePeriod;
 use mosaik_rust_api::{
+    default_api::{self, ApiHelpers},
     run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, CreateResult, CreateResultChild, FullId, InputData, Meta, ModelDescription,
-        ModelName, OutputData, OutputRequest, SimulatorType,
+        Attr, CreateResult, FullId, InputData, Meta, ModelDescription, ModelName, OutputData,
+        OutputRequest, SimulatorType, Time,
     },
-    ApiHelpers, DefaultMosaikApi, MosaikApi,
+    MosaikApi,
 };
 use sled::Db;
 
@@ -97,101 +98,14 @@ pub struct HouseholdBatterySim {
     pub neighborhood: Option<Neighborhood>,
 
     eid_prefix: String,
-    step_size: i64,
+    step_size: u64,
     entities: Map<String, Value>,
     time_resolution: f64,
-}
-
-impl DefaultMosaikApi for HouseholdBatterySim {}
-
-impl MosaikApi for HouseholdBatterySim {
-    ///Create *num* instances of *model* using the provided *model_params*.
-    /// *panics!* if more than one neighborhood is created.
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
-        DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
-    }
-
-    fn create(
-        &mut self,
-        num: usize,
-        model: String,
-        model_params: Map<Attr, Value>,
-    ) -> Vec<CreateResult> {
-        if num > 1 || self.neighborhood.is_some() {
-            todo!("Create Support for more  than one Neighborhood");
-        }
-        let mut out_vector = Vec::with_capacity(1);
-        let next_eid = self.get_mut_entities().len();
-
-        for i in next_eid..(next_eid + num) {
-            let nhdb = self.neighborhood.as_ref().unwrap();
-            let eid = nhdb.eid.clone();
-            self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-            let out_entity = CreateResult {
-                eid,
-                model_type: model.clone(),
-                children: self.add_model(model_params.clone()),
-                rel: None,
-                extra_info: None,
-            };
-            out_vector.push(out_entity);
-        }
-
-        debug!("the created model: {:?}", out_vector);
-        out_vector
-    }
-
-    fn setup_done(&self) {
-        info!("Setup done!")
-        //todo!()
-    }
-
-    /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
-    /// Just gives the inputs to [Neighborhood::step].
-    fn step(&mut self, time: usize, inputs: InputData, _max_advance: usize) -> Option<usize> {
-        // info!("Inputs; {:?}", inputs);
-
-        if let Some(nbhd) = &mut self.neighborhood {
-            nbhd.step(time, inputs);
-        }
-
-        Some(time + self.step_size as usize)
-    }
-
-    /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
-    /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
-    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
-        let mut data: OutputData = HashMap::new();
-
-        if let Some(nbhd) = &mut self.neighborhood {
-            nbhd.add_output_values(&outputs, &mut data);
-        }
-
-        data
-    }
-
-    fn stop(&self) {
-        warn!("Clearing all the Databases of the simulation!");
-        if let Some(nbhd) = &(self.neighborhood) {
-            for (_, household) in nbhd.households.iter() {
-                let hh_db = &household.db;
-                let trees = hh_db.tree_names();
-                for tree in trees {
-                    if let Ok(tree) = hh_db.open_tree(tree) {
-                        if let Err(e) = tree.clear() {
-                            warn!("Error clearing db {e}");
-                        }
-                    }
-                }
-            }
-        }
-
-        info!("Simulation has stopped!")
-    }
+    time: Time,
 }
 
 impl ApiHelpers for HouseholdBatterySim {
-    fn meta() -> Meta {
+    fn meta(&self) -> Meta {
         let neighborhood = ModelDescription::new(
             true,
             vec![
@@ -246,26 +160,18 @@ impl ApiHelpers for HouseholdBatterySim {
             vec![],
             vec!["p_mw_pv".to_string(), "trades".to_string()],
         );
-        let meta = Meta {
-            api_version: "3.0",
-            simulator_type: SimulatorType::TimeBased,
-            models: {
-                let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
-                m.insert("Neighborhood".to_string(), neighborhood);
-                m.insert("Consumer".to_string(), consumer);
-                m.insert("Prosumer".to_string(), prosumer);
-                m.insert("PV".to_string(), pv);
-                m
-            },
-            extra_methods: None,
-        };
-        meta
+        let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
+        m.insert("Neighborhood".to_string(), neighborhood);
+        m.insert("Consumer".to_string(), consumer);
+        m.insert("Prosumer".to_string(), prosumer);
+        m.insert("PV".to_string(), pv);
+        Meta::new(SimulatorType::TimeBased, m, None)
     }
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
         self.eid_prefix = eid_prefix.to_string();
     }
 
-    fn set_step_size(&mut self, step_size: i64) {
+    fn set_step_size(&mut self, step_size: u64) {
         self.step_size = step_size;
     }
 
@@ -273,7 +179,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &self.eid_prefix
     }
 
-    fn get_step_size(&self) -> i64 {
+    fn get_step_size(&self) -> u64 {
         self.step_size
     }
 
@@ -281,7 +187,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         let household_configs = self.params_to_household_config(&model_params);
 
         let start_time = if !model_params.contains_key(MOSAIK_PARAM_START_TIME) {
@@ -300,7 +206,7 @@ impl ApiHelpers for HouseholdBatterySim {
             enerdag_time::TimePeriod::create_period(date)
         };
 
-        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(self.get_next_neighborhood_eid(), start_time, household_configs, self.step_size);
+        let /*mut*/ model: Neighborhood = Neighborhood::initmodel(self.get_next_neighborhood_eid(), start_time, household_configs, self.get_step_size());
 
         let mosaik_children = model.households_as_mosaik_children();
 
@@ -309,14 +215,14 @@ impl ApiHelpers for HouseholdBatterySim {
         Some(mosaik_children)
     }
 
-    fn get_model_value(&self, _model_idx: u64, _attr: &str) -> Option<Value> {
-        panic!("Not implemented for this instance")
+    fn get_model_value(&self, _model_idx: u64, _attr: &str) -> Result<Value, String> {
+        unimplemented!("Not implemented in this instance")
     }
 
     /// perform a simulation step and a auction of the marketplace for every neighborhood in
     /// the simulation
     fn sim_step(&mut self, _deltas: Vec<(String, u64, Map<String, Value>)>) {
-        panic!("Not implemented in this instance");
+        unimplemented!("Not implemented in this instance")
     }
 
     fn get_time_resolution(&self) -> f64 {
@@ -325,6 +231,113 @@ impl ApiHelpers for HouseholdBatterySim {
 
     fn set_time_resolution(&mut self, time_resolution: f64) {
         self.time_resolution = time_resolution;
+    }
+
+    fn set_time(&mut self, time: Time) {
+        self.time = time;
+    }
+
+    fn get_time(&self) -> Time {
+        self.time as Time
+    }
+}
+
+impl MosaikApi for HouseholdBatterySim {
+    ///Create *num* instances of *model* using the provided *model_params*.
+    /// *panics!* if more than one neighborhood is created.
+    fn init(
+        &mut self,
+        sid: String,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<Meta, String> {
+        default_api::default_init(self, time_resolution, sim_params)
+    }
+
+    fn create(
+        &mut self,
+        num: usize,
+        model: String,
+        model_params: Map<Attr, Value>,
+    ) -> Result<Vec<CreateResult>, String> {
+        if num > 1 || self.neighborhood.is_some() {
+            todo!("Create Support for more  than one Neighborhood");
+        }
+        let mut out_vector = Vec::with_capacity(1);
+        let next_eid = self.entities.len();
+
+        for i in next_eid..(next_eid + num) {
+            let nhdb = self.neighborhood.as_ref().unwrap();
+            let eid = nhdb.eid.clone();
+            self.entities.insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
+            let out_entity = CreateResult {
+                eid,
+                model_type: model.clone(),
+                children: self.add_model(model_params.clone()),
+                rel: None,
+                extra_info: None,
+            };
+            out_vector.push(out_entity);
+        }
+
+        debug!("the created model: {:?}", out_vector);
+        Ok(out_vector)
+    }
+
+    fn setup_done(&self) -> Result<(), String> {
+        info!("Setup done! Nothing to clean up.");
+        Ok(())
+    }
+
+    /// Override default trait implementation of step, because i don't make use of [ApiHelpers::sim_step].
+    /// Just gives the inputs to [Neighborhood::step].
+    fn step(
+        &mut self,
+        time: Time,
+        inputs: InputData,
+        _max_advance: Time,
+    ) -> Result<Option<Time>, String> {
+        // info!("Inputs; {:?}", inputs);
+        self.time = time;
+        if let Some(nbhd) = &mut self.neighborhood {
+            nbhd.step(time, inputs);
+        }
+
+        Ok(Some(time + self.step_size))
+    }
+
+    /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
+    /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
+    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
+        let mut data = OutputData {
+            requests: HashMap::new(),
+            time: Some(self.time),
+        };
+
+        if let Some(nbhd) = &mut self.neighborhood {
+            nbhd.add_output_values(&outputs, &mut data);
+        }
+
+        Ok(data)
+    }
+
+    fn stop(&self) {
+        warn!("Clearing all the Databases of the simulation!");
+        if let Some(nbhd) = &(self.neighborhood) {
+            for (_, household) in nbhd.households.iter() {
+                let hh_db = &household.db;
+                let trees = hh_db.tree_names();
+                for tree in trees {
+                    if let Ok(tree) = hh_db.open_tree(tree) {
+                        if let Err(e) = tree.clear() {
+                            warn!("Error clearing db {e}");
+                        }
+                    }
+                }
+            }
+        }
+
+        info!("Simulation has stopped!");
     }
 }
 
@@ -338,6 +351,7 @@ impl HouseholdBatterySim {
             entities: Map::new(),
             neighborhood: None,
             time_resolution: 1.0f64,
+            time: 0,
         }
     }
     fn params_array_into_vec<'a, B, F>(
@@ -389,7 +403,7 @@ pub struct Neighborhood {
     total: i64,
     time: TimePeriod,
     total_disposable_energy: i64,
-    step_size: i64,
+    step_size: u64,
     grid_power_load: i64,
 }
 
@@ -407,7 +421,7 @@ impl Neighborhood {
         time: TimePeriod,
         // init_reading: f64,
         descriptions: Vec<HouseholdDescription>,
-        step_size: i64,
+        step_size: u64,
     ) -> Neighborhood {
         //assert_eq!(step_size, 300, "One Simulation step per TradePeriod");
 
@@ -455,11 +469,10 @@ impl Neighborhood {
     }
 
     /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
-    fn households_as_mosaik_children(&self) -> Vec<CreateResultChild> {
-        let mut child_descriptions: Vec<CreateResultChild> =
-            Vec::with_capacity(self.households.len());
+    fn households_as_mosaik_children(&self) -> Vec<CreateResult> {
+        let mut child_descriptions: Vec<CreateResult> = Vec::with_capacity(self.households.len());
         for (eid, household) in self.households.iter() {
-            let child = CreateResultChild::new(eid.clone(), household.household_type.clone());
+            let child = CreateResult::new(eid.clone(), household.household_type.clone());
             child_descriptions.push(child);
         }
 
@@ -497,7 +510,7 @@ impl Neighborhood {
                 requested_values.insert(attr.clone(), value);
             }
 
-            output_data.insert(eid.clone(), requested_values);
+            output_data.requests.insert(eid.clone(), requested_values);
         }
     }
 
@@ -526,7 +539,7 @@ impl Neighborhood {
     ***********************************************/
 
     ///perform a normal simulation step.
-    fn step(&mut self, _time: usize, inputs: InputData) {
+    fn step(&mut self, time: Time, inputs: InputData) {
         self.reset_prosumption();
         self.update_household_input_params(inputs);
 

@@ -6,14 +6,15 @@ use structopt::StructOpt;
 use enerdag_crypto::hashable::Hashable;
 use enerdag_marketplace::{energybalance::EnergyBalance, market::Market};
 use mosaik_rust_api::{
-    run_simulation,
+    default_api, run_simulation,
     tcp::ConnectionDirection,
     types::{
         Attr, CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
-        SimulatorType,
+        SimulatorType, Time,
     },
-    ApiHelpers, DefaultMosaikApi, MosaikApi,
+    MosaikApi,
 };
+
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
 struct Opt {
@@ -47,15 +48,14 @@ pub fn main() /*-> Result<()>*/
     }
 }
 
-impl DefaultMosaikApi for MarketplaceSim {}
-
 impl MosaikApi for MarketplaceSim {
-    /*fn get_mut_params<T: ApiHelpers>(&mut self) -> &mut T {
-        &mut self
-    }*/
-
-    fn init(&mut self, sid: SimId, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
-        DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
+    fn init(
+        &mut self,
+        sid: SimId,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<Meta, std::string::String> {
+        default_api::default_init(self, time_resolution, sim_params)
     }
 
     fn create(
@@ -63,40 +63,45 @@ impl MosaikApi for MarketplaceSim {
         num: usize,
         model_name: String,
         model_params: Map<Attr, Value>,
-    ) -> Vec<CreateResult> {
-        DefaultMosaikApi::create(self, num, model_name, model_params)
+    ) -> Result<Vec<CreateResult>, String> {
+        default_api::default_create(self, num, model_name, model_params)
     }
 
-    fn setup_done(&self) {
-        info!("Setup done!")
-        //todo!()
+    fn setup_done(&self) -> Result<(), String> {
+        info!("Setup done!");
+        Ok(())
     }
 
-    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
-        DefaultMosaikApi::step(self, time, inputs, max_advance)
+    fn step(
+        &mut self,
+        time: Time,
+        inputs: InputData,
+        max_advance: Time,
+    ) -> Result<Option<Time>, String> {
+        default_api::default_step(self, time, inputs, max_advance)
     }
 
-    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
-        DefaultMosaikApi::get_data(self, outputs)
+    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
+        default_api::default_get_data(self, outputs)
     }
 
     fn stop(&self) {
-        info!("Simulation has stopped!")
-        //todo!()
+        info!("Simulation has stopped! Nothing to clean up.");
     }
 }
 pub struct MarketplaceSim {
     pub models: Vec<Model>,
     data: Vec<Vec<Vec<f64>>>,
     eid_prefix: String,
-    step_size: i64,
+    step_size: u64,
     entities: Map<String, Value>,
     time_resolution: f64,
+    time: Time,
 }
 
 //Implementation of the helpers defined in the library
-impl ApiHelpers for MarketplaceSim {
-    fn meta() -> Meta {
+impl default_api::ApiHelpers for MarketplaceSim {
+    fn meta(&self) -> Meta {
         let model1 = ModelDescription::new(
             true,
             vec!["init_reading".to_string()],
@@ -109,19 +114,22 @@ impl ApiHelpers for MarketplaceSim {
             ],
         );
 
-        let meta = Meta::new("3.0", SimulatorType::TimeBased, {
-            let mut m = HashMap::new();
-            m.insert("MarktplatzModel".to_string(), model1);
-            m
-        });
-        meta
+        Meta::new(
+            SimulatorType::TimeBased,
+            {
+                let mut m = HashMap::new();
+                m.insert("MarktplatzModel".to_string(), model1);
+                m
+            },
+            None,
+        )
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
         self.eid_prefix = eid_prefix.to_string();
     }
 
-    fn set_step_size(&mut self, step_size: i64) {
+    fn set_step_size(&mut self, step_size: u64) {
         self.step_size = step_size;
     }
 
@@ -129,7 +137,7 @@ impl ApiHelpers for MarketplaceSim {
         &self.eid_prefix
     }
 
-    fn get_step_size(&self) -> i64 {
+    fn get_step_size(&self) -> u64 {
         self.step_size
     }
 
@@ -139,17 +147,23 @@ impl ApiHelpers for MarketplaceSim {
 
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         if let Some(init_reading) = model_params.get("init_reading").and_then(|x| x.as_f64()) {
-            let model = Model::initmodel(init_reading);
+            let model = Model::new(init_reading);
             self.models.push(model);
             self.data.push(vec![]); //Add list for simulation data
+        } else {
+            error!("No init_reading given for model.");
         }
         None
     }
 
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Result<Value, String> {
         self.models
             .get(model_idx as usize)
-            .and_then(|x| x.get_value(attr))
+            .ok_or_else(|| format!("Model with index {} not found", model_idx))
+            .and_then(|x| {
+                x.get_value(attr)
+                    .ok_or_else(|| format!("Attribute '{}' not found in model {}", attr, model_idx))
+            })
     }
 
     //perform a simulation step and a auction of the marketplace
@@ -185,6 +199,14 @@ impl ApiHelpers for MarketplaceSim {
     fn set_time_resolution(&mut self, time_resolution: f64) {
         self.time_resolution = time_resolution;
     }
+
+    fn set_time(&mut self, time: Time) {
+        self.time = time;
+    }
+
+    fn get_time(&self) -> Time {
+        self.time
+    }
 }
 
 impl MarketplaceSim {
@@ -198,6 +220,7 @@ impl MarketplaceSim {
             models: vec![],
             data: vec![],
             time_resolution: 1.0f64,
+            time: 0,
         }
     }
 }
@@ -234,7 +257,7 @@ pub struct Model {
 }
 
 impl Model {
-    fn initmodel(init_reading: f64) -> Model {
+    fn new(init_reading: f64) -> Model {
         Model {
             households: HashMap::new(),
             trades: 0,

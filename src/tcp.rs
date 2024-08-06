@@ -1,18 +1,16 @@
+//! The async TCP-Manager for the communication between Mosaik and the simulators.
+
 use crate::{json, MosaikApi};
+use json::Response;
+
 use async_std::{
     net::{TcpListener, TcpStream},
     prelude::*,
     task,
 };
-use futures::sink::SinkExt;
-use futures::FutureExt;
-use futures::{channel::mpsc, select};
+use futures::{channel::mpsc, select, sink::SinkExt, FutureExt};
 use log::{debug, error, info, trace};
 use std::{future::Future, net::SocketAddr, sync::Arc};
-
-//------------------------------------------------------------------
-// Here begins the async TCP-Manager
-//------------------------------------------------------------------
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 //channels needed for the communication in the async tcp
@@ -21,13 +19,20 @@ type Receiver<T> = mpsc::UnboundedReceiver<T>;
 
 #[derive(Debug)]
 enum Void {}
+
+/// The direction of the connection with the address of the socket.
+/// Either we listen on an address or we connect to an address.
+/// This is used in the `run_simulation` function.
 pub enum ConnectionDirection {
     ConnectToAddress(SocketAddr),
     ListenOnAddress(SocketAddr),
 }
 
 ///Build the connection between Mosaik and us. 2 cases, we connect to them or they connect to us.
-pub async fn build_connection<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> Result<()> {
+pub(crate) async fn build_connection<T: MosaikApi>(
+    addr: ConnectionDirection,
+    simulator: T,
+) -> Result<()> {
     debug!("accept loop debug");
     match addr {
         //Case: we need to listen for a possible connector
@@ -253,13 +258,14 @@ async fn broker_loop<T: MosaikApi>(
             //The event that will happen the rest of the time, because the only connector is mosaik.
             Event::Request { full_data, name } => {
                 //parse the request
-                match json::parse_request(full_data) {
+                match json::parse_json_request(&full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
                         trace!("The request: {:?} from {name}", request);
-                        use json::Response::*;
-                        match json::handle_request(request, &mut simulator) {
-                            Ok(Successful(response)) => {
+                        match json::handle_request(&mut simulator, &request) {
+                            Response::Reply(mosaik_msg) => {
+                                let response = mosaik_msg.serialize_to_vec();
+
                                 //get the second argument in the tuple of peer
                                 //-> send the message to mosaik channel receiver
                                 if let Err(e) = peer.1.send(response).await {
@@ -267,25 +273,12 @@ async fn broker_loop<T: MosaikApi>(
                                     // FIXME what to send in this case? Failure?
                                 }
                             }
-                            Ok(Failure(response)) => {
-                                if let Err(e) = peer.1.send(response).await {
-                                    error!("error sending failure response to peer: {}", e);
-                                }
-                                todo!()
-                            }
-                            Ok(Stop) => {
-                                /*if let Err(e) = peer.1.send(response).await {
-                                    error!("error sending response to peer: {}", e);
-                                }*/
+                            Response::Stop => {
                                 if let Err(e) = connection_shutdown_sender.send(true).await {
                                     error!("error sending to the shutdown channel: {}", e);
                                 }
                                 break 'event_loop;
                             }
-                            Ok(None) => {
-                                info!("Nothing to respond");
-                            }
-                            Err(_) => todo!(),
                         }
                     }
                     Err(e) => {

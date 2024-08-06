@@ -1,5 +1,5 @@
 [package]
-authors = ["Jakob Pohl", "Christoph Gross"]
+authors = ["Jakob Pohl", "Christoph Gross", "Lukas Seehuber"]
 edition = "2021"
 name = "mosaik-rust-api"
 version = "0.1.0"
@@ -16,13 +16,13 @@ thiserror = "1.0.22"
 
 
 [dev-dependencies]
-enerdag-core = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-core = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
 
-enerdag-crypto = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
-enerdag-marketplace = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
-enerdag-time = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
-enerdag-currency = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
-enerdag-utils = { git = "https://gitlab+deploy-token-enerdag:YPivzQP8CSKdixaLYi97@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-crypto = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-marketplace = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-time = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-currency = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
+enerdag-utils = { git = "https://gitlab+deploy-token-enerdag:T9xnCzyNSNmnPeNJS8sz@es-git.cs.uni-tuebingen.de/enerDAG/enerdag.git/", branch = "main" }
 chrono = { version = "0.4.11"}#, features = ["serde"] }
 #test_utilities = {path = "../enerdag/enerdag-core/test-utilities"}
 # enerdag-crypto = {path = "../enerdag/enerdag-crypto"}
@@ -37,10 +37,12 @@ rand = "0.8.3"
 sled = { version = "0.34.6" } #, optional = true} # for debugging/measuring databse: , default-features = false  }
 env_logger = "0.10.0"
 crossbeam = "0.8"
+mockall = "0.12.1"
 
 
 [features]
-default = []
+default = ["default_api"]
+default_api = []
 # To use price ranges instead of fixed prices for trading
 random_prices = []
 sarima = ["enerdag-core/sarima"]

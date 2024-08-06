@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 ///Time is represented as the number of simulation steps since the
 ///simulation started. One step represents `time_resolution` seconds.
-pub type Time = i64;
+/// All time-based or hybrid simulators start at time=0.
+pub type Time = u64;
 
 ///An attribute name
 pub type Attr = String;
@@ -30,11 +31,20 @@ pub type InputData = HashMap<EntityId, HashMap<Attr, Map<FullId, Value>>>;
 ///needed, the required attributes are listed.
 pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 
+///The compatible Mosaik version with this edition of the API
+pub const API_VERSION: &str = "3.0";
+
 ///The format of output data as return by ``get_data``
-pub type OutputData = HashMap<EntityId, HashMap<Attr, Value>>;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OutputData {
+    #[serde(flatten)]
+    pub requests: HashMap<EntityId, HashMap<Attr, Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<Time>,
+}
 
 /// Description of a single model in `Meta`
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct ModelDescription {
     /// Whether the model can be created directly.
     pub public: bool,
@@ -69,10 +79,10 @@ impl ModelDescription {
 }
 
 /// The meta-data for a simulator.
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Meta {
     /// The API version that this simulator supports in the format "major.minor".
-    pub api_version: &'static str,
+    api_version: &'static str,
     /// The simulator's stepping type.
     #[serde(rename = "type")]
     pub simulator_type: SimulatorType,
@@ -85,20 +95,38 @@ pub struct Meta {
 
 impl Meta {
     pub fn new(
-        api_version: &'static str,
         simulator_type: SimulatorType,
         models: HashMap<ModelName, ModelDescription>,
+        extra_methods: Option<Vec<String>>,
     ) -> Self {
         Self {
-            api_version,
+            api_version: API_VERSION,
             simulator_type,
             models,
+            extra_methods,
+        }
+    }
+    pub fn get_version(&self) -> &str {
+        self.api_version
+    }
+}
+
+impl Default for Meta {
+    fn default() -> Self {
+        Self {
+            api_version: API_VERSION,
+            simulator_type: SimulatorType::default(),
+            models: HashMap::new(),
             extra_methods: None,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+/// The three types of simulators. With `Hybrid` being the default.
+/// - `TimeBased`: start at time 0, return the next step time after each step, and produce data valid for \([t_{now}, t_{next})\).
+/// - `EventBased`: start whenever their first event is scheduled, step at event times, can schedule their own events, and produce output valid at specific times.
+/// - `Hybrid`: a mix of the two. Also starts at time 0.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum SimulatorType {
     TimeBased,
@@ -138,10 +166,9 @@ impl CreateResult {
     }
 }
 
-pub type CreateResultChild = CreateResult;
-
 /*
 // The below types are copied from the python implementation.
+// pub type CreateResultChild = CreateResult;
 
 class EntitySpec(TypedDict):
     type: ModelName
@@ -157,10 +184,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_output_data() {
+        // Example JSON data
+        let json_data = r#"{
+        "eid_1": {"attr_1": "val_1"},
+        "time": 64
+    }
+    "#
+        .replace(['\n', ' '], "");
+
+        // Deserialize JSON to OutputData struct
+        let data: OutputData = serde_json::from_str(&json_data).unwrap();
+        assert_ne!(data.requests, HashMap::new());
+        assert_eq!(data.time, Some(64));
+
+        // Serialize EventData struct to JSON
+        let serialized_json = serde_json::to_string(&data).unwrap();
+        assert!(!serialized_json.contains("requests"));
+        assert!(serialized_json.contains("time"));
+
+        assert_eq!(serialized_json, json_data);
+    }
+
+    #[test]
     fn test_model_description_without_optionals() {
         let mut model = ModelDescription::new(false, vec![], vec![]);
 
-        assert_eq!(model.public, false);
+        assert!(!model.public);
         assert_eq!(model.params.len(), 0);
         assert_eq!(model.attrs.len(), 0);
         assert_eq!(model.any_inputs, None);
@@ -174,7 +224,7 @@ mod tests {
         model.params.push("init_reading".to_string());
         model.attrs = vec!["trades".to_string(), "total".to_string()];
 
-        assert_eq!(model.public, true);
+        assert!(model.public);
         assert_eq!(model.params.len(), 1);
         assert_eq!(model.attrs.len(), 2);
 
@@ -215,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_meta() {
-        let mut meta = Meta::new("3.0", SimulatorType::default(), HashMap::new());
+        let mut meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
         assert_eq!(meta.api_version, "3.0");
         assert_eq!(
             meta.simulator_type,
@@ -253,7 +303,7 @@ mod tests {
 
     #[test]
     fn test_meta_optionals() {
-        let mut meta = Meta::new("3.0", SimulatorType::default(), HashMap::new());
+        let mut meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
             r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, meta_json,
@@ -304,7 +354,7 @@ mod tests {
         assert_eq!(create_result.eid, "eid_1");
         assert_eq!(create_result.model_type, "model_name");
         assert_eq!(create_result.rel, Some(vec!["eid_2".to_string()]));
-        assert_eq!(create_result.children.is_some(), true);
+        assert!(create_result.children.is_some());
         if let Some(children) = &create_result.children {
             assert_eq!(children.len(), 1);
             assert_eq!(children[0].eid, "child_1");

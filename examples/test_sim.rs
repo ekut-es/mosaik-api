@@ -2,15 +2,16 @@
 #![allow(dead_code)]
 #![cfg(not(test))]
 
-use std::{collections::HashMap, todo};
+use std::{collections::HashMap, todo, unimplemented};
 
 use log::error;
 use mosaik_rust_api::{
+    default_api::{self, ApiHelpers},
     types::{
         Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
-        SimulatorType,
+        SimulatorType, Time,
     },
-    ApiHelpers, DefaultMosaikApi, MosaikApi,
+    MosaikApi,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -114,15 +115,28 @@ impl RSimulator {
 
 pub struct RExampleSim {
     eid_prefix: String,
-    step_size: i64,
-    time: u64,
+    step_size: u64,
+    time: Time,
     time_resolution: f64,
     entities: HashMap<EntityId, RModel>,
     simulator: RSimulator,
 }
 
+impl RExampleSim {
+    pub fn new() -> Self {
+        Self {
+            eid_prefix: "Model_".to_string(),
+            step_size: 1,
+            time: 0,
+            time_resolution: 1.0,
+            entities: HashMap::new(),
+            simulator: RSimulator::new(),
+        }
+    }
+}
+
 impl ApiHelpers for RExampleSim {
-    fn meta() -> Meta {
+    fn meta(&self) -> Meta {
         let example_model = ModelDescription {
             public: true,
             params: vec!["init_val".to_string()],
@@ -132,12 +146,15 @@ impl ApiHelpers for RExampleSim {
             persistent: None,
         };
 
-        let meta = Meta::new("3.0", SimulatorType::TimeBased, {
-            let mut m = HashMap::new();
-            m.insert("ExampleModel".to_string(), example_model);
-            m
-        });
-        meta
+        Meta::new(
+            SimulatorType::TimeBased,
+            {
+                let mut m = HashMap::new();
+                m.insert("ExampleModel".to_string(), example_model);
+                m
+            },
+            None,
+        )
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
@@ -148,11 +165,11 @@ impl ApiHelpers for RExampleSim {
         &self.eid_prefix
     }
 
-    fn get_step_size(&self) -> i64 {
+    fn get_step_size(&self) -> u64 {
         self.step_size
     }
 
-    fn set_step_size(&mut self, step_size: i64) {
+    fn set_step_size(&mut self, step_size: u64) {
         self.step_size = step_size;
     }
 
@@ -166,12 +183,12 @@ impl ApiHelpers for RExampleSim {
         None
     }
 
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
-        todo!("not implemented")
+    fn get_model_value(&self, model_idx: u64, attr: &str) -> Result<Value, String> {
+        unimplemented!("not implemented")
     }
 
     fn sim_step(&mut self, deltas: Vec<(String, u64, serde_json::Map<String, Value>)>) {
-        todo!("not implemented")
+        unimplemented!("not implemented")
     }
 
     fn get_time_resolution(&self) -> f64 {
@@ -181,20 +198,32 @@ impl ApiHelpers for RExampleSim {
     fn set_time_resolution(&mut self, time_resolution: f64) {
         self.time_resolution = time_resolution;
     }
+
+    fn set_time(&mut self, time: Time) {
+        self.time = time;
+    }
+
+    fn get_time(&self) -> Time {
+        self.time
+    }
 }
 
-impl DefaultMosaikApi for RExampleSim {}
-
 impl MosaikApi for RExampleSim {
-    fn init(&mut self, sid: String, time_resolution: f64, sim_params: Map<String, Value>) -> Meta {
-        DefaultMosaikApi::init(self, sid, time_resolution, sim_params)
+    fn init(
+        &mut self,
+        sid: String,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<Meta, String> {
+        default_api::default_init(self, time_resolution, sim_params)
     }
+
     fn create(
         &mut self,
         num: usize,
         model_name: String,
-        model_params: Map<Attr, Value>,
-    ) -> Vec<CreateResult> {
+        _model_params: Map<Attr, Value>,
+    ) -> Result<Vec<CreateResult>, String> {
         let next_eid = self.entities.len();
         let mut result: Vec<CreateResult> = Vec::new();
 
@@ -210,49 +239,42 @@ impl MosaikApi for RExampleSim {
 
         // entities must have length of num
         assert_eq!(result.len(), num); // TODO improve error handling
-        result
+        Ok(result)
     }
 
-    fn step(&mut self, time: usize, inputs: InputData, max_advance: usize) -> Option<usize> {
-        self.time = time as u64;
+    fn step(
+        &mut self,
+        time: Time,
+        inputs: InputData,
+        _max_advance: Time,
+    ) -> Result<Option<Time>, String> {
+        self.time = time;
         // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
         for (eid, model_instance) in &mut self.entities {
             if let Some(attrs) = inputs.get(eid) {
                 let mut new_delta = 0.0;
-                for (_, values) in attrs {
-                    new_delta = values.values().map(|v| v.as_f64().unwrap()).sum();
+                for value in attrs.values() {
+                    new_delta = value.values().map(|v| v.as_f64().unwrap()).sum();
                 }
                 model_instance.delta = new_delta;
             }
             model_instance.step();
         }
 
-        return Some(time + 1); // Step size is 1 second
+        Ok(Some(time + 1)) // Step size is 1 second
     }
 
-    fn get_data(&mut self, outputs: OutputRequest) -> OutputData {
-        DefaultMosaikApi::get_data(self, outputs)
+    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
+        default_api::default_get_data(self, outputs)
     }
 
-    fn setup_done(&self) {
+    fn setup_done(&self) -> Result<(), String> {
         // Nothing to do
+        Ok(())
     }
 
     fn stop(&self) {
         // Nothing to do
-    }
-}
-
-impl RExampleSim {
-    pub fn new() -> Self {
-        Self {
-            eid_prefix: "Model_".to_string(),
-            step_size: 1,
-            time: 0,
-            time_resolution: 1.0,
-            entities: HashMap::new(),
-            simulator: RSimulator::new(),
-        }
     }
 }
