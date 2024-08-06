@@ -2,7 +2,6 @@
 
 use crate::types::*;
 
-use core::panic;
 use log::{debug, error, info, trace};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -171,12 +170,15 @@ pub fn default_step<T: ApiHelpers>(
     for (eid, attrs) in inputs.into_iter() {
         for (attr, attr_values) in attrs.into_iter() {
             let model_idx = match simulator.get_mut_entities().get(&eid.clone()) {
-                Some(entity_val) if entity_val.is_u64() => entity_val.as_u64().unwrap(), //unwrap safe, because we check for u64
-                _ => panic!(
-                    "No correct model eid available. Input: {:?}, Entities: {:?}",
-                    eid,
-                    simulator.get_mut_entities()
-                ),
+                // unwrap safe, because we check for u64 beforehand
+                Some(entity_val) if entity_val.is_u64() => entity_val.as_u64().unwrap(),
+                _ => {
+                    return Err(format!(
+                        "No correct model eid available. Input: {:?}, Entities: {:?}",
+                        eid,
+                        simulator.get_mut_entities()
+                    ))
+                }
             };
             deltas.push((attr, model_idx, attr_values));
         }
