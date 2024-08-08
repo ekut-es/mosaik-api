@@ -1,8 +1,12 @@
-use std::collections::HashMap;
-
 use log::error;
-use mosaik_rust_api::{run_simulation, ApiHelpers, ConnectionDirection, MosaikApi, API_VERSION};
+use mosaik_rust_api::tcp::ConnectionDirection;
+use mosaik_rust_api::types::{
+    CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
+    SimulatorType, Time,
+};
+use mosaik_rust_api::{run_simulation, MosaikApi};
 use serde_json::{json, Map, Value};
+use std::collections::HashMap;
 use structopt::StructOpt;
 
 // A simple demo controller. Inspired by the python tutorial
@@ -22,94 +26,58 @@ impl Default for Controller {
     }
 }
 
-impl ApiHelpers for Controller {
-    fn meta() -> serde_json::Value {
-        todo!()
-    }
-
-    fn set_eid_prefix(&mut self, eid_prefix: &str) {
-        todo!()
-    }
-
-    fn set_step_size(&mut self, step_size: i64) {
-        todo!()
-    }
-
-    fn get_eid_prefix(&self) -> &str {
-        todo!()
-    }
-
-    fn get_step_size(&self) -> i64 {
-        todo!()
-    }
-
-    fn get_mut_entities(&mut self) -> &mut Map<String, Value> {
-        todo!()
-    }
-
-    fn add_model(
-        &mut self,
-        model_params: Map<mosaik_rust_api::AttributeId, Value>,
-    ) -> Option<Value> {
-        todo!()
-    }
-
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value> {
-        todo!()
-    }
-
-    fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>) {
-        todo!()
-    }
-}
-
 impl MosaikApi for Controller {
-    fn init(&mut self, _: String, _: Option<Map<String, Value>>) -> Value {
-        json!({
-            "api_version": API_VERSION,
-            "type": "event-based",
-            "models": {
-                "Agent": {
-                    "public": true,
-                    "params": [],
-                    "attrs": ["val_in", "delta"],
-                },
-            },
-        })
+    fn init(
+        &mut self,
+        sid: SimId,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<Meta, String> {
+        let mut meta = Meta::new(SimulatorType::EventBased, HashMap::new(), None);
+        meta.models.insert(
+            "Agent".to_owned(),
+            ModelDescription::new(true, vec![], vec!["val_in".to_owned(), "delta".to_owned()]),
+        );
+        Ok(meta)
     }
 
     fn create(
         &mut self,
         num: usize,
-        model: Value,
-        model_params: Option<Map<String, Value>>,
-    ) -> Vec<Map<String, Value>> {
+        model_name: String,
+        model_params: Map<String, Value>,
+    ) -> Result<Vec<CreateResult>, String> {
         let n_agents = self.agents.len();
-        let mut entities: Vec<Map<String, Value>> = vec![];
+        let mut entities: Vec<CreateResult> = vec![];
         for i in n_agents..(n_agents + num) {
             let eid = format!("Agent_{}", i);
             self.agents.push(eid.clone());
-            let mut map = Map::new();
-            map.insert("eid".to_owned(), json!(eid.clone()));
-            map.insert("type".to_owned(), model.clone());
-            entities.push(map);
+            let cres = {
+                CreateResult {
+                    eid,
+                    model_type: model_name.clone(),
+                    rel: None,
+                    children: None,
+                    extra_info: None,
+                }
+            };
+            entities.push(cres);
         }
-        entities
+        Ok(entities)
     }
 
-    fn setup_done(&self) {}
+    fn setup_done(&self) -> Result<(), String> {
+        Ok(())
+    }
 
     fn stop(&self) {}
 
     fn step(
         &mut self,
-        time: usize,
-        inputs: std::collections::HashMap<
-            mosaik_rust_api::Eid,
-            Map<mosaik_rust_api::AttributeId, Value>,
-        >,
-        // max_advance: usize,
-    ) -> usize {
+        time: Time,
+        inputs: InputData,
+        max_advance: Time,
+    ) -> Result<Option<Time>, String> {
         /* self.time = time
         data = {}
         for agent_eid, attrs in inputs.items():
@@ -170,13 +138,10 @@ impl MosaikApi for Controller {
             }
         }
         self.data = data;
-        0
+        Ok(Some(0))
     }
 
-    fn get_data(
-        &mut self,
-        outputs: HashMap<String, Vec<mosaik_rust_api::AttributeId>>,
-    ) -> Map<mosaik_rust_api::Eid, Value> {
+    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
         self.data.clone()
     }
 }
