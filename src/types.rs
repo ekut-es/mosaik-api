@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 ///Time is represented as the number of simulation steps since the
 ///simulation started. One step represents `time_resolution` seconds.
-pub type Time = i64;
+/// All time-based or hybrid simulators start at time=0.
+pub type Time = u64;
 
 ///An attribute name
 pub type Attr = String;
@@ -121,6 +122,10 @@ impl Default for Meta {
     }
 }
 
+/// The three types of simulators. With `Hybrid` being the default.
+/// - `TimeBased`: start at time 0, return the next step time after each step, and produce data valid for \([t_{now}, t_{next})\).
+/// - `EventBased`: start whenever their first event is scheduled, step at event times, can schedule their own events, and produce output valid at specific times.
+/// - `Hybrid`: a mix of the two. Also starts at time 0.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum SimulatorType {
@@ -161,10 +166,9 @@ impl CreateResult {
     }
 }
 
-pub type CreateResultChild = CreateResult;
-
 /*
 // The below types are copied from the python implementation.
+// pub type CreateResultChild = CreateResult;
 
 class EntitySpec(TypedDict):
     type: ModelName
@@ -187,8 +191,7 @@ mod tests {
         "time": 64
     }
     "#
-        .replace("\n", "")
-        .replace(" ", "");
+        .replace(['\n', ' '], "");
 
         // Deserialize JSON to OutputData struct
         let data: OutputData = serde_json::from_str(&json_data).unwrap();
@@ -197,8 +200,8 @@ mod tests {
 
         // Serialize EventData struct to JSON
         let serialized_json = serde_json::to_string(&data).unwrap();
-        assert_eq!(serialized_json.contains("requests"), false);
-        assert_eq!(serialized_json.contains("time"), true);
+        assert!(!serialized_json.contains("requests"));
+        assert!(serialized_json.contains("time"));
 
         assert_eq!(serialized_json, json_data);
     }

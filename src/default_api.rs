@@ -24,7 +24,7 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_init]
-    fn set_step_size(&mut self, step_size: i64);
+    fn set_step_size(&mut self, step_size: u64);
 
     ///Get the eid_prefix.
     ///
@@ -36,7 +36,7 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_step]
-    fn get_step_size(&self) -> i64;
+    fn get_step_size(&self) -> u64;
 
     /// Get the list containing the created entities.
     ///
@@ -47,11 +47,11 @@ pub trait ApiHelpers {
     fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value>;
 
     /// Create a model instance (= entity) with an initial value. Returns the
-    /// [types](CreateResultChild) representation of the children, if the entity has children.
+    /// [types](CreateResult) representation of the children, if the entity has children.
     ///
     /// # Used in:
     /// - [default_create]
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>>;
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>>;
 
     /// Get the value from an entity.
     ///
@@ -93,7 +93,6 @@ pub trait ApiHelpers {
 /// This function sets the time resolution and sets eid prefix and step size if they are given in the `sim_params`.
 pub fn default_init<T: ApiHelpers>(
     simulator: &mut T,
-    sid: SimId,
     time_resolution: f64,
     sim_params: Map<String, Value>,
 ) -> Result<Meta, String> {
@@ -108,7 +107,7 @@ pub fn default_init<T: ApiHelpers>(
                 simulator.set_eid_prefix(eid_prefix.as_str());
             }
             ("step_size", Value::Number(step_size)) => {
-                if let Some(step_size) = step_size.as_i64() {
+                if let Some(step_size) = step_size.as_u64() {
                     simulator.set_step_size(step_size);
                 } else {
                     let e = format!("Step size is not a valid number: {:?}", step_size);

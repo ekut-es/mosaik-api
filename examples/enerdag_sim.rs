@@ -19,8 +19,8 @@ use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, CreateResult, CreateResultChild, FullId, InputData, Meta, ModelDescription,
-        ModelName, OutputData, OutputRequest, SimulatorType, Time,
+        Attr, CreateResult, FullId, InputData, Meta, ModelDescription, ModelName, OutputData,
+        OutputRequest, SimulatorType, Time,
     },
     MosaikApi,
 };
@@ -98,7 +98,7 @@ pub struct HouseholdBatterySim {
     pub neighborhood: Option<Neighborhood>,
 
     eid_prefix: String,
-    step_size: i64,
+    step_size: u64,
     entities: Map<String, Value>,
     time_resolution: f64,
     time: Time,
@@ -171,7 +171,7 @@ impl ApiHelpers for HouseholdBatterySim {
         self.eid_prefix = eid_prefix.to_string();
     }
 
-    fn set_step_size(&mut self, step_size: i64) {
+    fn set_step_size(&mut self, step_size: u64) {
         self.step_size = step_size;
     }
 
@@ -179,7 +179,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &self.eid_prefix
     }
 
-    fn get_step_size(&self) -> i64 {
+    fn get_step_size(&self) -> u64 {
         self.step_size
     }
 
@@ -187,7 +187,7 @@ impl ApiHelpers for HouseholdBatterySim {
         &mut self.entities
     }
 
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResultChild>> {
+    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         let household_configs = self.params_to_household_config(&model_params);
 
         let start_time = if !model_params.contains_key(MOSAIK_PARAM_START_TIME) {
@@ -251,7 +251,7 @@ impl MosaikApi for HouseholdBatterySim {
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> Result<Meta, String> {
-        default_api::default_init(self, sid, time_resolution, sim_params)
+        default_api::default_init(self, time_resolution, sim_params)
     }
 
     fn create(
@@ -296,7 +296,7 @@ impl MosaikApi for HouseholdBatterySim {
         time: Time,
         inputs: InputData,
         _max_advance: Time,
-    ) -> Result<Option<i64>, String> {
+    ) -> Result<Option<Time>, String> {
         // info!("Inputs; {:?}", inputs);
         self.time = time;
         if let Some(nbhd) = &mut self.neighborhood {
@@ -403,7 +403,7 @@ pub struct Neighborhood {
     total: i64,
     time: TimePeriod,
     total_disposable_energy: i64,
-    step_size: i64,
+    step_size: u64,
     grid_power_load: i64,
 }
 
@@ -421,7 +421,7 @@ impl Neighborhood {
         time: TimePeriod,
         // init_reading: f64,
         descriptions: Vec<HouseholdDescription>,
-        step_size: i64,
+        step_size: u64,
     ) -> Neighborhood {
         //assert_eq!(step_size, 300, "One Simulation step per TradePeriod");
 
@@ -469,11 +469,10 @@ impl Neighborhood {
     }
 
     /// Returns a MOSAIK compatible JSON representation of the [households](ModelHousehold).
-    fn households_as_mosaik_children(&self) -> Vec<CreateResultChild> {
-        let mut child_descriptions: Vec<CreateResultChild> =
-            Vec::with_capacity(self.households.len());
+    fn households_as_mosaik_children(&self) -> Vec<CreateResult> {
+        let mut child_descriptions: Vec<CreateResult> = Vec::with_capacity(self.households.len());
         for (eid, household) in self.households.iter() {
-            let child = CreateResultChild::new(eid.clone(), household.household_type.clone());
+            let child = CreateResult::new(eid.clone(), household.household_type.clone());
             child_descriptions.push(child);
         }
 
