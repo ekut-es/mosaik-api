@@ -19,7 +19,8 @@ use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, CreateResult, EntityId, FullId, InputData, Meta, ModelDescription, ModelName, OutputData, OutputRequest, SimulatorType, Time
+        Attr, CreateResult, EntityId, FullId, InputData, Meta, ModelDescription, ModelName,
+        OutputData, OutputRequest, SimulatorType, Time,
     },
     MosaikApi,
 };
