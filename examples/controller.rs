@@ -5,7 +5,7 @@ use mosaik_rust_api::types::{
     SimulatorType, Time,
 };
 use mosaik_rust_api::{run_simulation, MosaikApi};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
@@ -105,6 +105,7 @@ impl MosaikApi for Controller {
         self.data = data
 
         return None*/
+        /* =====================================================================================
         self.time = time as i64;
         let mut data = Map::new();
         for (agent_eid, attrs) in inputs {
@@ -138,11 +139,13 @@ impl MosaikApi for Controller {
             }
         }
         self.data = data;
-        Ok(Some(0))
+        Ok(Some(0))*/
+        unimplemented!()
     }
 
     fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
-        self.data.clone()
+        // self.data.clone()
+        unimplemented!()
     }
 }
 
@@ -168,8 +171,8 @@ pub fn main() {
             ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
         }
     };
-    let mut controller = Controller::default();
+    let controller = Controller::default();
     if let Err(e) = run_simulation(address, controller) {
-        error!("{:?}", e);
+        error!("Error running controller: {:?}", e);
     }
 }
