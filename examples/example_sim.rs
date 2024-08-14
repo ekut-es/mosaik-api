@@ -5,7 +5,7 @@
 use log::error;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::{collections::HashMap, todo, unimplemented};
+use std::{collections::HashMap, unimplemented};
 use structopt::StructOpt;
 
 use mosaik_rust_api::{
@@ -18,43 +18,29 @@ use mosaik_rust_api::{
     },
     MosaikApi,
 };
-/* API calls:
 
-    init
+const EXAMPLE_MODEL: ModelDescription = ModelDescription {
+    public: true,
+    params: &["init_val"],
+    attrs: &["delta", "val"],
+    trigger: Some(&["delta"]),
+    any_inputs: None,
+    persistent: None,
+};
 
-    create
-
-    setup_done
-
-    step
-
-    get_data
-
-    stop
-
-Async. requests:
-
-    get_progress
-
-    get_related_entities
-
-    get_data
-
-    set_data
-
-    set_event
- */
 #[derive(StructOpt, Debug)]
 struct Opt {
     //The local addres mosaik connects to or none, if we connect to them
     #[structopt(short = "a", long)]
     addr: Option<String>,
+    eid_prefix: Option<String>,
 }
-pub fn main() /*-> Result<()>*/
-{
+
+pub fn main() {
     //get the address if there is one
     let opt = Opt::from_args();
     env_logger::init();
+    println!("opt: {:?}", opt);
 
     let address = match opt.addr {
         //case if we connect us to mosaik
@@ -87,7 +73,7 @@ impl RModel {
     pub fn new(init_val: Option<f64>) -> Self {
         Self {
             val: init_val.unwrap_or_default(),
-            delta: 1.0,
+            delta: 3.0,
         }
     }
 
@@ -128,7 +114,7 @@ impl RSimulator {
     }
 
     pub fn get_val(&self, index: usize) -> f64 {
-        self.models.get(index).unwrap().get_val() //self.models[index].get_val()
+        self.models[index].get_val() //self.models[index].get_val()
     }
 
     pub fn get_delta(&self, index: usize) -> f64 {
@@ -193,7 +179,7 @@ impl ApiHelpers for RExampleSim {
     }
 
     fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value> {
-        todo!()
+        &mut self.entities
     }
 
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
@@ -202,11 +188,15 @@ impl ApiHelpers for RExampleSim {
         None
     }
 
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Result<Value, String> {
-        unimplemented!("not implemented")
+    fn get_model_value(&self, model_idx: u64, _attr: &str) -> Result<Value, String> {
+        self.simulator
+            .models
+            .get(model_idx as usize)
+            .map(|v| v.get_val().into())
+            .ok_or("Model not found".to_string())
     }
 
-    fn sim_step(&mut self, deltas: Vec<(String, u64, serde_json::Map<String, Value>)>) {
+    fn sim_step(&mut self, _deltas: Vec<(String, u64, Map<String, Value>)>) {
         unimplemented!("not implemented")
     }
 
@@ -253,8 +243,9 @@ impl MosaikApi for RExampleSim {
         let mut result: Vec<CreateResult> = Vec::new();
 
         for i in next_eid..(next_eid + num) {
-            let model_instance = RModel::new(None);
-            let eid = format!("{}_{}", self.eid_prefix, i);
+            let model_instance =
+                serde_json::to_value(RModel::new(None)).map_err(|e| e.to_string())?;
+            let eid = format!("{}{}", self.eid_prefix, i);
 
             self.entities.insert(eid.clone(), model_instance);
 
@@ -263,7 +254,6 @@ impl MosaikApi for RExampleSim {
         }
 
         // entities must have length of num
-        assert_eq!(result.len(), num); // TODO improve error handling
         Ok(result)
     }
 
@@ -274,24 +264,54 @@ impl MosaikApi for RExampleSim {
         _max_advance: Time,
     ) -> Result<Option<Time>, String> {
         self.time = time;
+
         // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
-        for (eid, model_instance) in &mut self.entities {
+
+        // Check for new delta and do step for each model instance:
+        for (eid, model_instance) in self.get_mut_entities().iter_mut() {
+            let mut r_model: RModel =
+                RModel::deserialize(model_instance.clone()).map_err(|e| e.to_string())?;
             if let Some(attrs) = inputs.get(eid) {
                 let mut new_delta = 0.0;
                 for value in attrs.values() {
                     new_delta = value.values().map(|v| v.as_f64().unwrap()).sum();
                 }
-                model_instance.delta = new_delta;
+                r_model.delta = new_delta;
             }
-            model_instance.step();
+            r_model.step();
+            *model_instance = serde_json::to_value(&r_model).map_err(|e| e.to_string())?;
         }
 
         Ok(Some(time + 1)) // Step size is 1 second
     }
 
     fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
-        default_api::default_get_data(self, outputs)
+        let mut data: HashMap<EntityId, HashMap<Attr, Value>> = HashMap::new();
+
+        for (eid, attrs) in outputs.iter() {
+            let instance = self.entities.get(eid);
+            let instance: Option<RModel> =
+                instance.and_then(|i| serde_json::from_value(i.clone()).ok());
+
+            if let Some(instance) = instance {
+                let mut values: HashMap<String, Value> = HashMap::new();
+
+                for attr in attrs {
+                    if attr == "val" {
+                        values.insert(attr.clone(), instance.get_val().into());
+                    } else if attr == "delta" {
+                        values.insert(attr.clone(), instance.get_delta().into());
+                    }
+                }
+
+                data.insert(eid.clone(), values);
+            }
+        }
+        Ok(OutputData {
+            requests: data,
+            time: None,
+        })
     }
 
     fn setup_done(&self) -> Result<(), String> {
