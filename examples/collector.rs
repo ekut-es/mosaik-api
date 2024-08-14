@@ -117,9 +117,9 @@ impl MosaikApi for Collector {
                 for (src, value) in values {
                     self.data
                         .entry(src.clone())
-                        .or_insert_with(HashMap::new)
+                        .or_default()
                         .entry(attr.clone())
-                        .or_insert_with(HashMap::new)
+                        .or_default()
                         .insert(time, value.as_f64().unwrap_or_default());
                 }
             }

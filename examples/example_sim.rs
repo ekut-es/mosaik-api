@@ -54,7 +54,7 @@ pub fn main() {
     };
 
     //initialize the simulator.
-    let simulator = RExampleSim::new();
+    let simulator = RExampleSim::default();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
         error!("Error running RExampleSim: {:?}", e);
@@ -98,10 +98,6 @@ pub struct RSimulator {
 }
 
 impl RSimulator {
-    pub fn new() -> Self {
-        Self { models: Vec::new() }
-    }
-
     pub fn add_model(&mut self, init_val: Option<f64>) {
         self.models.push(RModel::new(init_val));
     }
@@ -138,8 +134,8 @@ pub struct RExampleSim {
     simulator: RSimulator,
 }
 
-impl RExampleSim {
-    pub fn new() -> Self {
+impl Default for RExampleSim {
+    fn default() -> Self {
         Self {
             meta: Meta::new(
                 SimulatorType::Hybrid,
@@ -151,7 +147,7 @@ impl RExampleSim {
             time: 0,
             time_resolution: 1.0,
             entities: Map::new(), // Maps EIDs to model instances/entities
-            simulator: RSimulator::new(),
+            simulator: RSimulator { models: vec![] },
         }
     }
 }
