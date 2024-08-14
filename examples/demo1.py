@@ -12,24 +12,32 @@ SIM_CONFIG = {
         "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",
     },
 }
-END = 10 * 60
+END = 10  # 10 seconds
 
 # Create World
 world = mosaik.World(SIM_CONFIG)
 
 # Start simulators
-examplesim = world.start("ExampleSim", eid_prefix="RModel_")
+# NOTE sim_name must match String in SIM_CONFIG
+examplesim = world.start(
+    "ExampleSim", eid_prefix="Model_"
+)  # FIXME eid_prefix param does not connect with Rust yet
 collector = world.start("Collector")
 
 # Instantiate models
-model = examplesim.RModel(init_val=2)
+# NOTE model class name must match String in META of Simulator
+model = examplesim.ExampleModel(
+    init_val=10
+)  # FIXME init_val param does not connect with Rust yet
 monitor = collector.Monitor()
 
 # Connect entities
 world.connect(model, monitor, "val", "delta")
 
 # Create more entities
-more_models = examplesim.RModel.create(2, init_val=3)
+more_models = examplesim.ExampleModel.create(
+    2, init_val=3
+)  # FIXME init_val param does not connect with Rust yet
 mosaik.util.connect_many_to_one(world, more_models, monitor, "val", "delta")
 
 # Run simulation
