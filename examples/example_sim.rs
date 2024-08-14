@@ -2,14 +2,13 @@
 #![allow(dead_code)]
 #![cfg(not(test))]
 
-use log::error;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::{collections::HashMap, unimplemented};
+use std::collections::HashMap;
 use structopt::StructOpt;
 
 use mosaik_rust_api::{
-    default_api::{self, ApiHelpers},
     run_simulation,
     tcp::ConnectionDirection,
     types::{
@@ -157,66 +156,6 @@ impl RExampleSim {
     }
 }
 
-impl ApiHelpers for RExampleSim {
-    fn meta(&self) -> Meta {
-        self.meta.clone()
-    }
-
-    fn set_eid_prefix(&mut self, eid_prefix: &str) {
-        self.eid_prefix = eid_prefix.to_string();
-    }
-
-    fn get_eid_prefix(&self) -> &str {
-        &self.eid_prefix
-    }
-
-    fn get_step_size(&self) -> u64 {
-        self.step_size
-    }
-
-    fn set_step_size(&mut self, step_size: u64) {
-        self.step_size = step_size;
-    }
-
-    fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value> {
-        &mut self.entities
-    }
-
-    fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
-        let init_val = model_params.get("init_val").map(|v| v.as_f64().unwrap());
-        self.simulator.models.push(RModel::new(init_val));
-        None
-    }
-
-    fn get_model_value(&self, model_idx: u64, _attr: &str) -> Result<Value, String> {
-        self.simulator
-            .models
-            .get(model_idx as usize)
-            .map(|v| v.get_val().into())
-            .ok_or("Model not found".to_string())
-    }
-
-    fn sim_step(&mut self, _deltas: Vec<(String, u64, Map<String, Value>)>) {
-        unimplemented!("not implemented")
-    }
-
-    fn get_time_resolution(&self) -> f64 {
-        self.time_resolution
-    }
-
-    fn set_time_resolution(&mut self, time_resolution: f64) {
-        self.time_resolution = time_resolution;
-    }
-
-    fn set_time(&mut self, time: Time) {
-        self.time = time;
-    }
-
-    fn get_time(&self) -> Time {
-        self.time
-    }
-}
-
 impl MosaikApi for RExampleSim {
     fn init(
         &mut self,
@@ -230,7 +169,29 @@ impl MosaikApi for RExampleSim {
                 time_resolution
             ));
         }
-        default_api::default_init(self, time_resolution, sim_params)
+        self.time_resolution = time_resolution;
+
+        for (key, value) in sim_params.into_iter() {
+            match (key.as_str(), value) {
+                ("eid_prefix", Value::String(eid_prefix)) => {
+                    self.eid_prefix = eid_prefix;
+                }
+                ("step_size", Value::Number(step_size)) => {
+                    if let Some(step_size) = step_size.as_u64() {
+                        self.step_size = step_size;
+                    } else {
+                        let e = format!("Step size is not a valid number: {:?}", step_size);
+                        error!("Error in default_init: {}", e);
+                        return Err(e);
+                    }
+                }
+                _ => {
+                    info!("Init: Unknown parameter: {}", key);
+                }
+            }
+        }
+
+        Ok(self.meta.clone())
     }
 
     fn create(
@@ -269,7 +230,7 @@ impl MosaikApi for RExampleSim {
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
 
         // Check for new delta and do step for each model instance:
-        for (eid, model_instance) in self.get_mut_entities().iter_mut() {
+        for (eid, model_instance) in self.entities.iter_mut() {
             let mut r_model: RModel =
                 RModel::deserialize(model_instance.clone()).map_err(|e| e.to_string())?;
             if let Some(attrs) = inputs.get(eid) {
