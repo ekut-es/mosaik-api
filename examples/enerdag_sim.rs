@@ -108,58 +108,51 @@ impl ApiHelpers for HouseholdBatterySim {
     fn meta(&self) -> Meta {
         let neighborhood = ModelDescription::new(
             true,
-            vec![
-                MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION.to_string(),
-                MOSAIK_PARAM_START_TIME.to_string(),
-            ],
-            vec![
-                "trades".to_string(),
-                "total".to_string(),
-                "total_disposable_energy".to_string(),
-                "grid_power_load".to_string(),
+            &[MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
+            &[
+                "trades",
+                "total",
+                "total_disposable_energy",
+                "grid_power_load",
             ],
         );
 
         let consumer = ModelDescription::new(
             false,
-            vec![],
-            vec![
-                "p_mw_load".to_string(),
-                "energy_balance".to_string(),
-                "published_energy_balance".to_string(),
-                "trades".to_string(),
-                "battery_charge".to_string(),
-                "trades".to_string(),
-                "p2p_traded".to_string(),
-                "avg_p2p_price".to_string(),
-                "published_p_mW_pv".to_string(),
-                "published_p_mW_load".to_string(),
+            &[],
+            &[
+                "p_mw_load",
+                "energy_balance",
+                "published_energy_balance",
+                "trades",
+                "battery_charge",
+                "trades",
+                "p2p_traded",
+                "avg_p2p_price",
+                "published_p_mW_pv",
+                "published_p_mW_load",
             ],
         );
 
         let prosumer = ModelDescription::new(
             false,
-            vec![],
-            vec![
-                "p_mw_load".to_string(),
-                "energy_balance".to_string(),
-                "published_energy_balance".to_string(),
-                "p_mw_pv".to_string(),
-                "battery_charge".to_string(),
-                "trades".to_string(),
-                "disposable_energy".to_string(),
-                "p2p_traded".to_string(),
-                "avg_p2p_price".to_string(),
-                "published_p_mW_pv".to_string(),
-                "published_p_mW_load".to_string(),
+            &[],
+            &[
+                "p_mw_load",
+                "energy_balance",
+                "published_energy_balance",
+                "p_mw_pv",
+                "battery_charge",
+                "trades",
+                "disposable_energy",
+                "p2p_traded",
+                "avg_p2p_price",
+                "published_p_mW_pv",
+                "published_p_mW_load",
             ],
         );
 
-        let pv = ModelDescription::new(
-            false,
-            vec![],
-            vec!["p_mw_pv".to_string(), "trades".to_string()],
-        );
+        let pv = ModelDescription::new(false, &[], &["p_mw_pv", "trades"]);
         let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
         m.insert("Neighborhood".to_string(), neighborhood);
         m.insert("Consumer".to_string(), consumer);

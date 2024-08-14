@@ -36,7 +36,7 @@ impl MosaikApi for Controller {
         let mut meta = Meta::new(SimulatorType::EventBased, HashMap::new(), None);
         meta.models.insert(
             "Agent".to_owned(),
-            ModelDescription::new(true, vec![], vec!["val_in".to_owned(), "delta".to_owned()]),
+            ModelDescription::new(true, &[], &["val_in", "delta"]),
         );
         Ok(meta)
     }

@@ -104,14 +104,8 @@ impl default_api::ApiHelpers for MarketplaceSim {
     fn meta(&self) -> Meta {
         let model1 = ModelDescription::new(
             true,
-            vec!["init_reading".to_string()],
-            vec![
-                "p_mw_pv".to_string(),
-                "p_mw_load".to_string(),
-                "reading".to_string(),
-                "trades".to_string(),
-                "total".to_string(),
-            ],
+            &["init_reading"],
+            &["p_mw_pv", "p_mw_load", "reading", "trades", "total"],
         );
 
         Meta::new(

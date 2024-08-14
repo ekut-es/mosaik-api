@@ -141,22 +141,31 @@ impl RSimulator {
 }
 
 pub struct RExampleSim {
+    // The meta information in the original example is a constant
+    meta: Meta,
+    // init values of the original example
     eid_prefix: String,
-    step_size: u64,
+    entities: Map<EntityId, Value>,
     time: Time,
+    // some more values
+    step_size: u64,
     time_resolution: f64,
-    entities: HashMap<EntityId, RModel>,
     simulator: RSimulator,
 }
 
 impl RExampleSim {
     pub fn new() -> Self {
         Self {
+            meta: Meta::new(
+                SimulatorType::Hybrid,
+                HashMap::from([("ExampleModel".to_string(), EXAMPLE_MODEL)]),
+                None,
+            ),
             eid_prefix: "Model_".to_string(),
             step_size: 1,
             time: 0,
             time_resolution: 1.0,
-            entities: HashMap::new(),
+            entities: Map::new(), // Maps EIDs to model instances/entities
             simulator: RSimulator::new(),
         }
     }
@@ -164,24 +173,7 @@ impl RExampleSim {
 
 impl ApiHelpers for RExampleSim {
     fn meta(&self) -> Meta {
-        let example_model = ModelDescription {
-            public: true,
-            params: vec!["init_val".to_string()],
-            attrs: vec!["delta".to_string(), "val".to_string()],
-            trigger: Some(vec!["delta".to_string()]),
-            any_inputs: None,
-            persistent: None,
-        };
-
-        Meta::new(
-            SimulatorType::TimeBased,
-            {
-                let mut m = HashMap::new();
-                m.insert("ExampleModel".to_string(), example_model);
-                m
-            },
-            None,
-        )
+        self.meta.clone()
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
