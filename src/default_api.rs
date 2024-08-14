@@ -42,9 +42,14 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_create]
-    /// - [default_get_data]
     /// - [default_step]
     fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value>;
+
+    /// Get the list containing the created entities.
+    ///
+    /// # Used in:
+    /// - [default_get_data]
+    fn get_entities(&self) -> &Map<EntityId, Value>;
 
     /// Create a model instance (= entity) with an initial value. Returns the
     /// [types](CreateResult) representation of the children, if the entity has children.
@@ -189,19 +194,19 @@ pub fn default_step<T: ApiHelpers>(
 /// The default implementation for the get_data function.
 /// Allows to get `attr` values of the model instances.
 pub fn default_get_data<T: ApiHelpers>(
-    simulator: &mut T,
+    simulator: &T,
     outputs: OutputRequest,
 ) -> Result<OutputData, String> {
     let mut data: HashMap<String, HashMap<Attr, Value>> = HashMap::new();
     for (eid, attrs) in outputs.into_iter() {
         let model_idx = simulator
-            .get_mut_entities()
+            .get_entities()
             .get(&eid)
             .and_then(|v| v.as_u64())
             .ok_or(format!(
                 "No correct model eid available. Input: {:?}, Entities: {:?}",
                 eid,
-                simulator.get_mut_entities(),
+                simulator.get_entities(),
             ))?;
 
         let mut attribute_values: HashMap<Attr, Value> = HashMap::new();

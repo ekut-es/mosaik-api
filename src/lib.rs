@@ -58,7 +58,7 @@ pub trait MosaikApi: Send + 'static {
     ) -> Result<Option<Time>, String>;
 
     /// Collect data from the simulation and return a nested vector (`OutputData`) containing the information.
-    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String>;
+    fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String>;
 
     /// This function is called by Mosaik when the simulation is finished.
     /// Returns `Null`. The simulation API stops as soon as the function returns.

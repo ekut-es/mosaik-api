@@ -9,8 +9,8 @@ use mosaik_rust_api::{
     default_api, run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
-        SimulatorType, Time,
+        Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
+        SimId, SimulatorType, Time,
     },
     MosaikApi,
 };
@@ -81,7 +81,7 @@ impl MosaikApi for MarketplaceSim {
         default_api::default_step(self, time, inputs, max_advance)
     }
 
-    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
+    fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String> {
         default_api::default_get_data(self, outputs)
     }
 
@@ -135,8 +135,12 @@ impl default_api::ApiHelpers for MarketplaceSim {
         self.step_size
     }
 
-    fn get_mut_entities(&mut self) -> &mut Map<String, Value> {
+    fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value> {
         &mut self.entities
+    }
+
+    fn get_entities(&self) -> &Map<EntityId, Value> {
+        &self.entities
     }
 
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {

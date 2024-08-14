@@ -143,7 +143,7 @@ impl MosaikApi for Controller {
         unimplemented!()
     }
 
-    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
+    fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String> {
         // self.data.clone()
         unimplemented!()
     }

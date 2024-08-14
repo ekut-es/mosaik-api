@@ -247,7 +247,7 @@ impl MosaikApi for RExampleSim {
         Ok(Some(time + 1)) // Step size is 1 second
     }
 
-    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
+    fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String> {
         let mut data: HashMap<EntityId, HashMap<Attr, Value>> = HashMap::new();
 
         for (eid, attrs) in outputs.iter() {

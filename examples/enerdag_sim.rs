@@ -19,8 +19,7 @@ use mosaik_rust_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, CreateResult, FullId, InputData, Meta, ModelDescription, ModelName, OutputData,
-        OutputRequest, SimulatorType, Time,
+        Attr, CreateResult, EntityId, FullId, InputData, Meta, ModelDescription, ModelName, OutputData, OutputRequest, SimulatorType, Time
     },
     MosaikApi,
 };
@@ -180,6 +179,10 @@ impl ApiHelpers for HouseholdBatterySim {
         &mut self.entities
     }
 
+    fn get_entities(&self) -> &Map<EntityId, Value> {
+        &self.entities
+    }
+
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {
         let household_configs = self.params_to_household_config(&model_params);
 
@@ -301,13 +304,13 @@ impl MosaikApi for HouseholdBatterySim {
 
     /// Override default trait implementation of get_data, because i don't make use of [ApiHelpers::get_model_value].
     /// Lets the [Neighborhood] give all the requested value via [Neighborhood::add_output_values].
-    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
+    fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String> {
         let mut data = OutputData {
             requests: HashMap::new(),
             time: Some(self.time),
         };
 
-        if let Some(nbhd) = &mut self.neighborhood {
+        if let Some(nbhd) = &self.neighborhood {
             nbhd.add_output_values(&outputs, &mut data);
         }
 
