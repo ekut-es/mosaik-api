@@ -9,7 +9,8 @@ SIM_CONFIG = {
         "cmd": "cargo run --example example_sim -- -a=%(addr)s",
     },
     "Collector": {
-        "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",
+        # "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",
+        "cmd": "cargo run --example collector -- -a=%(addr)s",
     },
 }
 END = 10  # 10 seconds
