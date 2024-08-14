@@ -85,7 +85,7 @@ pub fn main() /*-> Result<()>*/
     let simulator = HouseholdBatterySim::init_sim();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        error!("{:?}", e);
+        error!("Error running HouseholdBatterySim: {:?}", e);
     }
 }
 
@@ -247,7 +247,7 @@ impl MosaikApi for HouseholdBatterySim {
     /// *panics!* if more than one neighborhood is created.
     fn init(
         &mut self,
-        sid: String,
+        _sid: String,
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> Result<Meta, String> {
@@ -539,7 +539,7 @@ impl Neighborhood {
     ***********************************************/
 
     ///perform a normal simulation step.
-    fn step(&mut self, time: Time, inputs: InputData) {
+    fn step(&mut self, _time: Time, inputs: InputData) {
         self.reset_prosumption();
         self.update_household_input_params(inputs);
 

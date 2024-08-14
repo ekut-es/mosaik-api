@@ -72,10 +72,11 @@ pub fn main() /*-> Result<()>*/
     let simulator = RExampleSim::new();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        error!("{:?}", e);
+        error!("Error running RExampleSim: {:?}", e);
     }
 }
 
+/// Rust implementation of the Python example model
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RModel {
     val: f64,
@@ -237,10 +238,16 @@ impl ApiHelpers for RExampleSim {
 impl MosaikApi for RExampleSim {
     fn init(
         &mut self,
-        sid: String,
+        _sid: String,
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> Result<Meta, String> {
+        if time_resolution != 1.0f64 {
+            return Err(format!(
+                "ExampleSim only supports time_resolution=1., but {} was set.",
+                time_resolution
+            ));
+        }
         default_api::default_init(self, time_resolution, sim_params)
     }
 

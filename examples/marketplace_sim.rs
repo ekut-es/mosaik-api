@@ -44,14 +44,14 @@ pub fn main() /*-> Result<()>*/
     let simulator = MarketplaceSim::init_sim();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        error!("{:?}", e);
+        error!("Error running MarketplaceSim: {:?}", e);
     }
 }
 
 impl MosaikApi for MarketplaceSim {
     fn init(
         &mut self,
-        sid: SimId,
+        _sid: SimId,
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> Result<Meta, std::string::String> {

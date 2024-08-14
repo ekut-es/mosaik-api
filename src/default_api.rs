@@ -2,7 +2,7 @@
 
 use crate::types::*;
 
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
@@ -97,7 +97,7 @@ pub fn default_init<T: ApiHelpers>(
     sim_params: Map<String, Value>,
 ) -> Result<Meta, String> {
     if time_resolution <= 0.0 {
-        debug!("Non positive time resolution was given!");
+        warn!("Non positive time resolution was given! Converted to positive value.");
     }
     simulator.set_time_resolution(time_resolution.abs());
 
@@ -111,7 +111,7 @@ pub fn default_init<T: ApiHelpers>(
                     simulator.set_step_size(step_size);
                 } else {
                     let e = format!("Step size is not a valid number: {:?}", step_size);
-                    error!("{}", e);
+                    error!("Error in default_init: {}", e);
                     return Err(e);
                 }
             }
@@ -197,14 +197,19 @@ pub fn default_get_data<T: ApiHelpers>(
         let model_idx = simulator
             .get_mut_entities()
             .get(&eid)
-            .and_then(|eid| eid.as_u64())
-            .ok_or("No correct model eid available.")?;
+            .and_then(|v| v.as_u64())
+            .ok_or(format!(
+                "No correct model eid available. Input: {:?}, Entities: {:?}",
+                eid,
+                simulator.get_mut_entities(),
+            ))?;
 
         let mut attribute_values: HashMap<Attr, Value> = HashMap::new();
         for attr in attrs.into_iter() {
             //Get the values of the model
             match simulator.get_model_value(model_idx, &attr) {
                 Ok(value) => {
+                    // Get model.val or model.delta
                     attribute_values.insert(attr, value);
                 }
                 Err(e) => {

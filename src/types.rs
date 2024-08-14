@@ -1,9 +1,9 @@
 //! Mosaik types as defined in the [Mosaik API](https://gitlab.com/mosaik/api/mosaik-api-python/-/blob/3.0.9/mosaik_api_v3/types.py?ref_type=tags)
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::HashMap;
+
 ///Time is represented as the number of simulation steps since the
 ///simulation started. One step represents `time_resolution` seconds.
 /// All time-based or hybrid simulators start at time=0.
