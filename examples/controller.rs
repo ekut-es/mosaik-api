@@ -9,11 +9,21 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
+const AGENT_MODEL: ModelDescription = ModelDescription {
+    public: true,
+    params: &[],
+    attrs: &["val_in", "delta"],
+    trigger: None,
+    any_inputs: None,
+    persistent: None,
+};
+
 // A simple demo controller. Inspired by the python tutorial
 pub struct Controller {
     agents: Vec<String>,
     data: Map<String, Value>,
     time: i64,
+    meta: Meta,
 }
 
 impl Default for Controller {
@@ -22,6 +32,11 @@ impl Default for Controller {
             agents: vec![],
             data: Map::new(),
             time: 0,
+            meta: Meta::new(
+                SimulatorType::EventBased,
+                HashMap::from([("Agent".to_string(), AGENT_MODEL)]),
+                None,
+            ),
         }
     }
 }
@@ -29,16 +44,11 @@ impl Default for Controller {
 impl MosaikApi for Controller {
     fn init(
         &mut self,
-        sid: SimId,
-        time_resolution: f64,
-        sim_params: Map<String, Value>,
+        _sid: SimId,
+        _time_resolution: f64,
+        _sim_params: Map<String, Value>,
     ) -> Result<Meta, String> {
-        let mut meta = Meta::new(SimulatorType::EventBased, HashMap::new(), None);
-        meta.models.insert(
-            "Agent".to_owned(),
-            ModelDescription::new(true, &[], &["val_in", "delta"]),
-        );
-        Ok(meta)
+        Ok(self.meta.clone())
     }
 
     fn create(
