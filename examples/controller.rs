@@ -55,7 +55,7 @@ impl MosaikApi for Controller {
         &mut self,
         num: usize,
         model_name: String,
-        model_params: Map<String, Value>,
+        _model_params: Map<String, Value>,
     ) -> Result<Vec<CreateResult>, String> {
         let n_agents = self.agents.len();
         let mut entities: Vec<CreateResult> = vec![];
@@ -83,7 +83,7 @@ impl MosaikApi for Controller {
         &mut self,
         time: Time,
         inputs: InputData,
-        max_advance: Time,
+        _max_advance: Time,
     ) -> Result<Option<Time>, String> {
         self.time = time;
         let mut data = HashMap::new();
@@ -144,15 +144,13 @@ impl MosaikApi for Controller {
 
                 if let Some(agent_data) = self.data.get(&agent_eid) {
                     data.entry("time".to_string())
-                        .or_insert_with(HashMap::new)
+                        .or_default()
                         .insert("time".to_string(), json!(self.time));
 
-                    data.entry(agent_eid.clone())
-                        .or_insert_with(HashMap::new)
-                        .insert(
-                            attr.clone(),
-                            agent_data.get(&attr).unwrap_or(&json!(0.0)).clone(),
-                        );
+                    data.entry(agent_eid.clone()).or_default().insert(
+                        attr.clone(),
+                        agent_data.get(&attr).unwrap_or(&json!(0.0)).clone(),
+                    );
                 }
             }
         }
