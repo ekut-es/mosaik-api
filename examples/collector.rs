@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use log::error;
 use mosaik_rust_api::{
@@ -48,7 +48,7 @@ pub fn main() {
 
 struct Collector {
     eid: Option<String>,
-    data: HashMap<String, HashMap<String, HashMap<u64, f64>>>,
+    data: BTreeMap<String, BTreeMap<String, BTreeMap<u64, f64>>>,
     meta: Meta,
 }
 
@@ -65,7 +65,7 @@ impl Collector {
     fn new() -> Self {
         Collector {
             eid: None,
-            data: HashMap::new(),
+            data: BTreeMap::new(),
             meta: Meta::new(
                 SimulatorType::EventBased,
                 HashMap::from([("Monitor".to_string(), MONITOR_MODEL)]),
@@ -130,14 +130,12 @@ impl MosaikApi for Collector {
     fn stop(&self) {
         println!("Collected data:");
 
-        let mut sims: Vec<_> = self.data.iter().collect();
-        sims.sort_by_key(|&(sim, _)| sim);
+        let sims: Vec<_> = self.data.iter().collect();
 
         for (sim, sim_data) in sims {
             println!("- {}:", sim);
 
-            let mut attrs: Vec<_> = sim_data.iter().collect();
-            attrs.sort_by_key(|&(attr, _)| attr);
+            let attrs: Vec<_> = sim_data.iter().collect();
 
             for (attr, values) in attrs {
                 println!("  - {}: {:?}", attr, values);
