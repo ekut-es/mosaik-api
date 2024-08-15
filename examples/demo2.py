@@ -4,15 +4,19 @@ import mosaik.util
 
 
 # Sim config
+# this_folder = __file__.rsplit("/", 1)[0]
 SIM_CONFIG = {
     "ExampleSim": {
-        "python": "simulator_mosaik:ExampleSim",
+        # "python": "simulator_mosaik:ExampleSim",
+        "cmd": "cargo run --example example_sim -- -a=%(addr)s",
     },
     "ExampleCtrl": {
+        # "cmd": f"%(python)s {this_folder}/controller.py %(addr)s",
         "python": "controller:Controller",
     },
     "Collector": {
-        "cmd": "%(python)s collector.py %(addr)s",
+        # "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",
+        "cmd": "cargo run --example collector -- -a=%(addr)s",
     },
 }
 END = 10  # 10 seconds
