@@ -26,41 +26,7 @@ const EXAMPLE_MODEL: ModelDescription = ModelDescription {
     persistent: None,
 };
 
-#[derive(StructOpt, Debug)]
-struct Opt {
-    //The local addres mosaik connects to or none, if we connect to them
-    #[structopt(short = "a", long)]
-    addr: Option<String>,
-    eid_prefix: Option<String>,
-}
-
-pub fn main() {
-    //get the address if there is one
-    let opt = Opt::from_args();
-    env_logger::init();
-    println!("opt: {:?}", opt);
-
-    let address = match opt.addr {
-        //case if we connect us to mosaik
-        Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
-            mosaik_addr.parse().expect("Address is not parseable."),
-        ),
-        //case if mosaik connects to us
-        None => {
-            let addr = "127.0.0.1:3456";
-            ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
-        }
-    };
-
-    //initialize the simulator.
-    let simulator = RExampleSim::default();
-    //start build_connection in the library.
-    if let Err(e) = run_simulation(address, simulator) {
-        error!("Error running RExampleSim: {:?}", e);
-    }
-}
-
-/// Rust implementation of the Python example model
+/// Rust implementation of the Python [example_model.py](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html#the-model)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RModel {
     val: f64,
@@ -249,5 +215,38 @@ impl MosaikApi for ExampleSim {
 
     fn stop(&self) {
         // Nothing to do
+    }
+}
+
+#[derive(StructOpt, Debug)]
+struct Opt {
+    //The local addres mosaik connects to or none, if we connect to them
+    #[structopt(short = "a", long)]
+    addr: Option<String>,
+    eid_prefix: Option<String>,
+}
+
+pub fn main() {
+    //get the address if there is one
+    let opt = Opt::from_args();
+    env_logger::init();
+
+    let address = match opt.addr {
+        //case if we connect us to mosaik
+        Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
+            mosaik_addr.parse().expect("Address is not parseable."),
+        ),
+        //case if mosaik connects to us
+        None => {
+            let addr = "127.0.0.1:3456";
+            ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
+        }
+    };
+
+    //initialize the simulator.
+    let simulator = ExampleSim::default();
+    //start build_connection in the library.
+    if let Err(e) = run_simulation(address, simulator) {
+        error!("Error running RExampleSim: {:?}", e);
     }
 }
