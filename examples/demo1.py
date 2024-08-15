@@ -3,13 +3,11 @@ import mosaik
 import mosaik.util
 
 # Sim config. and other parameters
-this_folder = __file__.rsplit("/", 1)[0]
 SIM_CONFIG = {
     "ExampleSim": {
         "cmd": "cargo run --example example_sim -- -a=%(addr)s",
     },
     "Collector": {
-        # "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",
         "cmd": "cargo run --example collector -- -a=%(addr)s",
     },
 }
@@ -28,7 +26,7 @@ collector = world.start("Collector")
 # Instantiate models
 # NOTE model class name must match String in META of Simulator
 model = examplesim.ExampleModel(
-    init_val=10
+    init_val=2
 )  # FIXME init_val param does not connect with Rust yet
 monitor = collector.Monitor()
 
@@ -43,3 +41,16 @@ mosaik.util.connect_many_to_one(world, more_models, monitor, "val", "delta")
 
 # Run simulation
 world.run(until=END)
+
+# --------- Expected Output:
+#
+# Collected data:
+# - ExampleSim-0.Model_0:
+#   - delta: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1}
+#   - val: {0: 3, 1: 4, 2: 5, 3: 6, 4: 7, 5: 8, 6: 9, 7: 10, 8: 11, 9: 12}
+# - ExampleSim-0.Model_1:
+#   - delta: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1}
+#   - val: {0: 4, 1: 5, 2: 6, 3: 7, 4: 8, 5: 9, 6: 10, 7: 11, 8: 12, 9: 13}
+# - ExampleSim-0.Model_2:
+#   - delta: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1}
+#   - val: {0: 4, 1: 5, 2: 6, 3: 7, 4: 8, 5: 9, 6: 10, 7: 11, 8: 12, 9: 13}

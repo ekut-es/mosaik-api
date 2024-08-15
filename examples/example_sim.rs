@@ -1,7 +1,3 @@
-// ignore this file when building with cargo
-#![allow(dead_code)]
-#![cfg(not(test))]
-
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -72,7 +68,7 @@ impl RModel {
     pub fn new(init_val: Option<f64>) -> Self {
         Self {
             val: init_val.unwrap_or_default(),
-            delta: 3.0,
+            delta: 1.0,
         }
     }
 
