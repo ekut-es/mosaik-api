@@ -27,7 +27,6 @@ pub fn main() {
     //get the address if there is one
     let opt = Opt::from_args();
     env_logger::init();
-    println!("opt: {:?}", opt);
 
     let address = match opt.addr {
         //case if we connect us to mosaik
