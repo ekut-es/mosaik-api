@@ -12,7 +12,8 @@ SIM_CONFIG = {
     },
     "ExampleCtrl": {
         # "cmd": f"%(python)s {this_folder}/controller.py %(addr)s",
-        "python": "controller:Controller",
+        # "python": "controller:Controller",
+        "cmd": "cargo run --example controller -- -a=%(addr)s",
     },
     "Collector": {
         # "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",

@@ -1,11 +1,11 @@
 use log::error;
 use mosaik_rust_api::tcp::ConnectionDirection;
 use mosaik_rust_api::types::{
-    CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
-    SimulatorType, Time,
+    Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
+    SimId, SimulatorType, Time,
 };
 use mosaik_rust_api::{run_simulation, MosaikApi};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use structopt::StructOpt;
 
@@ -21,8 +21,8 @@ const AGENT_MODEL: ModelDescription = ModelDescription {
 // A simple demo controller. Inspired by the python tutorial
 pub struct Controller {
     agents: Vec<String>,
-    data: Map<String, Value>,
-    time: i64,
+    data: HashMap<EntityId, HashMap<Attr, Value>>,
+    time: Time,
     meta: Meta,
 }
 
@@ -30,7 +30,7 @@ impl Default for Controller {
     fn default() -> Self {
         Controller {
             agents: vec![],
-            data: Map::new(),
+            data: HashMap::new(),
             time: 0,
             meta: Meta::new(
                 SimulatorType::EventBased,
@@ -85,49 +85,24 @@ impl MosaikApi for Controller {
         inputs: InputData,
         max_advance: Time,
     ) -> Result<Option<Time>, String> {
-        /* self.time = time
-        data = {}
-        for agent_eid, attrs in inputs.items():
-            delta_dict = attrs.get('delta', {})
-            if len(delta_dict) > 0:
-                data[agent_eid] = {'delta': list(delta_dict.values())[0]}
-                continue
+        self.time = time;
+        let mut data = HashMap::new();
 
-            values_dict = attrs.get('val_in', {})
-            if len(values_dict) != 1:
-                raise RuntimeError('Only one ingoing connection allowed per '
-                                   'agent, but "%s" has %i.'
-                                   % (agent_eid, len(values_dict)))
-            value = list(values_dict.values())[0]
-
-            if value >= 3:
-                delta = -1
-            elif value <= -3:
-                delta = 1
-            else:
-                continue
-
-            data[agent_eid] = {'delta': delta}
-
-        self.data = data
-
-        return None*/
-        /* =====================================================================================
-        self.time = time as i64;
-        let mut data = Map::new();
         for (agent_eid, attrs) in inputs {
-            let delta_dict = attrs.get("delta").and_then(|x| x.as_object());
-            if let Some(delta_dict) = delta_dict {
-                if delta_dict.len() > 0 {
+            if let Some(delta_dict) = attrs.get("delta") {
+                if !delta_dict.is_empty() {
                     data.insert(
-                        agent_eid,
-                        json!({"delta": delta_dict.values().next().unwrap()}),
+                        agent_eid.clone(),
+                        HashMap::from([(
+                            "delta".to_string(),
+                            delta_dict.values().next().unwrap().clone(),
+                        )]),
                     );
                     continue;
                 }
             }
-            let mut values_dict = attrs.get("val_in").and_then(|x| x.as_object());
-            if let Some(values_dict) = values_dict {
+
+            if let Some(values_dict) = attrs.get("val_in") {
                 if values_dict.len() != 1 {
                     panic!(
                         "Only one ingoing connection allowed per agent, but \"{}\" has {}.",
@@ -135,24 +110,57 @@ impl MosaikApi for Controller {
                         values_dict.len()
                     );
                 }
-                let value: f64 = values_dict.values().next().unwrap().as_f64().unwrap();
-                if value >= 3.0 {
-                    data.insert(agent_eid, json!({"delta": -1.0}));
-                } else if value <= -3.0 {
-                    data.insert(agent_eid, json!({"delta": 1.0}));
+
+                let value = values_dict.values().next().unwrap();
+
+                let delta = if value.as_f64().unwrap() >= 3.0 {
+                    -1
+                } else if value.as_f64().unwrap() <= -3.0 {
+                    1
                 } else {
                     continue;
-                }
+                };
+
+                data.insert(
+                    agent_eid.clone(),
+                    HashMap::from([("delta".to_string(), json!(delta))]),
+                );
             }
         }
+
         self.data = data;
-        Ok(Some(0))*/
-        unimplemented!()
+
+        Ok(None)
     }
 
     fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String> {
-        // self.data.clone()
-        unimplemented!()
+        let mut data: HashMap<String, HashMap<String, Value>> = HashMap::new();
+
+        for (agent_eid, attrs) in outputs {
+            for attr in attrs {
+                if attr != "delta" {
+                    return Err(format!("Unknown output attribute \"{}\"", attr));
+                }
+
+                if let Some(agent_data) = self.data.get(&agent_eid) {
+                    data.entry("time".to_string())
+                        .or_insert_with(HashMap::new)
+                        .insert("time".to_string(), json!(self.time));
+
+                    data.entry(agent_eid.clone())
+                        .or_insert_with(HashMap::new)
+                        .insert(
+                            attr.clone(),
+                            agent_data.get(&attr).unwrap_or(&json!(0.0)).clone(),
+                        );
+                }
+            }
+        }
+
+        Ok(OutputData {
+            requests: data,
+            time: Some(self.time),
+        })
     }
 }
 
