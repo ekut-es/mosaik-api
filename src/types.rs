@@ -44,7 +44,7 @@ pub struct OutputData {
 }
 
 /// Description of a single model in `Meta`
-#[derive(Debug, Serialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Clone, Default)]
 pub struct ModelDescription {
     /// Whether the model can be created directly.
     pub public: bool,
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_model_description_without_optionals() {
-        let mut model = ModelDescription::new(false, &[], &[]);
+        let mut model = ModelDescription::default();
 
         assert!(!model.public);
         assert_eq!(model.params.len(), 0);

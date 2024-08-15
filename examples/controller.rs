@@ -62,16 +62,13 @@ impl MosaikApi for Controller {
         for i in n_agents..(n_agents + num) {
             let eid = format!("Agent_{}", i);
             self.agents.push(eid.clone());
-            let cres = {
-                CreateResult {
-                    eid,
-                    model_type: model_name.clone(),
-                    rel: None,
-                    children: None,
-                    extra_info: None,
-                }
-            };
-            entities.push(cres);
+            entities.push(CreateResult {
+                eid,
+                model_type: model_name.clone(),
+                rel: None,
+                children: None,
+                extra_info: None,
+            });
         }
         Ok(entities)
     }
