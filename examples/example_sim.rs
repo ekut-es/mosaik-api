@@ -28,15 +28,15 @@ const EXAMPLE_MODEL: ModelDescription = ModelDescription {
 
 /// Rust implementation of the Python [example_model.py](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html#the-model)
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RModel {
+pub struct Model {
     val: f64,
     delta: f64,
 }
 
-impl RModel {
-    pub fn new(init_val: Option<f64>) -> Self {
+impl Model {
+    pub fn new(init_val: f64) -> Self {
         Self {
-            val: init_val.unwrap_or_default(),
+            val: init_val,
             delta: 1.0,
         }
     }
@@ -131,14 +131,29 @@ impl MosaikApi for ExampleSim {
         &mut self,
         num: usize,
         model_name: String,
-        _model_params: Map<Attr, Value>,
+        model_params: Map<Attr, Value>,
     ) -> Result<Vec<CreateResult>, String> {
         let next_eid = self.entities.len();
         let mut result: Vec<CreateResult> = Vec::new();
 
+        let init_val = match model_params.get("init_val") {
+            Some(v) => match v.as_f64() {
+                Some(val) => {
+                    info!("init_val is set to: {}", val);
+                    val
+                }
+                None => {
+                    let e = format!("init_val is not a valid number: {:?}", v);
+                    error!("Error in create: {}", e);
+                    return Err(e);
+                }
+            },
+            None => 0.0, // default
+        };
+
         for i in next_eid..(next_eid + num) {
             let model_instance =
-                serde_json::to_value(RModel::new(None)).map_err(|e| e.to_string())?;
+                serde_json::to_value(Model::new(init_val)).map_err(|e| e.to_string())?;
             let eid = format!("{}{}", self.eid_prefix, i);
 
             self.entities.insert(eid.clone(), model_instance);
@@ -163,18 +178,18 @@ impl MosaikApi for ExampleSim {
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
 
         // Check for new delta and do step for each model instance:
-        for (eid, model_instance) in self.entities.iter_mut() {
-            let mut r_model: RModel =
-                RModel::deserialize(model_instance.clone()).map_err(|e| e.to_string())?;
+        for (eid, model_value) in self.entities.iter_mut() {
+            let mut model_instance: Model =
+                Model::deserialize(model_value.clone()).map_err(|e| e.to_string())?;
             if let Some(attrs) = inputs.get(eid) {
                 let mut new_delta = 0.0;
                 for value in attrs.values() {
                     new_delta = value.values().map(|v| v.as_f64().unwrap()).sum();
                 }
-                r_model.delta = new_delta;
+                model_instance.delta = new_delta;
             }
-            r_model.step();
-            *model_instance = serde_json::to_value(&r_model).map_err(|e| e.to_string())?;
+            model_instance.step();
+            *model_value = serde_json::to_value(&model_instance).map_err(|e| e.to_string())?;
         }
 
         Ok(Some(time + 1)) // Step size is 1 second
@@ -185,7 +200,7 @@ impl MosaikApi for ExampleSim {
 
         for (eid, attrs) in outputs.iter() {
             let instance = self.entities.get(eid);
-            let instance: Option<RModel> =
+            let instance: Option<Model> =
                 instance.and_then(|i| serde_json::from_value(i.clone()).ok());
 
             if let Some(instance) = instance {
