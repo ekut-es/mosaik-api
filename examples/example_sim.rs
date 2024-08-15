@@ -89,35 +89,8 @@ impl RModel {
     }
 }
 
-pub struct RSimulator {
-    models: Vec<RModel>,
-}
-
-impl RSimulator {
-    pub fn add_model(&mut self, init_val: Option<f64>) {
-        self.models.push(RModel::new(init_val));
-    }
-
-    pub fn step(&mut self) {
-        for model in self.models.iter_mut() {
-            model.step();
-        }
-    }
-
-    pub fn get_val(&self, index: usize) -> f64 {
-        self.models[index].get_val() //self.models[index].get_val()
-    }
-
-    pub fn get_delta(&self, index: usize) -> f64 {
-        self.models[index].get_delta()
-    }
-
-    pub fn set_delta(&mut self, index: usize, delta: f64) {
-        self.models[index].set_delta(delta);
-    }
-}
-
-pub struct RExampleSim {
+/// Rust implementation of the Python [simulator_mosaik.py](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html#the-simulator-class)
+pub struct ExampleSim {
     // The meta information in the original example is a constant
     meta: Meta,
     // init values of the original example
@@ -127,10 +100,10 @@ pub struct RExampleSim {
     // some more values
     step_size: u64,
     time_resolution: f64,
-    simulator: RSimulator,
 }
 
-impl Default for RExampleSim {
+impl Default for ExampleSim {
+    // This is like the __init__ in the original example
     fn default() -> Self {
         Self {
             meta: Meta::new(
@@ -143,12 +116,11 @@ impl Default for RExampleSim {
             time: 0,
             time_resolution: 1.0,
             entities: Map::new(), // Maps EIDs to model instances/entities
-            simulator: RSimulator { models: vec![] },
         }
     }
 }
 
-impl MosaikApi for RExampleSim {
+impl MosaikApi for ExampleSim {
     fn init(
         &mut self,
         _sid: String,
