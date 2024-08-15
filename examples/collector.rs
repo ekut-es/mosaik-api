@@ -1,3 +1,6 @@
+//! Taken from official [demo1](https://mosaik.readthedocs.io/en/3.3.3/tutorials/demo1.html)
+//! collects all data it receives each step in a dictionary (including the current simulation time)
+//! and simply prints everything at the end of the simulation.
 use std::collections::{BTreeMap, HashMap};
 
 use log::error;
@@ -42,7 +45,7 @@ pub fn main() {
     let simulator = Collector::new();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        error!("Error running RExampleSim: {:?}", e);
+        error!("Error running Collector: {:?}", e);
     }
 }
 
