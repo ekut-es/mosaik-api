@@ -1,6 +1,6 @@
 //! Taken from official [tutorial](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html)
 //! This includes the example_model.py and the simulator_mosaik.py of the Python tutorial.
-use log::{error, info};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -107,10 +107,12 @@ impl MosaikApi for ExampleSim {
         for (key, value) in sim_params.into_iter() {
             match (key.as_str(), value) {
                 ("eid_prefix", Value::String(eid_prefix)) => {
+                    info!("EID prefix is set to: {}", eid_prefix);
                     self.eid_prefix = eid_prefix;
                 }
                 ("step_size", Value::Number(step_size)) => {
                     if let Some(step_size) = step_size.as_u64() {
+                        info!("Step size is set to: {}", step_size);
                         self.step_size = step_size;
                     } else {
                         let e = format!("Step size is not a valid number: {:?}", step_size);
@@ -119,7 +121,7 @@ impl MosaikApi for ExampleSim {
                     }
                 }
                 _ => {
-                    info!("Init: Unknown parameter: {}", key);
+                    warn!("Init: Unknown parameter: {}", key);
                 }
             }
         }
@@ -238,7 +240,6 @@ struct Opt {
     //The local addres mosaik connects to or none, if we connect to them
     #[structopt(short = "a", long)]
     addr: Option<String>,
-    eid_prefix: Option<String>,
 }
 
 pub fn main() {
