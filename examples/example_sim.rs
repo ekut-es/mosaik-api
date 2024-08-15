@@ -1,3 +1,5 @@
+//! Taken from official [tutorial](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html)
+//! This includes the example_model.py and the simulator_mosaik.py of the Python tutorial.
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -14,6 +16,7 @@ use mosaik_rust_api::{
     MosaikApi,
 };
 
+/// The model description used in the simulators META.
 const EXAMPLE_MODEL: ModelDescription = ModelDescription {
     public: true,
     params: &["init_val"],
