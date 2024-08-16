@@ -3,7 +3,7 @@
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 use structopt::StructOpt;
 
 use mosaik_rust_api::{
@@ -16,15 +16,23 @@ use mosaik_rust_api::{
     MosaikApi,
 };
 
-/// The model description used in the simulators META.
-const EXAMPLE_MODEL: ModelDescription = ModelDescription {
-    public: true,
-    params: &["init_val"],
-    attrs: &["delta", "val"],
-    trigger: Some(&["delta"]),
-    any_inputs: None,
-    persistent: None,
-};
+const META: LazyLock<Meta> = LazyLock::new(|| {
+    Meta::new(
+        SimulatorType::Hybrid,
+        HashMap::from([(
+            "ExampleModel".to_string(),
+            ModelDescription {
+                public: true,
+                params: &["init_val"],
+                attrs: &["delta", "val"],
+                trigger: Some(&["delta"]),
+                any_inputs: None,
+                persistent: None,
+            },
+        )]),
+        None,
+    )
+});
 
 /// Rust implementation of the Python [example_model.py](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html#the-model)
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,8 +68,6 @@ impl Model {
 
 /// Rust implementation of the Python [simulator_mosaik.py](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html#the-simulator-class)
 pub struct ExampleSim {
-    // The meta information in the original example is a constant
-    meta: Meta,
     // init values of the original example
     eid_prefix: String,
     entities: Map<EntityId, Value>,
@@ -75,11 +81,6 @@ impl Default for ExampleSim {
     // This is like the __init__ in the original example
     fn default() -> Self {
         Self {
-            meta: Meta::new(
-                SimulatorType::Hybrid,
-                HashMap::from([("ExampleModel".to_string(), EXAMPLE_MODEL)]),
-                None,
-            ),
             eid_prefix: "Model_".to_string(),
             step_size: 1,
             time: 0,
@@ -126,7 +127,7 @@ impl MosaikApi for ExampleSim {
             }
         }
 
-        Ok(self.meta.clone())
+        Ok(META.clone())
     }
 
     fn create(
