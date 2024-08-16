@@ -44,6 +44,18 @@ pub struct OutputData {
 }
 
 /// Description of a single model in `Meta`
+///
+/// ## Example implementation
+/// ```rust
+/// ModelDescription {
+///     public: true,
+///     params: &["init_val"],
+///     attrs: &["delta", "val"],
+///     trigger: Some(&["delta"]),
+///     any_inputs: None,
+///     persistent: None,
+/// },
+/// ```
 #[derive(Debug, Serialize, PartialEq, Clone, Default)]
 pub struct ModelDescription {
     /// Whether the model can be created directly.
@@ -66,6 +78,7 @@ pub struct ModelDescription {
 }
 
 impl ModelDescription {
+    /// Creates a new `ModelDescription` with fields `any_inputs`, `trigger` and `persistent` set to `None`.
     pub fn new(
         public: bool,
         params: &'static [&'static str],
@@ -110,6 +123,7 @@ impl Meta {
             extra_methods,
         }
     }
+
     pub fn get_version(&self) -> &str {
         self.api_version
     }
