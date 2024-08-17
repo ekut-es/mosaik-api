@@ -53,7 +53,7 @@ pub fn main() {
 
 struct Collector {
     eid: Option<String>,
-    data: BTreeMap<String, BTreeMap<String, BTreeMap<u64, f64>>>,
+    data: BTreeMap<String, BTreeMap<String, BTreeMap<u64, i64>>>,
 }
 
 static META: LazyLock<Meta> = LazyLock::new(|| {
@@ -128,7 +128,7 @@ impl MosaikApi for Collector {
                         .or_default()
                         .entry(attr.clone())
                         .or_default()
-                        .insert(time, value.as_f64().unwrap_or_default());
+                        .insert(time, value.as_f64().unwrap().round() as i64);
                 }
             }
         }
