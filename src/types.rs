@@ -47,14 +47,16 @@ pub struct OutputData {
 ///
 /// ## Example implementation
 /// ```rust
-/// ModelDescription {
+/// use mosaik_rust_api::types::ModelDescription;
+///
+/// const foo: ModelDescription = ModelDescription {
 ///     public: true,
 ///     params: &["init_val"],
 ///     attrs: &["delta", "val"],
 ///     trigger: Some(&["delta"]),
 ///     any_inputs: None,
 ///     persistent: None,
-/// },
+/// };
 /// ```
 #[derive(Debug, Serialize, PartialEq, Clone, Default)]
 pub struct ModelDescription {
