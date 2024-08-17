@@ -1,6 +1,6 @@
 use log::*;
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 use structopt::StructOpt;
 
 use enerdag_crypto::hashable::Hashable;
@@ -14,6 +14,24 @@ use mosaik_rust_api::{
     },
     MosaikApi,
 };
+
+static META: LazyLock<Meta> = LazyLock::new(|| {
+    let model1 = ModelDescription::new(
+        true,
+        &["init_reading"],
+        &["p_mw_pv", "p_mw_load", "reading", "trades", "total"],
+    );
+
+    Meta::new(
+        SimulatorType::TimeBased,
+        {
+            let mut m = HashMap::new();
+            m.insert("MarktplatzModel".to_string(), model1);
+            m
+        },
+        None,
+    )
+});
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -54,7 +72,7 @@ impl MosaikApi for MarketplaceSim {
         _sid: SimId,
         time_resolution: f64,
         sim_params: Map<String, Value>,
-    ) -> Result<Meta, std::string::String> {
+    ) -> Result<&'static Meta, String> {
         default_api::default_init(self, time_resolution, sim_params)
     }
 
@@ -101,22 +119,8 @@ pub struct MarketplaceSim {
 
 //Implementation of the helpers defined in the library
 impl default_api::ApiHelpers for MarketplaceSim {
-    fn meta(&self) -> Meta {
-        let model1 = ModelDescription::new(
-            true,
-            &["init_reading"],
-            &["p_mw_pv", "p_mw_load", "reading", "trades", "total"],
-        );
-
-        Meta::new(
-            SimulatorType::TimeBased,
-            {
-                let mut m = HashMap::new();
-                m.insert("MarktplatzModel".to_string(), model1);
-                m
-            },
-            None,
-        )
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {

@@ -4,7 +4,7 @@
 //! The Mosaik-Interface is different from [marketplace_sim](marketplace_sim). The
 use log::*;
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 use structopt::StructOpt;
 
 use enerdag_core::battery::forecast::DisposableEnergyCalcToml;
@@ -27,6 +27,62 @@ use mosaik_rust_api::{
 use sled::Db;
 
 type BidWAddrTuple = ([u8; 32], enerdag_marketplace::bid::Bid);
+
+static META: LazyLock<Meta> = LazyLock::new(|| {
+    let neighborhood = ModelDescription::new(
+        true,
+        &[MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
+        &[
+            "trades",
+            "total",
+            "total_disposable_energy",
+            "grid_power_load",
+        ],
+    );
+
+    let consumer = ModelDescription::new(
+        false,
+        &[],
+        &[
+            "p_mw_load",
+            "energy_balance",
+            "published_energy_balance",
+            "trades",
+            "battery_charge",
+            "trades",
+            "p2p_traded",
+            "avg_p2p_price",
+            "published_p_mW_pv",
+            "published_p_mW_load",
+        ],
+    );
+
+    let prosumer = ModelDescription::new(
+        false,
+        &[],
+        &[
+            "p_mw_load",
+            "energy_balance",
+            "published_energy_balance",
+            "p_mw_pv",
+            "battery_charge",
+            "trades",
+            "disposable_energy",
+            "p2p_traded",
+            "avg_p2p_price",
+            "published_p_mW_pv",
+            "published_p_mW_load",
+        ],
+    );
+
+    let pv = ModelDescription::new(false, &[], &["p_mw_pv", "trades"]);
+    let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
+    m.insert("Neighborhood".to_string(), neighborhood);
+    m.insert("Consumer".to_string(), consumer);
+    m.insert("Prosumer".to_string(), prosumer);
+    m.insert("PV".to_string(), pv);
+    Meta::new(SimulatorType::TimeBased, m, None)
+});
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -105,61 +161,10 @@ pub struct HouseholdBatterySim {
 }
 
 impl ApiHelpers for HouseholdBatterySim {
-    fn meta(&self) -> Meta {
-        let neighborhood = ModelDescription::new(
-            true,
-            &[MOSAIK_PARAM_HOUSEHOLD_DESCRIPTION, MOSAIK_PARAM_START_TIME],
-            &[
-                "trades",
-                "total",
-                "total_disposable_energy",
-                "grid_power_load",
-            ],
-        );
-
-        let consumer = ModelDescription::new(
-            false,
-            &[],
-            &[
-                "p_mw_load",
-                "energy_balance",
-                "published_energy_balance",
-                "trades",
-                "battery_charge",
-                "trades",
-                "p2p_traded",
-                "avg_p2p_price",
-                "published_p_mW_pv",
-                "published_p_mW_load",
-            ],
-        );
-
-        let prosumer = ModelDescription::new(
-            false,
-            &[],
-            &[
-                "p_mw_load",
-                "energy_balance",
-                "published_energy_balance",
-                "p_mw_pv",
-                "battery_charge",
-                "trades",
-                "disposable_energy",
-                "p2p_traded",
-                "avg_p2p_price",
-                "published_p_mW_pv",
-                "published_p_mW_load",
-            ],
-        );
-
-        let pv = ModelDescription::new(false, &[], &["p_mw_pv", "trades"]);
-        let mut m: HashMap<ModelName, ModelDescription> = HashMap::new();
-        m.insert("Neighborhood".to_string(), neighborhood);
-        m.insert("Consumer".to_string(), consumer);
-        m.insert("Prosumer".to_string(), prosumer);
-        m.insert("PV".to_string(), pv);
-        Meta::new(SimulatorType::TimeBased, m, None)
+    fn meta(&self) -> &'static Meta {
+        &META
     }
+
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
         self.eid_prefix = eid_prefix.to_string();
     }
@@ -247,7 +252,7 @@ impl MosaikApi for HouseholdBatterySim {
         _sid: String,
         time_resolution: f64,
         sim_params: Map<String, Value>,
-    ) -> Result<Meta, String> {
+    ) -> Result<&'static Meta, String> {
         default_api::default_init(self, time_resolution, sim_params)
     }
 

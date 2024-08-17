@@ -304,6 +304,7 @@ mod tests {
     use mockall::predicate::*;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::sync::LazyLock;
 
     // --------------------------------------------------------------------------
     // Tests for MosaikMessage
@@ -625,9 +626,10 @@ mod tests {
     //         }
     //     }
     // }
-
     #[test]
     fn test_handle_request_init_success() -> Result<(), MosaikError> {
+        static META: LazyLock<Meta> =
+            LazyLock::new(|| Meta::new(SimulatorType::default(), HashMap::new(), None));
         let mut simulator = MockMosaikApi::new();
         let request = Request {
             msg_id: 789,
@@ -640,7 +642,7 @@ mod tests {
             .expect_init()
             .once()
             .with(eq("simID-1".to_string()), eq(1.0), eq(Map::new()))
-            .returning(|_, _, _| Ok(Meta::new(SimulatorType::default(), HashMap::new(), None)));
+            .returning(|_, _, _| Ok(&META));
 
         let payload = json!(Meta::new(SimulatorType::default(), HashMap::new(), None));
         let actual_response = handle_request(&mut simulator, &request);

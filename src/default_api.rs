@@ -12,7 +12,7 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_init]
-    fn meta(&self) -> Meta;
+    fn meta(&self) -> &'static Meta;
 
     /// Set the `eid_prefix` on the simulator, which we got from the interface.
     ///
@@ -100,7 +100,7 @@ pub fn default_init<T: ApiHelpers>(
     simulator: &mut T,
     time_resolution: f64,
     sim_params: Map<String, Value>,
-) -> Result<Meta, String> {
+) -> Result<&'static Meta, String> {
     if time_resolution <= 0.0 {
         warn!("Non positive time resolution was given! Converted to positive value.");
     }

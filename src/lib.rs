@@ -33,7 +33,7 @@ pub trait MosaikApi: Send + 'static {
         sid: SimId,
         time_resolution: f64,
         sim_params: Map<String, Value>,
-    ) -> Result<Meta, String>;
+    ) -> Result<&'static Meta, String>;
 
     /// Create `num` instances of the specified `model_name` using the provided `model_params`.
     /// The returned list must have the same length as `num`.

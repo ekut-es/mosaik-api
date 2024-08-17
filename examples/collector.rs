@@ -1,7 +1,10 @@
 //! Taken from official [demo1](https://mosaik.readthedocs.io/en/3.3.3/tutorials/demo1.html)
 //! collects all data it receives each step in a dictionary (including the current simulation time)
 //! and simply prints everything at the end of the simulation.
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::LazyLock,
+};
 
 use log::error;
 use mosaik_rust_api::{
@@ -51,28 +54,31 @@ pub fn main() {
 struct Collector {
     eid: Option<String>,
     data: BTreeMap<String, BTreeMap<String, BTreeMap<u64, f64>>>,
-    meta: Meta,
 }
 
-const MONITOR_MODEL: ModelDescription = ModelDescription {
-    public: true,
-    params: &[],
-    attrs: &[],
-    trigger: None,
-    any_inputs: Some(true),
-    persistent: None,
-};
+static META: LazyLock<Meta> = LazyLock::new(|| {
+    Meta::new(
+        SimulatorType::EventBased,
+        HashMap::from([(
+            "Monitor".to_string(),
+            ModelDescription {
+                public: true,
+                params: &[],
+                attrs: &[],
+                trigger: None,
+                any_inputs: Some(true),
+                persistent: None,
+            },
+        )]),
+        None,
+    )
+});
 
 impl Collector {
     fn new() -> Self {
         Collector {
             eid: None,
             data: BTreeMap::new(),
-            meta: Meta::new(
-                SimulatorType::EventBased,
-                HashMap::from([("Monitor".to_string(), MONITOR_MODEL)]),
-                None,
-            ),
         }
     }
 }
@@ -83,8 +89,8 @@ impl MosaikApi for Collector {
         _sid: SimId,
         _time_resolution: f64,
         _sim_params: Map<String, Value>,
-    ) -> Result<Meta, String> {
-        Ok(self.meta.clone())
+    ) -> Result<&'static Meta, String> {
+        Ok(&META)
     }
 
     fn create(

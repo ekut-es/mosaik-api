@@ -7,23 +7,32 @@ use mosaik_rust_api::types::{
 use mosaik_rust_api::{run_simulation, MosaikApi};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use structopt::StructOpt;
 
-const AGENT_MODEL: ModelDescription = ModelDescription {
-    public: true,
-    params: &[],
-    attrs: &["val_in", "delta"],
-    trigger: None,
-    any_inputs: None,
-    persistent: None,
-};
+static META: LazyLock<Meta> = LazyLock::new(|| {
+    Meta::new(
+        SimulatorType::EventBased,
+        HashMap::from([(
+            "Agent".to_string(),
+            ModelDescription {
+                public: true,
+                params: &[],
+                attrs: &["val_in", "delta"],
+                trigger: None,
+                any_inputs: None,
+                persistent: None,
+            },
+        )]),
+        None,
+    )
+});
 
 // A simple demo controller. Inspired by the python tutorial
 pub struct Controller {
     agents: Vec<String>,
     data: HashMap<EntityId, HashMap<Attr, Value>>,
     time: Time,
-    meta: Meta,
 }
 
 impl Default for Controller {
@@ -32,11 +41,6 @@ impl Default for Controller {
             agents: vec![],
             data: HashMap::new(),
             time: 0,
-            meta: Meta::new(
-                SimulatorType::EventBased,
-                HashMap::from([("Agent".to_string(), AGENT_MODEL)]),
-                None,
-            ),
         }
     }
 }
@@ -47,8 +51,8 @@ impl MosaikApi for Controller {
         _sid: SimId,
         _time_resolution: f64,
         _sim_params: Map<String, Value>,
-    ) -> Result<Meta, String> {
-        Ok(self.meta.clone())
+    ) -> Result<&'static Meta, String> {
+        Ok(&META)
     }
 
     fn create(

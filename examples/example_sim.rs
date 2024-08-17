@@ -16,7 +16,7 @@ use mosaik_rust_api::{
     MosaikApi,
 };
 
-const META: LazyLock<Meta> = LazyLock::new(|| {
+static META: LazyLock<Meta> = LazyLock::new(|| {
     Meta::new(
         SimulatorType::Hybrid,
         HashMap::from([(
@@ -96,7 +96,7 @@ impl MosaikApi for ExampleSim {
         _sid: String,
         time_resolution: f64,
         sim_params: Map<String, Value>,
-    ) -> Result<Meta, String> {
+    ) -> Result<&'static Meta, String> {
         if time_resolution != 1.0f64 {
             return Err(format!(
                 "ExampleSim only supports time_resolution=1., but {} was set.",
@@ -127,7 +127,7 @@ impl MosaikApi for ExampleSim {
             }
         }
 
-        Ok(META.clone())
+        Ok(&META)
     }
 
     fn create(
