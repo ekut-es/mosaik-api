@@ -29,20 +29,11 @@ static META: LazyLock<Meta> = LazyLock::new(|| {
 });
 
 // A simple demo controller. Inspired by the python tutorial
+#[derive(Default)]
 pub struct Controller {
     agents: Vec<String>,
     data: HashMap<EntityId, HashMap<Attr, Value>>,
     time: Time,
-}
-
-impl Default for Controller {
-    fn default() -> Self {
-        Controller {
-            agents: vec![],
-            data: HashMap::new(),
-            time: 0,
-        }
-    }
 }
 
 impl MosaikApi for Controller {
