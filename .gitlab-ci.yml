@@ -86,8 +86,8 @@ Integration-tests:
     # Run examples and check outputs
     - python3 examples/demo1.py > output1.txt
     - python3 examples/demo2.py > output2.txt
-    - diff output1.txt examples/demo1_expected_output.txt
-    - diff output2.txt examples/demo2_expected_output.txt
+    - diff output1.txt examples/expected_output/demo1_output.txt
+    - diff output2.txt examples/expected_output/demo2_output.txt
 # Error: "Failed to run tests: ASLR disable failed: EPERM: Operation not permitted"
 # https://github.com/xd009642/tarpaulin/issues/146
 # Cargo test coverage:
