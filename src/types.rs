@@ -200,6 +200,7 @@ class EntityGraph(TypedDict):
 
 // tests for Meta
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

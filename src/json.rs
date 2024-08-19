@@ -302,6 +302,7 @@ fn handle_setup_done<T: MosaikApi>(simulator: &mut T) -> Result<Value, MosaikErr
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::types::{InputData, Meta, SimulatorType};
@@ -327,8 +328,7 @@ mod tests {
             args: vec![json!("hello"), json!("world")],
             kwargs: {
                 let mut map = Map::new();
-                map.insert("times".to_string(), json!(23))
-                    .unwrap_or_default();
+                map.insert("times".to_string(), json!(23));
                 map
             },
         };
@@ -433,8 +433,7 @@ mod tests {
             args: vec![json!("hello"), json!("world")],
             kwargs: {
                 let mut map = Map::new();
-                map.insert("times".to_string(), json!(23))
-                    .unwrap_or_default();
+                map.insert("times".to_string(), json!(23));
                 map
             },
         };
@@ -593,8 +592,7 @@ mod tests {
             args: vec![json!("hello"), json!("world")],
             kwargs: {
                 let mut map = Map::new();
-                map.insert("times".to_string(), json!(23))
-                    .unwrap_or_default();
+                map.insert("times".to_string(), json!(23));
                 map
             },
         };
