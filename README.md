@@ -35,7 +35,6 @@ This version will run *marketplace_sim.rs itself.
 
     Once started, it will wait for a client to connect to the TCP manager, now the `city_energy_simulation.py`-Cosimulation can be started.
 
-
 #### Changing the scenario
 
 To change the parameters of the simulation, define the scenarios in "rust_interface.py" located in the simulation repo under cosimulation_city_energy.
@@ -47,3 +46,29 @@ sim_data_entities = hhsim.householdsim(num_of_consumer=5, num_of_pv=5, num_of_pr
 ```
 
 The step size of the simulation is currently 15 minutes and can be changed in `city_energy_simulation.py`, as well as the start and end time of the simulation.
+
+### Running the example scenarios
+
+The example simulations are located in the [examples folder](./examples/).
+It includes two scenarios inspired by the [Python tutorials](https://mosaik.readthedocs.io/en/3.3.3/tutorials/index.html): demo1 and demo2.
+In contrast to the Python tutorials, the simulations are written in Rust and only invoked by a modified Python script to connect the Rust simulators with Mosaik.
+- The scenario in **Demo 1** consists of an example model `Model` used in the *hybrid* `ExampleSim` both implemented in [example_sim.rs](./examples/example_sim.rs) and an *event-based* Monitor called `Collector` in [collector.rs](./examples/collector.rs).
+- The scenario in **Demo 2** consists additionaly of the Rust implementation of an event-based [`Controller`](./examples/controller.rs).
+
+To run them, build a virtual environment for python:
+
+```bash
+virtualenv .venv_examples && \
+source .venv_examples/bin/activate && \
+pip install -r examples/requirements.txt
+```
+
+Then run the example scenarios with:
+
+```bash
+python examples/demo1.py
+```
+or
+```bash
+python examples/demo2.py
+```

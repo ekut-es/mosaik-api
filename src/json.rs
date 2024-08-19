@@ -47,7 +47,6 @@ impl MosaikMessage {
                 header
             }
             Err(e) => {
-                // return a FailureReply with the error message
                 error!(
                     "Failed to serialize response to MessageID {}: {}",
                     self.id, e
@@ -55,7 +54,7 @@ impl MosaikMessage {
                 // build an error response without e variable to ensure fixed size of MosaikMessage
                 let error_message = format!(
                     "Failed to serialize a vector from the response to MessageID {}",
-                    self.id
+                    self.id // without Err(e) to maintain a small error msg size
                 );
                 let error_response = json!([MsgType::ReplyFailure, self.id, error_message]);
                 to_vec(&error_response)
@@ -311,6 +310,7 @@ mod tests {
     use mockall::predicate::*;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::sync::LazyLock;
 
     // --------------------------------------------------------------------------
     // Tests for MosaikMessage
@@ -632,9 +632,10 @@ mod tests {
     //         }
     //     }
     // }
-
     #[test]
     fn test_handle_request_init_success() -> Result<(), MosaikError> {
+        static META: LazyLock<Meta> =
+            LazyLock::new(|| Meta::new(SimulatorType::default(), HashMap::new(), None));
         let mut simulator = MockMosaikApi::new();
         let request = Request {
             msg_id: 789,
@@ -647,7 +648,7 @@ mod tests {
             .expect_init()
             .once()
             .with(eq("simID-1".to_string()), eq(1.0), eq(Map::new()))
-            .returning(|_, _, _| Ok(Meta::new(SimulatorType::default(), HashMap::new(), None)));
+            .returning(|_, _, _| Ok(&META));
 
         let payload = json!(Meta::new(SimulatorType::default(), HashMap::new(), None));
         let actual_response = handle_request(&mut simulator, &request);

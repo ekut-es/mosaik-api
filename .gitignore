@@ -4,4 +4,4 @@ Cargo.lock
 .vscode/*
 *.py
 
-__pycache__/*
+*/__pycache__/*

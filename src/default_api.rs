@@ -2,7 +2,7 @@
 
 use crate::types::*;
 
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_init]
-    fn meta(&self) -> Meta;
+    fn meta(&self) -> &'static Meta;
 
     /// Set the `eid_prefix` on the simulator, which we got from the interface.
     ///
@@ -42,9 +42,14 @@ pub trait ApiHelpers {
     ///
     /// # Used in:
     /// - [default_create]
-    /// - [default_get_data]
     /// - [default_step]
     fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value>;
+
+    /// Get the list containing the created entities.
+    ///
+    /// # Used in:
+    /// - [default_get_data]
+    fn get_entities(&self) -> &Map<EntityId, Value>;
 
     /// Create a model instance (= entity) with an initial value. Returns the
     /// [types](CreateResult) representation of the children, if the entity has children.
@@ -95,9 +100,9 @@ pub fn default_init<T: ApiHelpers>(
     simulator: &mut T,
     time_resolution: f64,
     sim_params: Map<String, Value>,
-) -> Result<Meta, String> {
+) -> Result<&'static Meta, String> {
     if time_resolution <= 0.0 {
-        debug!("Non positive time resolution was given!");
+        warn!("Non positive time resolution was given! Converted to positive value.");
     }
     simulator.set_time_resolution(time_resolution.abs());
 
@@ -111,7 +116,7 @@ pub fn default_init<T: ApiHelpers>(
                     simulator.set_step_size(step_size);
                 } else {
                     let e = format!("Step size is not a valid number: {:?}", step_size);
-                    error!("{}", e);
+                    error!("Error in default_init: {}", e);
                     return Err(e);
                 }
             }
@@ -168,18 +173,16 @@ pub fn default_step<T: ApiHelpers>(
     // Check for new delta and do step for each model instance:
     let mut deltas: Vec<(EntityId, u64, Map<Attr, Value>)> = Vec::new();
     for (eid, attrs) in inputs.into_iter() {
+        let model_idx = simulator
+            .get_mut_entities()
+            .get(&eid.clone())
+            .and_then(|eid| eid.as_u64())
+            .ok_or(format!(
+                "No correct model eid available. Input: {:?}, Entities: {:?}",
+                eid,
+                simulator.get_mut_entities(),
+            ))?;
         for (attr, attr_values) in attrs.into_iter() {
-            let model_idx = match simulator.get_mut_entities().get(&eid.clone()) {
-                // unwrap safe, because we check for u64 beforehand
-                Some(entity_val) if entity_val.is_u64() => entity_val.as_u64().unwrap(),
-                _ => {
-                    return Err(format!(
-                        "No correct model eid available. Input: {:?}, Entities: {:?}",
-                        eid,
-                        simulator.get_mut_entities()
-                    ))
-                }
-            };
             deltas.push((attr, model_idx, attr_values));
         }
     }
@@ -191,22 +194,27 @@ pub fn default_step<T: ApiHelpers>(
 /// The default implementation for the get_data function.
 /// Allows to get `attr` values of the model instances.
 pub fn default_get_data<T: ApiHelpers>(
-    simulator: &mut T,
+    simulator: &T,
     outputs: OutputRequest,
 ) -> Result<OutputData, String> {
     let mut data: HashMap<String, HashMap<Attr, Value>> = HashMap::new();
     for (eid, attrs) in outputs.into_iter() {
         let model_idx = simulator
-            .get_mut_entities()
+            .get_entities()
             .get(&eid)
-            .and_then(|eid| eid.as_u64())
-            .expect("No correct model eid available.");
+            .and_then(|v| v.as_u64())
+            .ok_or(format!(
+                "No correct model eid available. Input: {:?}, Entities: {:?}",
+                eid,
+                simulator.get_entities(),
+            ))?;
 
         let mut attribute_values: HashMap<Attr, Value> = HashMap::new();
         for attr in attrs.into_iter() {
             //Get the values of the model
             match simulator.get_model_value(model_idx, &attr) {
                 Ok(value) => {
+                    // Get model.val or model.delta
                     attribute_values.insert(attr, value);
                 }
                 Err(e) => {

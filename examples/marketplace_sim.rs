@@ -1,6 +1,6 @@
 use log::*;
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 use structopt::StructOpt;
 
 use enerdag_crypto::hashable::Hashable;
@@ -9,11 +9,29 @@ use mosaik_rust_api::{
     default_api, run_simulation,
     tcp::ConnectionDirection,
     types::{
-        Attr, CreateResult, InputData, Meta, ModelDescription, OutputData, OutputRequest, SimId,
-        SimulatorType, Time,
+        Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
+        SimId, SimulatorType, Time,
     },
     MosaikApi,
 };
+
+static META: LazyLock<Meta> = LazyLock::new(|| {
+    let model1 = ModelDescription::new(
+        true,
+        &["init_reading"],
+        &["p_mw_pv", "p_mw_load", "reading", "trades", "total"],
+    );
+
+    Meta::new(
+        SimulatorType::TimeBased,
+        {
+            let mut m = HashMap::new();
+            m.insert("MarktplatzModel".to_string(), model1);
+            m
+        },
+        None,
+    )
+});
 
 ///Read, if we get an address or not
 #[derive(StructOpt, Debug)]
@@ -44,17 +62,17 @@ pub fn main() /*-> Result<()>*/
     let simulator = MarketplaceSim::init_sim();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        error!("{:?}", e);
+        error!("Error running MarketplaceSim: {:?}", e);
     }
 }
 
 impl MosaikApi for MarketplaceSim {
     fn init(
         &mut self,
-        sid: SimId,
+        _sid: SimId,
         time_resolution: f64,
         sim_params: Map<String, Value>,
-    ) -> Result<Meta, std::string::String> {
+    ) -> Result<&'static Meta, String> {
         default_api::default_init(self, time_resolution, sim_params)
     }
 
@@ -81,7 +99,7 @@ impl MosaikApi for MarketplaceSim {
         default_api::default_step(self, time, inputs, max_advance)
     }
 
-    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String> {
+    fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String> {
         default_api::default_get_data(self, outputs)
     }
 
@@ -101,28 +119,8 @@ pub struct MarketplaceSim {
 
 //Implementation of the helpers defined in the library
 impl default_api::ApiHelpers for MarketplaceSim {
-    fn meta(&self) -> Meta {
-        let model1 = ModelDescription::new(
-            true,
-            vec!["init_reading".to_string()],
-            vec![
-                "p_mw_pv".to_string(),
-                "p_mw_load".to_string(),
-                "reading".to_string(),
-                "trades".to_string(),
-                "total".to_string(),
-            ],
-        );
-
-        Meta::new(
-            SimulatorType::TimeBased,
-            {
-                let mut m = HashMap::new();
-                m.insert("MarktplatzModel".to_string(), model1);
-                m
-            },
-            None,
-        )
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn set_eid_prefix(&mut self, eid_prefix: &str) {
@@ -141,8 +139,12 @@ impl default_api::ApiHelpers for MarketplaceSim {
         self.step_size
     }
 
-    fn get_mut_entities(&mut self) -> &mut Map<String, Value> {
+    fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value> {
         &mut self.entities
+    }
+
+    fn get_entities(&self) -> &Map<EntityId, Value> {
+        &self.entities
     }
 
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>> {

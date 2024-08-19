@@ -1,9 +1,9 @@
 //! Mosaik types as defined in the [Mosaik API](https://gitlab.com/mosaik/api/mosaik-api-python/-/blob/3.0.9/mosaik_api_v3/types.py?ref_type=tags)
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::HashMap;
+
 ///Time is represented as the number of simulation steps since the
 ///simulation started. One step represents `time_resolution` seconds.
 /// All time-based or hybrid simulators start at time=0.
@@ -44,14 +44,28 @@ pub struct OutputData {
 }
 
 /// Description of a single model in `Meta`
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+///
+/// ## Example implementation
+/// ```rust
+/// use mosaik_rust_api::types::ModelDescription;
+///
+/// const foo: ModelDescription = ModelDescription {
+///     public: true,
+///     params: &["init_val"],
+///     attrs: &["delta", "val"],
+///     trigger: Some(&["delta"]),
+///     any_inputs: None,
+///     persistent: None,
+/// };
+/// ```
+#[derive(Debug, Serialize, PartialEq, Clone, Default)]
 pub struct ModelDescription {
     /// Whether the model can be created directly.
     pub public: bool,
     /// The parameters given during creating of this model.
-    pub params: Vec<String>,
+    pub params: &'static [&'static str],
     /// The input and output attributes of this model.
-    pub attrs: Vec<Attr>,
+    pub attrs: &'static [&'static str],
     /// Whether this model accepts inputs other than those specified in `attrs`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub any_inputs: Option<bool>,
@@ -59,14 +73,19 @@ pub struct ModelDescription {
     /// (Non-trigger attributes are collected and supplied to the simulator when it
     /// steps next.)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub trigger: Option<Vec<Attr>>,
+    pub trigger: Option<&'static [&'static str]>,
     /// The output attributes that are persistent.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub persistent: Option<Vec<Attr>>,
+    pub persistent: Option<&'static [&'static str]>,
 }
 
 impl ModelDescription {
-    pub fn new(public: bool, params: Vec<String>, attrs: Vec<Attr>) -> Self {
+    /// Creates a new `ModelDescription` with fields `any_inputs`, `trigger` and `persistent` set to `None`.
+    pub fn new(
+        public: bool,
+        params: &'static [&'static str],
+        attrs: &'static [&'static str],
+    ) -> Self {
         Self {
             public,
             params,
@@ -79,7 +98,7 @@ impl ModelDescription {
 }
 
 /// The meta-data for a simulator.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Clone)]
 pub struct Meta {
     /// The API version that this simulator supports in the format "major.minor".
     api_version: &'static str,
@@ -106,6 +125,7 @@ impl Meta {
             extra_methods,
         }
     }
+
     pub fn get_version(&self) -> &str {
         self.api_version
     }
@@ -208,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_model_description_without_optionals() {
-        let mut model = ModelDescription::new(false, vec![], vec![]);
+        let mut model = ModelDescription::default();
 
         assert!(!model.public);
         assert_eq!(model.params.len(), 0);
@@ -221,8 +241,8 @@ mod tests {
         assert_eq!(r#"{"public":false,"params":[],"attrs":[]}"#, model_json);
 
         model.public = true;
-        model.params.push("init_reading".to_string());
-        model.attrs = vec!["trades".to_string(), "total".to_string()];
+        model.params = &["init_reading"];
+        model.attrs = &["trades", "total"];
 
         assert!(model.public);
         assert_eq!(model.params.len(), 1);
@@ -237,14 +257,10 @@ mod tests {
 
     #[test]
     fn test_model_description_with_optionals() {
-        let mut model = ModelDescription::new(
-            true,
-            vec!["init_reading".to_string()],
-            vec!["p_mw_pv".to_string(), "p_mw_load".to_string()],
-        );
+        let mut model = ModelDescription::new(true, &["init_reading"], &["p_mw_pv", "p_mw_load"]);
         model.any_inputs = Some(true);
-        model.trigger = Some(vec!["trigger1".to_string()]);
-        model.persistent = Some(vec!["trades".to_string()]);
+        model.trigger = Some(&["trigger1"]);
+        model.persistent = Some(&["trades"]);
 
         let model_json = serde_json::to_string(&model).unwrap();
         assert_eq!(
@@ -252,7 +268,7 @@ mod tests {
             model_json
         );
 
-        model.trigger = Some(vec!["trigger1".to_string()]);
+        model.trigger = Some(&["trigger1"]);
         model.any_inputs = None;
         model.persistent = None;
 
@@ -284,11 +300,7 @@ mod tests {
         assert_eq!(meta.api_version, "3.1", "API version should be changeable");
 
         assert!(meta.models.is_empty());
-        let model1 = ModelDescription::new(
-            true,
-            vec!["init_reading".to_string()],
-            vec!["trades".to_string(), "total".to_string()],
-        );
+        let model1 = ModelDescription::new(true, &["init_reading"], &["trades", "total"]);
         meta.models.insert("MarktplatzModel".to_string(), model1);
         assert_eq!(meta.models.len(), 1, "Should have one model");
 
