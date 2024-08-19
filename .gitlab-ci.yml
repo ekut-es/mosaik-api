@@ -74,16 +74,18 @@ Cargo-test:
 # Build the python environment as in README and run demo1.py and demo2.py
 Integration-tests:
   stage: test
+  before_script:
+    - apt-get update && apt-get install -y python3 python3-venv python3-pip # Install Python
   script:
-    # install python
-    - apt-get update
-    - apt-get install -y python3 python3-pip
-    - pip3 install -r examples/requirements.txt
-    # run examples and check outputs
+    - python3 -m venv venv # Create virtual environment
+    - source venv/bin/activate # Activate virtual environment
+    - pip install --upgrade pip # Upgrade pip
+    - pip install -r examples/requirements.txt # Install requirements
+    # Run examples and check outputs
     - python3 examples/demo1.py > output1.txt
     - python3 examples/demo2.py > output2.txt
-    - diff output1.txt examples/demo1_expected_output.txt || (echo "Output of demo1.py is not as expected" && exit 1)
-    - diff output2.txt examples/demo2_expected_output.txt || (echo "Output of demo2.py is not as expected" && exit 1)
+    - diff output1.txt examples/demo1_expected_output.txt
+    - diff output2.txt examples/demo2_expected_output.txt
 # Error: "Failed to run tests: ASLR disable failed: EPERM: Operation not permitted"
 # https://github.com/xd009642/tarpaulin/issues/146
 # Cargo test coverage:
