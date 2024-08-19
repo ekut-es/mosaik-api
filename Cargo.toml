@@ -46,3 +46,8 @@ default_api = []
 # To use price ranges instead of fixed prices for trading
 random_prices = []
 sarima = ["enerdag-core/sarima"]
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+expect_used = "deny"
+unwrap_used = "deny"
