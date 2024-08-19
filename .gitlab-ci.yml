@@ -16,7 +16,7 @@ stages:
   - build
   - test
 
-# Run `cargo build` for the project with stable Rust
+# ------------- Stage 1: Format----------------
 Rust and Cargo Version:
   stage: format
   script:
@@ -29,19 +29,12 @@ Cargo Format:
   script:
     - cargo fmt --all -- --check
 
-Cargo Clippy:
-  stage: format
-  allow_failure: true
-  before_script:
-    - rustup component add clippy
-  script:
-    - cargo clippy --all-targets --all-features -- -D warnings
-
 Cargo check:
   stage: format
   script:
     - cargo check
 
+# ------------- Stage 2: Build ----------------
 Build lib:
   stage: build
   script:
@@ -56,11 +49,20 @@ Build examples:
   script:
     - cargo build --examples
 
+# ------------- Stage 3: Test ----------------
 # Not necessary as this is just a lib
 # Cargo testbuild lib:
 #   stage: test
 #   script:
 #   - cargo build --release
+
+Cargo Clippy:
+  stage: test
+  allow_failure: true
+  before_script:
+    - rustup component add clippy
+  script:
+    - cargo clippy --all-targets --all-features -- -D warnings
 
 Cargo-test:
   stage: test
