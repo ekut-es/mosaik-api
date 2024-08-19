@@ -2,14 +2,13 @@
 image: rust:latest
 
 variables:
-    CARGO_HOME: $CI_PROJECT_DIR/cargo
+  CARGO_HOME: $CI_PROJECT_DIR/cargo
 
 # Caches some files for improved CI Times
 cache:
   paths:
-  - $CARGO_HOME
+    - $CARGO_HOME
   #- ./target/
-
 
 # Defines stages which are to be executed
 stages:
@@ -20,34 +19,34 @@ stages:
 
 # Run `cargo build` for the project with stable Rust
 Rust and Cargo Version:
-  stage: format  
+  stage: format
   script:
-  - rustc --version && cargo --version
+    - rustc --version && cargo --version
 
 Cargo Format:
   stage: format
   before_script:
-  - rustup component add rustfmt
+    - rustup component add rustfmt
   script:
-  - cargo fmt --all -- --check
+    - cargo fmt --all -- --check
 
 Cargo Clippy:
   stage: test
   allow_failure: true
   before_script:
-  - rustup component add clippy
+    - rustup component add clippy
   script:
-  - cargo clippy --all-targets --all-features -- -D warnings
+    - cargo clippy --all-targets --all-features -- -D warnings
 
 Cargo check:
   stage: format
   script:
-  - cargo check
+    - cargo check
 
 Build lib:
   stage: build
   script:
-  - cargo build
+    - cargo build
 
 Build examples:
   stage: test
@@ -56,7 +55,7 @@ Build examples:
   #   - ./target/debug/examples/p2p_crust
   #   - ./target/debug/examples/p2p_libp2p
   script:
-  - cargo build --examples
+    - cargo build --examples
 
 # Not necessary as this is just a lib
 # Cargo testbuild lib:
@@ -67,11 +66,24 @@ Build examples:
 Cargo-test:
   stage: test
   script:
-  - cargo test
+    - cargo test
   artifacts:
     paths:
     #- target/debug/
 
+# Build the python environment as in README and run demo1.py and demo2.py
+Integration-tests:
+  stage: test
+  script:
+    # install python
+    - apt-get update
+    - apt-get install -y python3 python3-pip
+    - pip3 install -r examples/requirements.txt
+    # run examples and check outputs
+    - python3 examples/demo1.py > output1.txt
+    - python3 examples/demo2.py > output2.txt
+    - diff output1.txt examples/demo1_expected_output.txt || (echo "Output of demo1.py is not as expected" && exit 1)
+    - diff output2.txt examples/demo2_expected_output.txt || (echo "Output of demo2.py is not as expected" && exit 1)
 # Error: "Failed to run tests: ASLR disable failed: EPERM: Operation not permitted"
 # https://github.com/xd009642/tarpaulin/issues/146
 # Cargo test coverage:
@@ -80,5 +92,5 @@ Cargo-test:
 #   - cargo install cargo-tarpaulin
 #   script:
 #   - cargo tarpaulin
-#   dependencies: 
+#   dependencies:
 #   - Cargo-test
