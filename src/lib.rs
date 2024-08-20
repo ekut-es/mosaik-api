@@ -22,7 +22,7 @@ pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> 
     task::block_on(build_connection(addr, simulator))
 }
 
-/// The MosaikApi trait defines the interface for a Mosaik simulator API.
+/// The `MosaikApi` trait defines the interface for a Mosaik simulator API.
 /// Errors will result in a Failure Response being sent to Mosaik containing the Error's message and/or Stack Trace.
 #[cfg_attr(test, automock)]
 pub trait MosaikApi: Send + 'static {

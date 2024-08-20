@@ -87,7 +87,7 @@ pub(crate) async fn build_connection<T: MosaikApi>(
     }
 }
 
-///Receive the Requests, send them to the broker_loop.
+///Receive the Requests, send them to the `broker_loop`.
 async fn connection_loop(
     mut broker: Sender<Event>,
     mut connection_shutdown_receiver: Receiver<bool>,
@@ -202,7 +202,7 @@ enum Event {
     },
 }
 
-///Receive requests from the connection_loop, parse them, get the values from the API and send the finished response to the connection_writer_loop
+///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
     events: Receiver<Event>,
     mut connection_shutdown_sender: Sender<bool>,

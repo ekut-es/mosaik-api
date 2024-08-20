@@ -21,13 +21,13 @@ pub type SimId = String;
 ///An entity ID
 pub type EntityId = String;
 
-///A full ID of the form "sim_id.entity_id"
+///A full ID of the form "`sim_id.entity_id`"
 pub type FullId = String;
 
 ///The format of input data for simulator's step methods.
 pub type InputData = HashMap<EntityId, HashMap<Attr, Map<FullId, Value>>>;
 
-///The requested outputs for get_data. For each entity where data is
+///The requested outputs for `get_data`. For each entity where data is
 ///needed, the required attributes are listed.
 pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 
