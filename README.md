@@ -60,15 +60,17 @@ To run them, build a virtual environment for python:
 ```bash
 virtualenv .venv_examples && \
 source .venv_examples/bin/activate && \
-pip install -r examples/requirements.txt
+pip install "mosaik>=3.3"
 ```
 
 Then run the example scenarios with:
 
 ```bash
+cargo build --examples
 python examples/demo1.py
 ```
 or
 ```bash
+cargo build --examples
 python examples/demo2.py
 ```

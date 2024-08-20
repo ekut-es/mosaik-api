@@ -29,11 +29,6 @@ Cargo Format:
   script:
     - cargo fmt --all -- --check
 
-Cargo check:
-  stage: format
-  script:
-    - cargo check
-
 # ------------- Stage 2: Build ----------------
 Build lib:
   stage: build
@@ -82,7 +77,7 @@ Integration-tests:
     - python3 -m venv venv # Create virtual environment
     - source venv/bin/activate # Activate virtual environment
     - pip install --upgrade pip # Upgrade pip
-    - pip install -r examples/requirements.txt # Install requirements
+    - pip install "mosaik>=3.3" # Install requirements
     # Run examples and check outputs
     - python3 examples/demo1.py > output1.txt
     - python3 examples/demo2.py > output2.txt

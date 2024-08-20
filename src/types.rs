@@ -108,6 +108,10 @@ pub struct Meta {
     /// The descriptions of this simulator's models.
     pub models: HashMap<ModelName, ModelDescription>,
     /// The names of the extra methods this simulator supports.
+    ///
+    /// # Note
+    /// > These methods can be called while the scenario is being created and can be used
+    /// > for operations that don’t really belong into init() or create().
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra_methods: Option<Vec<String>>,
 }
@@ -281,9 +285,17 @@ mod tests {
     }
 
     #[test]
-    fn test_meta() {
-        let mut meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
-        assert_eq!(meta.api_version, "3.0");
+    fn test_meta_empty() {
+        let meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
+        assert_eq!(
+            meta.api_version, API_VERSION,
+            "API version should match the global variable."
+        );
+        assert_eq!(
+            meta.get_version(),
+            API_VERSION,
+            "get_version should return the API version."
+        );
         assert_eq!(
             meta.simulator_type,
             SimulatorType::Hybrid,
@@ -293,37 +305,38 @@ mod tests {
         let empty_meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
             r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, empty_meta_json,
-            "Empty meta should not have extra_methods and no empty models."
+            "Empty meta should not have extra_methods and empty models."
         );
-
-        // TODO is this a bug in the python implementation?
-        meta.api_version = "3.1";
-        assert_eq!(meta.api_version, "3.1", "API version should be changeable");
-
         assert!(meta.models.is_empty());
+    }
+
+    #[test]
+    fn test_meta_with_models() {
         let model1 = ModelDescription::new(true, &["init_reading"], &["trades", "total"]);
-        meta.models.insert("MarktplatzModel".to_string(), model1);
+        let meta = Meta::new(
+            SimulatorType::default(),
+            HashMap::from([("MarktplatzModel".to_string(), model1)]),
+            None,
+        );
         assert_eq!(meta.models.len(), 1, "Should have one model");
 
         assert!(meta.extra_methods.is_none());
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
-            r#"{"api_version":"3.1","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#,
+            r#"{"api_version":"3.0","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#,
             meta_json,
             "Meta should have one model and no extra methods."
-        )
+        );
     }
 
     #[test]
     fn test_meta_optionals() {
-        let mut meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
-        let meta_json = serde_json::to_string(&meta).unwrap();
-        assert_eq!(
-            r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, meta_json,
-            "JSON String should contain no 'extra_methods'."
+        let meta = Meta::new(
+            SimulatorType::default(),
+            HashMap::new(),
+            Some(vec!["foo".to_string(), "bar".to_string()]),
         );
 
-        meta.extra_methods = Some(vec!["foo".to_string(), "bar".to_string()]);
         assert_eq!(
             meta.extra_methods.as_ref().unwrap().len(),
             2,
@@ -335,7 +348,7 @@ mod tests {
             r#"{"api_version":"3.0","type":"hybrid","models":{},"extra_methods":["foo","bar"]}"#,
             meta_json,
             "JSON String should contain 'foo' and 'bar' as extra methods."
-        )
+        );
     }
 
     #[test]

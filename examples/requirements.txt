@@ -1,7 +1,0 @@
-docopt==0.6.2
-loguru==0.7.2
-mosaik==3.3.3
-mosaik-api-v3==3.0.10
-networkx==2.8.8
-tqdm==4.66.4
-typing_extensions==4.12.2
