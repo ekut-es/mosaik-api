@@ -293,7 +293,7 @@ fn handle_get_data<T: MosaikApi>(
 /// ["`setup_done`", [], {}] -> null
 fn handle_setup_done<T: MosaikApi>(simulator: &mut T) -> Result<Value, MosaikError> {
     match simulator.setup_done() {
-        Ok(_) => Ok(json!(null)),
+        Ok(()) => Ok(json!(null)),
         Err(e) => Err(MosaikError::UserError(e)),
     }
 }
