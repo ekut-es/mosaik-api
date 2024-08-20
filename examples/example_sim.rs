@@ -248,6 +248,7 @@ pub fn main() {
     let opt = Opt::from_args();
     env_logger::init();
 
+    // TODO: Should this be part of `run_simulation`?
     let address = match opt.addr {
         //case if we connect us to mosaik
         Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
