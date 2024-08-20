@@ -218,7 +218,7 @@ fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Val
     let time_resolution = match request
         .kwargs
         .get("time_resolution")
-        .and_then(|value| value.as_f64())
+        .and_then(Value::as_f64)
     {
         Some(time_resolution) => time_resolution,
         None => {
