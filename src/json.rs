@@ -1,6 +1,6 @@
 //! JSON serialization and deserialization for Mosaik messages. And handling of Mosaik requests.
 
-use log::*;
+use log::{debug, error, warn};
 use serde::ser::{Serialize, SerializeTuple, Serializer};
 use serde::{Deserialize, Deserializer};
 use serde_json::{json, map::Map, to_vec, Value};

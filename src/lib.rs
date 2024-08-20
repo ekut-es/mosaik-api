@@ -6,7 +6,7 @@ pub mod types;
 
 use crate::{
     tcp::{build_connection, ConnectionDirection},
-    types::*,
+    types::{Attr, CreateResult, InputData, Meta, OutputData, OutputRequest, SimId, Time},
 };
 
 use async_std::task;
