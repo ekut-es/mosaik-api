@@ -176,7 +176,7 @@ async fn connection_writer_loop(
         select! {
             msg = messages.next().fuse() => match msg {
                 Some(msg) => {
-                    stream.write_all(&msg).await?//write the message
+                    stream.write_all(&msg).await?;//write the message
                 },
                 None => break,
             },
@@ -314,7 +314,7 @@ where
     task::spawn(async move {
         trace!("Task Spawned");
         if let Err(e) = fut.await {
-            error!("{}", e)
+            error!("{}", e);
         }
     })
 }

@@ -257,7 +257,7 @@ mod tests {
         assert_eq!(
             r#"{"public":true,"params":["init_reading"],"attrs":["trades","total"]}"#,
             model_json
-        )
+        );
     }
 
     #[test]
@@ -281,7 +281,7 @@ mod tests {
         assert_eq!(
             r#"{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"trigger":["trigger1"]}"#,
             model_json
-        )
+        );
     }
 
     #[test]
@@ -364,7 +364,7 @@ mod tests {
         assert_eq!(
             r#"{"eid":"eid_1","type":"model_name"}"#, create_result_json,
             "New CreateResult should not contain any optional fields"
-        )
+        );
     }
 
     #[test]
@@ -391,6 +391,6 @@ mod tests {
             r#"{"eid":"eid_1","type":"model_name","rel":["eid_2"],"children":[{"eid":"child_1","type":"child"}]}"#,
             create_result_json,
             "Filled create result should contain optional fields without extra_info"
-        )
+        );
     }
 }
