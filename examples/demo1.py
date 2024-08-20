@@ -39,5 +39,8 @@ more_models = examplesim.ExampleModel.create(
 )  # FIXME init_val param does not connect with Rust yet
 mosaik.util.connect_many_to_one(world, more_models, monitor, "val", "delta")
 
+# Additional code to test extra method fuctionality
+examplesim.print_something("Some args", 2, 3, msg="Hello to Ferris!", flag=True)
+
 # Run simulation
 world.run(until=END)

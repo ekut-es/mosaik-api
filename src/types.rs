@@ -108,6 +108,10 @@ pub struct Meta {
     /// The descriptions of this simulator's models.
     pub models: HashMap<ModelName, ModelDescription>,
     /// The names of the extra methods this simulator supports.
+    ///
+    /// # Note
+    /// > These methods can be called while the scenario is being created and can be used
+    /// > for operations that don’t really belong into init() or create().
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra_methods: Option<Vec<String>>,
 }

@@ -1,3 +1,4 @@
+This is a print statement from an extra method! With args: [String("Some args"), Number(2), Number(3)] and kwargs: {"flag": Bool(true), "msg": String("Hello to Ferris!")}
 Collected data:
 - ExampleSim-0.Model_0:
   - delta: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1}

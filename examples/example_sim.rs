@@ -30,7 +30,7 @@ static META: LazyLock<Meta> = LazyLock::new(|| {
                 persistent: None,
             },
         )]),
-        None,
+        Some(vec!["print_something".to_string()]),
     )
 });
 
@@ -233,6 +233,32 @@ impl MosaikApi for ExampleSim {
 
     fn stop(&self) {
         // Nothing to do
+    }
+
+    fn extra_method(
+        &mut self,
+        method: &str,
+        args: &Vec<Value>,
+        kwargs: &Map<String, Value>,
+    ) -> Result<Value, String> {
+        match method {
+            "print_something" => {
+                self.print_something(args, kwargs);
+                Ok(Value::String("Printed something!".to_string()))
+            }
+            _ => Err(format!(
+                "Method '{}' not found with args: {:?} and kwargs: {:?}",
+                method, args, kwargs
+            )),
+        }
+    }
+}
+
+impl ExampleSim {
+    pub fn print_something(&self, args: &Vec<Value>, kwargs: &Map<String, Value>) {
+        println!(
+            "This is a print statement from an extra method! With args: {args:?} and kwargs: {kwargs:?}",
+        );
     }
 }
 
