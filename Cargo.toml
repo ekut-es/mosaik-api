@@ -22,5 +22,5 @@ mockall = "0.12.1"
 
 
 [features]
-default = ["default_api"]
+default = []
 default_api = []
