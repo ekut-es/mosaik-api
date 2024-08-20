@@ -55,7 +55,7 @@ impl MosaikApi for Controller {
         let n_agents = self.agents.len();
         let mut entities: Vec<CreateResult> = vec![];
         for i in n_agents..(n_agents + num) {
-            let eid = format!("Agent_{}", i);
+            let eid = format!("Agent_{i}");
             self.agents.push(eid.clone());
             entities.push(CreateResult {
                 eid,
@@ -134,7 +134,7 @@ impl MosaikApi for Controller {
         for (agent_eid, attrs) in outputs {
             for attr in attrs {
                 if attr != "delta" {
-                    return Err(format!("Unknown output attribute \"{}\"", attr));
+                    return Err(format!("Unknown output attribute \"{attr}\""));
                 }
 
                 if let Some(agent_data) = self.data.get(&agent_eid) {

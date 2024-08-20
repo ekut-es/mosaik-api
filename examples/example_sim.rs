@@ -99,8 +99,7 @@ impl MosaikApi for ExampleSim {
     ) -> Result<&'static Meta, String> {
         if time_resolution != 1.0f64 {
             return Err(format!(
-                "ExampleSim only supports time_resolution=1., but {} was set.",
-                time_resolution
+                "ExampleSim only supports time_resolution=1., but {time_resolution} was set."
             ));
         }
         self.time_resolution = time_resolution;
@@ -116,7 +115,7 @@ impl MosaikApi for ExampleSim {
                         info!("Step size is set to: {}", step_size);
                         self.step_size = step_size;
                     } else {
-                        let e = format!("Step size is not a valid number: {:?}", step_size);
+                        let e = format!("Step size is not a valid number: {step_size:?}");
                         error!("Error in default_init: {}", e);
                         return Err(e);
                     }
@@ -146,7 +145,7 @@ impl MosaikApi for ExampleSim {
                     val
                 }
                 None => {
-                    let e = format!("init_val is not a valid number: {:?}", v);
+                    let e = format!("init_val is not a valid number: {v:?}");
                     error!("Error in create: {}", e);
                     return Err(e);
                 }
@@ -247,8 +246,7 @@ impl MosaikApi for ExampleSim {
                 Ok(Value::String("Printed something!".to_string()))
             }
             _ => Err(format!(
-                "Method '{}' not found with args: {:?} and kwargs: {:?}",
-                method, args, kwargs
+                "Method '{method}' not found with args: {args:?} and kwargs: {kwargs:?}"
             )),
         }
     }

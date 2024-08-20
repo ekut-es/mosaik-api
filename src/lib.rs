@@ -74,8 +74,7 @@ pub trait MosaikApi: Send + 'static {
         kwargs: &Map<String, Value>,
     ) -> Result<Value, String> {
         Err(format!(
-            "Method '{}' not found with args: {:?} and kwargs: {:?}",
-            method, args, kwargs
+            "Method '{method}' not found with args: {args:?} and kwargs: {kwargs:?}"
         ))
     }
 }
@@ -105,7 +104,7 @@ mod tests {
         // Implement the logic for extra_method
         let actual_method = |method: &str| match method {
             "example_method" => Ok(Value::String("example result".to_string())),
-            _ => Err(format!("Method not found: {}", method)),
+            _ => Err(format!("Method not found: {method}")),
         };
 
         // Set up expectation

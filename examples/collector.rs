@@ -141,12 +141,12 @@ impl MosaikApi for Collector {
         let sims: Vec<_> = self.data.iter().collect();
 
         for (sim, sim_data) in sims {
-            println!("- {}:", sim);
+            println!("- {sim}:");
 
             let attrs: Vec<_> = sim_data.iter().collect();
 
             for (attr, values) in attrs {
-                println!("  - {}: {:?}", attr, values);
+                println!("  - {attr}: {values:?}");
             }
         }
     }

@@ -151,16 +151,14 @@ pub(crate) fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
         Ok(payload) => payload,
         Err(e) => {
             return Err(MosaikError::ParseError(format!(
-                "Payload is not a valid Mosaik Message: {}",
-                e
+                "Payload is not a valid Mosaik Message: {e}"
             )));
         }
     };
 
     if payload.msg_type != MsgType::Request {
         return Err(MosaikError::ParseError(format!(
-            "The Mosaik Message is not a request: {:?}",
-            payload
+            "The Mosaik Message is not a request: {payload:?}"
         )));
     }
 
@@ -168,8 +166,7 @@ pub(crate) fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
         Ok(request) => request,
         Err(e) => {
             return Err(MosaikError::ParseError(format!(
-                "The Mosaik Message has no valid Request content: {}",
-                e
+                "The Mosaik Message has no valid Request content: {e}"
             )));
         }
     };
@@ -217,7 +214,7 @@ pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request)
 /// ["init", [sim_id], {time_resolution=time_resolution, **sim_params}] -> meta
 fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
     let sid = serde_json::from_value(request.args[0].clone())
-        .map_err(|err| MosaikError::ParseError(format!("Failed to parse SimId: {}", err)))?;
+        .map_err(|err| MosaikError::ParseError(format!("Failed to parse SimId: {err}")))?;
     let time_resolution = match request
         .kwargs
         .get("time_resolution")
@@ -243,10 +240,10 @@ fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Val
 /// ["create", [num, model], {**model_params}] -> entity_list
 fn handle_create<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
     let num = serde_json::from_value(request.args[0].clone()).map_err(|e| {
-        MosaikError::ParseError(format!("Failed to parse number of instances: {}", e))
+        MosaikError::ParseError(format!("Failed to parse number of instances: {e}"))
     })?;
     let model_name = serde_json::from_value(request.args[1].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse model name: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse model name: {e}")))?;
     let kwargs = request.kwargs.clone();
 
     match simulator.create(num, model_name, kwargs) {
@@ -261,11 +258,11 @@ fn handle_create<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<V
 /// ["step", [time, inputs, max_advance], {}] -> Optional[time_next_step]
 fn handle_step<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
     let time = serde_json::from_value(request.args[0].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse time: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse time: {e}")))?;
     let inputs = serde_json::from_value(request.args[1].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse inputs: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse inputs: {e}")))?;
     let max_advance = serde_json::from_value(request.args[2].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse max_advance: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse max_advance: {e}")))?;
 
     match simulator.step(time, inputs, max_advance) {
         Ok(value) => Ok(serde_json::to_value(value)?),
@@ -282,7 +279,7 @@ fn handle_get_data<T: MosaikApi>(
     request: &Request,
 ) -> Result<Value, MosaikError> {
     let outputs = serde_json::from_value(request.args[0].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse output request: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse output request: {e}")))?;
 
     match simulator.get_data(outputs) {
         Ok(output_data) => Ok(serde_json::to_value(output_data)?),
@@ -453,9 +450,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
@@ -468,9 +463,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
@@ -483,9 +476,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
@@ -498,9 +489,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
@@ -514,9 +503,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 

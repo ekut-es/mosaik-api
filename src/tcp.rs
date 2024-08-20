@@ -139,7 +139,7 @@ async fn connection_loop(
                     match e.kind() {
                         async_std::io::ErrorKind::UnexpectedEof => {
                             info!("Read unexpected EOF. Simulation and therefore TCP Connection should be finished. Waiting for Shutdown Request from Shutdown Sender.");
-                            panic!("Unexpected EOF. Error: {}", e);
+                            panic!("Unexpected EOF. Error: {e}");
                         },
                         _ => {
                             error!("Error reading Stream Data: {:?}. Stopping connection loop.", e);
