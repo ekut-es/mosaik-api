@@ -29,11 +29,6 @@ Cargo Format:
   script:
     - cargo fmt --all -- --check
 
-Cargo check:
-  stage: format
-  script:
-    - cargo check
-
 # ------------- Stage 2: Build ----------------
 Build lib:
   stage: build
