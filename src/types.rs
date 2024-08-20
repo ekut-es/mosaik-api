@@ -291,6 +291,11 @@ mod tests {
             "API version should match the global variable."
         );
         assert_eq!(
+            meta.get_version(),
+            API_VERSION,
+            "get_version should return the API version."
+        );
+        assert_eq!(
             meta.simulator_type,
             SimulatorType::Hybrid,
             "Default type should be Hybrid"
