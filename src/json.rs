@@ -61,6 +61,7 @@ impl MosaikMessage {
     /// # (No) Errors
     /// If serialization failes or the message is too large, it will be serialized to a ReplyFailure message.
     /// These messages are tested in the tests for this module. They should be smaller than u32::MAX and always serialize.
+    #[allow(clippy::expect_used)] // NOTE expect only used for the tested default messages which should not fail
     pub fn serialize_to_vec(&self) -> Vec<u8> {
         // Serialize the content to a vector of bytes.
         let mut payload = serde_json::to_vec(&self).unwrap_or_else(|e| {
@@ -98,7 +99,7 @@ impl MosaikMessage {
         });
         let mut message = header.to_be_bytes().to_vec();
         message.append(&mut payload);
-        return message;
+        message
     }
 }
 
