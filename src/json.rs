@@ -3,7 +3,7 @@
 use log::{debug, error, warn};
 use serde::ser::{Serialize, SerializeTuple, Serializer};
 use serde::{Deserialize, Deserializer};
-use serde_json::{json, map::Map, to_vec, Value};
+use serde_json::{json, map::Map, Value};
 use thiserror::Error;
 
 use crate::MosaikApi;
@@ -36,31 +36,64 @@ pub(crate) struct MosaikMessage {
     content: Value,
 }
 
+impl Serialize for MosaikMessage {
+    /// Serialize a [`MosaikMessage`] to a tuple of 3 elements for the TCP connection.
+    /// Should look like this: `[msg_type, id, content]`.
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut tup = serializer.serialize_tuple(3)?;
+        tup.serialize_element(&(self.msg_type as u8))?;
+        tup.serialize_element(&self.id)?;
+        tup.serialize_element(&self.content)?;
+        tup.end()
+    }
+}
+
 impl MosaikMessage {
     /// Serialize a [`MosaikMessage`] to a vector of bytes for the TCP connection.
     pub fn serialize_to_vec(&self) -> Vec<u8> {
-        let response: Value = json!([self.msg_type, self.id, self.content]);
-        match to_vec(&response) {
-            Ok(vec) => {
-                let mut header = (vec.len() as u32).to_be_bytes().to_vec();
-                header.append(&mut vec.clone());
-                header
-            }
-            Err(e) => {
-                error!(
-                    "Failed to serialize response to MessageID {}: {}",
-                    self.id, e
-                );
-                // build an error response without e variable to ensure fixed size of MosaikMessage
-                let error_message = format!(
-                    "Failed to serialize a vector from the response to MessageID {}",
-                    self.id // without Err(e) to maintain a small error msg size
-                );
-                let error_response = json!([MsgType::ReplyFailure, self.id, error_message]);
-                to_vec(&error_response)
-                    .expect("should not fail, because the error message is a short enough string")
-            }
-        }
+        let mut payload = serde_json::to_vec(&self)
+            .expect("a Serialize implementation returned an error unexpectedly.");
+        //      .unwrap_or_else(|e| {
+        //      error!(
+        //         "Failed to serialize response to MessageID {}: {}",
+        //         self.id, e
+        //     );
+        //     // build an error response without e variable to ensure fixed size of MosaikMessage
+        //     let error_message = format!(
+        //         "Failed to serialize a vector from the response to MessageID {}",
+        //         self.id // without Err(e) to maintain a small error msg size
+        //     );
+        //     let error_response = MosaikMessage {
+        //         msg_type: MsgType::ReplyFailure,
+        //         id: self.id,
+        //         content: Value::from(error_message),
+        //     };
+        //     serde_json::to_vec(&error_response)
+        //         .expect("should not fail, because the error message is a short enough string")
+        // });
+        let header = if let Ok(msg_size) = u32::try_from(payload.len()) {
+            msg_size
+        } else {
+            error!(
+                "Failed to serialize response to MessageID {}: Message too large for Mosaik API protocol (more than {} bytes)",
+                self.id, u32::MAX
+            );
+            // overwrite payload with error message to a ReplyFailure
+            payload = serde_json::to_vec(&MosaikMessage {
+                msg_type: MsgType::ReplyFailure,
+                id: self.id,
+                content: Value::from("Message too large"),
+            })
+            .expect("a Serialize implementation returned an error unexpectedly.");
+            // return the length of the ReplyFailure message, which is << u32::MAX
+            payload.len() as u32
+        };
+        let mut message = header.to_be_bytes().to_vec();
+        message.append(&mut payload);
+        return message;
     }
 }
 
