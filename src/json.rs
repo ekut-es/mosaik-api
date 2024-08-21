@@ -53,44 +53,49 @@ impl Serialize for MosaikMessage {
 
 impl MosaikMessage {
     /// Serialize a [`MosaikMessage`] to a vector of bytes for the TCP connection.
+    /// The message is serialized to a vector of bytes with a header of 4 bytes.
+    ///
+    ///  # Format
+    /// `\0x00\0x00\0x00\0x18[type, id, content]`
+    ///
+    /// # (No) Errors
+    /// If serialization failes or the message is too large, it will be serialized to a ReplyFailure message.
+    /// These messages are tested in the tests for this module. They should be smaller than u32::MAX and always serialize.
     pub fn serialize_to_vec(&self) -> Vec<u8> {
-        let mut payload = serde_json::to_vec(&self)
-            .expect("a Serialize implementation returned an error unexpectedly.");
-        //      .unwrap_or_else(|e| {
-        //      error!(
-        //         "Failed to serialize response to MessageID {}: {}",
-        //         self.id, e
-        //     );
-        //     // build an error response without e variable to ensure fixed size of MosaikMessage
-        //     let error_message = format!(
-        //         "Failed to serialize a vector from the response to MessageID {}",
-        //         self.id // without Err(e) to maintain a small error msg size
-        //     );
-        //     let error_response = MosaikMessage {
-        //         msg_type: MsgType::ReplyFailure,
-        //         id: self.id,
-        //         content: Value::from(error_message),
-        //     };
-        //     serde_json::to_vec(&error_response)
-        //         .expect("should not fail, because the error message is a short enough string")
-        // });
-        let header = if let Ok(msg_size) = u32::try_from(payload.len()) {
-            msg_size
-        } else {
+        // Serialize the content to a vector of bytes.
+        let mut payload = serde_json::to_vec(&self).unwrap_or_else(|e| {
+            error!(
+                "Failed to serialize a vector from the response to MessageID {}: {}",
+                self.id, e
+            );
+            // NOTE if this Message is changed, update [`test_serialize_to_vec_error_serializing_default()`].
+            let error_response = MosaikMessage {
+                msg_type: MsgType::ReplyFailure,
+                id: self.id,
+                // build an error response without e variable to ensure fixed size of MosaikMessage
+                content: Value::from(
+                    "Failed to serialize a vector from the response", // without Err(e) to maintain a small error msg size
+                ),
+            };
+            serde_json::to_vec(&error_response)
+                .expect("Tested error response should be serializable.")
+        });
+        let header = u32::try_from(payload.len()).unwrap_or_else(|_| {
             error!(
                 "Failed to serialize response to MessageID {}: Message too large for Mosaik API protocol (more than {} bytes)",
                 self.id, u32::MAX
             );
             // overwrite payload with error message to a ReplyFailure
+            // NOTE if this Message is changed, update [`test_serialize_to_vec_error_message_length_default()`].
             payload = serde_json::to_vec(&MosaikMessage {
                 msg_type: MsgType::ReplyFailure,
                 id: self.id,
                 content: Value::from("Message too large"),
             })
-            .expect("a Serialize implementation returned an error unexpectedly.");
+            .expect("Tested error response should be serializable.");
             // return the length of the ReplyFailure message, which is << u32::MAX
             payload.len() as u32
-        };
+        });
         let mut message = header.to_be_bytes().to_vec();
         message.append(&mut payload);
         return message;
@@ -413,6 +418,53 @@ mod tests {
             content: json!(error.to_string()),
         }
         .serialize_to_vec();
+        assert_eq!(actual.len(), 4 + expect.len());
+        assert_eq!(actual[4..], expect);
+    }
+
+    #[test]
+    fn test_serialize_to_vec_error_serializing_default() {
+        let expect = r#"[2,18446744073709551615,"Failed to serialize a vector from the response"]"#
+            .as_bytes()
+            .to_vec();
+        let error_response = MosaikMessage {
+            msg_type: MsgType::ReplyFailure,
+            id: u64::MAX,
+            // build an error response without e variable to ensure fixed size of MosaikMessage
+            content: Value::from(
+                "Failed to serialize a vector from the response", // without Err(e) to maintain a small error msg size
+            ),
+        };
+        assert!(expect.len() < u32::MAX as usize);
+        let to_vec = serde_json::to_vec(&error_response);
+        assert!(&to_vec.is_ok(), "Default response should be serializable.");
+        assert_eq!(
+            to_vec.unwrap(),
+            expect,
+            "JSON Serialized response should equal the expected response."
+        );
+        let actual = error_response.serialize_to_vec();
+        assert_eq!(actual.len(), 4 + expect.len());
+        assert_eq!(actual[4..], expect);
+    }
+
+    #[test]
+    fn test_serialize_to_vec_error_message_length_default() {
+        let expect = r#"[2,18446744073709551615,"Message too large"]"#.as_bytes().to_vec();
+        let error_response = MosaikMessage {
+            msg_type: MsgType::ReplyFailure,
+            id: u64::MAX,
+            content: Value::from("Message too large"),
+        };
+        assert!(expect.len() < u32::MAX as usize);
+        let to_vec = serde_json::to_vec(&error_response);
+        assert!(&to_vec.is_ok(), "Default response should be serializable.");
+        assert_eq!(
+            to_vec.unwrap(),
+            expect,
+            "JSON Serialized response should equal the expected response."
+        );
+        let actual = error_response.serialize_to_vec();
         assert_eq!(actual.len(), 4 + expect.len());
         assert_eq!(actual[4..], expect);
     }
