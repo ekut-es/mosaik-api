@@ -49,7 +49,7 @@ pub trait MosaikApi: Send + 'static {
     fn setup_done(&self) -> Result<(), String>;
 
     /// Perform the next simulation step at `time` and return the new simulation time (the time at which `step` should be called again),
-    /// or `None` if the simulator doesn't need to step itself.
+    /// or `None` if the simulator doesn't need to step itself. The Return value must be set for time-based simulators.
     fn step(
         &mut self,
         time: Time,
