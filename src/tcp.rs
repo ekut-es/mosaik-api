@@ -120,14 +120,7 @@ async fn connection_loop(
                     let mut full_package = vec![0; size];
                     match stream.read_exact(&mut full_package).await {
                         Ok(()) => {
-                            if let Err(e) = broker
-                                .send(Event::Request {
-                                    full_data: String::from_utf8(full_package[0..size].to_vec())
-                                        .expect("string from utf 8 connection loops"),
-                                    name: name.clone(),
-                                })
-                                .await
-                            {
+                            if let Err(e) = broker.send(Event::Request {full_data: String::from_utf8(full_package[0..size].to_vec()).expect("string from utf 8 connection loops"), name: name.clone(),}).await {
                                 error!("Error sending package to broker: {:?}", e);
                             }
                         }
