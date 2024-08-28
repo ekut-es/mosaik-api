@@ -1,3 +1,4 @@
+use clap::Parser;
 use log::error;
 use mosaik_rust_api::tcp::ConnectionDirection;
 use mosaik_rust_api::types::{
@@ -8,7 +9,6 @@ use mosaik_rust_api::{run_simulation, MosaikApi};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use structopt::StructOpt;
 
 static META: LazyLock<Meta> = LazyLock::new(|| {
     Meta::new(
@@ -157,18 +157,19 @@ impl MosaikApi for Controller {
     }
 }
 
-#[derive(StructOpt, Debug)]
-struct Opt {
-    //The local addres mosaik connects to or none, if we connect to them
-    #[structopt(short = "a", long)]
+#[derive(Parser, Debug)]
+struct Args {
+    /// The local addres mosaik connects to, or none if we connect to them
+    #[clap(short, long)]
     addr: Option<String>,
 }
+
 pub fn main() {
     //get the address if there is one
-    let opt = Opt::from_args();
+    let args = Args::parse();
     env_logger::init();
 
-    let address = match opt.addr {
+    let address = match args.addr {
         //case if we connect us to mosaik
         Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
             mosaik_addr.parse().expect("Address is not parseable."),

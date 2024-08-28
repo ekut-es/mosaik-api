@@ -1,10 +1,10 @@
 //! Taken from official [tutorial](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html)
 //! This includes the `example_model.py` and the `simulator_mosaik.py` of the Python tutorial.
+use clap::Parser;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::HashMap, sync::LazyLock};
-use structopt::StructOpt;
 
 use mosaik_rust_api::{
     run_simulation,
@@ -260,20 +260,20 @@ impl ExampleSim {
     }
 }
 
-#[derive(StructOpt, Debug)]
-struct Opt {
-    //The local addres mosaik connects to or none, if we connect to them
-    #[structopt(short = "a", long)]
+#[derive(Parser, Debug)]
+struct Args {
+    /// The local address mosaik connects to, or none if we connect to them
+    #[clap(short, long)]
     addr: Option<String>,
 }
 
 pub fn main() {
     //get the address if there is one
-    let opt = Opt::from_args();
+    let args = Args::parse();
     env_logger::init();
 
     // TODO: Should this be part of `run_simulation`?
-    let address = match opt.addr {
+    let address = match args.addr {
         //case if we connect us to mosaik
         Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
             mosaik_addr.parse().expect("Address is not parseable."),
