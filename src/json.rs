@@ -59,9 +59,10 @@ impl MosaikMessage {
     /// `\0x00\0x00\0x00\0x18[type, id, content]`
     ///
     /// # (No) Errors
-    /// If serialization failes or the message is too large, it will be serialized to a ReplyFailure message.
-    /// These messages are tested in the tests for this module. They should be smaller than u32::MAX and always serialize.
+    /// If serialization failes or the message is too large, it will be serialized to a `ReplyFailure` message.
+    /// These messages are tested in the tests for this module. They should be smaller than `u32::MAX` and always serialize.
     #[allow(clippy::expect_used)] // NOTE expect only used for the tested default messages which should not fail
+    #[allow(clippy::cast_possible_truncation)]
     pub fn serialize_to_vec(&self) -> Vec<u8> {
         // Serialize the content to a vector of bytes.
         let mut payload = serde_json::to_vec(&self).unwrap_or_else(|e| {
@@ -134,7 +135,7 @@ impl<'de> Deserialize<'de> for MsgType {
             1 => Ok(MsgType::ReplySuccess),
             2 => Ok(MsgType::ReplyFailure),
             _ => Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Unsigned(value as u64),
+                serde::de::Unexpected::Unsigned(value.into()),
                 &"expected a valid MsgType variant number. These are: 0, 1, 2",
             )),
         }
@@ -254,17 +255,14 @@ pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request)
 fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
     let sid = serde_json::from_value(request.args[0].clone())
         .map_err(|err| MosaikError::ParseError(format!("Failed to parse SimId: {err}")))?;
-    let time_resolution = match request
+    let time_resolution = request
         .kwargs
         .get("time_resolution")
         .and_then(Value::as_f64)
-    {
-        Some(time_resolution) => time_resolution,
-        None => {
+        .unwrap_or_else(|| {
             warn!("Invalid time resolution provided, defaulting to 1.0");
             1.0f64
-        }
-    };
+        });
     let sim_params = request.kwargs.clone();
 
     match simulator.init(sid, time_resolution, sim_params) {
@@ -312,7 +310,7 @@ fn handle_step<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Val
 /// Helper function to handle the `get_data` API call. See [`MosaikApi::get_data`].
 ///
 /// # Example
-/// ["`get_data`", \[outputs\], {}] -> data
+/// \["`get_data`", \[outputs\], {}\] -> data
 fn handle_get_data<T: MosaikApi>(
     simulator: &mut T,
     request: &Request,
