@@ -27,7 +27,7 @@ Cargo Format:
   before_script:
     - rustup component add rustfmt
   script:
-    - cargo fmt --all -- --check
+    - cargo fmt --verbose --all -- --check
 
 # ------------- Stage 2: Build ----------------
 Build lib:
