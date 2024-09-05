@@ -46,19 +46,17 @@ pub(crate) async fn build_connection<T: MosaikApi>(
                 shutdown_connection_loop_sender,
                 simulator,
             ));
-
-            let mut incoming = listener.incoming();
-            let connection_handle = if let Some(stream) = incoming.next().await {
-                let stream = stream?;
-                info!("Accepting from: {}", stream.peer_addr()?);
-                spawn_and_log_error(connection_loop(
-                    broker_sender,
-                    shutdown_connection_loop_receiver,
-                    stream,
-                ))
-            } else {
-                panic!("No stream available.")
-            };
+            let stream = listener
+                .incoming()
+                .next()
+                .await
+                .expect("No stream available")?;
+            info!("Accepting from: {}", stream.peer_addr()?);
+            let connection_handle = spawn_and_log_error(connection_loop(
+                broker_sender,
+                shutdown_connection_loop_receiver,
+                stream,
+            ));
             connection_handle.await;
             broker_handle.await;
 
@@ -95,7 +93,7 @@ async fn connection_loop(
 ) -> Result<()> {
     info!("Started connection loop");
 
-    let mut stream = stream;
+    let mut stream = stream; // FIXME why not make stream mutable in the first place?
     let name = String::from("Mosaik");
 
     let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
@@ -106,7 +104,7 @@ async fn connection_loop(
             shutdown: shutdown_receiver,
         })
         .await
-        .unwrap();
+        .expect("Failed to send NewPeer event to broker"); // FIXME should this be error! instead?
 
     let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number in front of the request.
 
@@ -120,7 +118,8 @@ async fn connection_loop(
                     let mut full_package = vec![0; size];
                     match stream.read_exact(&mut full_package).await {
                         Ok(()) => {
-                            if let Err(e) = broker.send(Event::Request {full_data: String::from_utf8(full_package[0..size].to_vec()).expect("string from utf 8 connection loops"), name: name.clone(),}).await {
+                            let msg = String::from_utf8(full_package[0..size].to_vec()).expect("Should convert to string from utf 8 in connection loops");
+                            if let Err(e) = broker.send(Event::Request {full_data: msg, name: name.clone(),}).await {
                                 error!("Error sending package to broker: {:?}", e);
                             }
                         }
@@ -221,7 +220,7 @@ async fn broker_loop<T: MosaikApi>(
             disconnect_sender
                 .send((String::from("Mosaik"), client_receiver))
                 .await
-                .unwrap();
+                .expect("Failed to send disconnect message to broker");
             res
         });
     } else {
@@ -235,8 +234,8 @@ async fn broker_loop<T: MosaikApi>(
                 None => break,
                 Some(event) => event,
             },
-            disconnect = disconnect_receiver.next().fuse() => {
-                let (_name, _pending_messages) = disconnect.unwrap();
+            _disconnect = disconnect_receiver.next().fuse() => {
+                // let (_name, _pending_messages) = disconnect.unwrap(); // FIXME what is this line doing?
                 //assert!(peer.remove(&name).is_some());
                 continue;
             },
@@ -302,7 +301,7 @@ where
     task::spawn(async move {
         trace!("Task Spawned");
         if let Err(e) = fut.await {
-            error!("{}", e);
+            error!("{}", e); // FIXME does this function simply log errors but continue running?
         }
     })
 }

@@ -1,5 +1,7 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Taken from official [tutorial](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html)
 //! This includes the `example_model.py` and the `simulator_mosaik.py` of the Python tutorial.
+
 use clap::Parser;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Taken from official [demo1](https://mosaik.readthedocs.io/en/3.3.3/tutorials/demo1.html)
 //! collects all data it receives each step in a dictionary (including the current simulation time)
 //! and simply prints everything at the end of the simulation.

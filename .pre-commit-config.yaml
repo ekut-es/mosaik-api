@@ -11,17 +11,6 @@ repos:
     rev: v1.0
     hooks:
       - id: fmt
-        args:
-         [
-            "--all-targets",
-            "--all-features",
-          ]
+        args: ["--all", "--verbose", "--", "--check"]
       - id: clippy
-        args:
-          [
-            "--all-targets",
-            "--all-features",
-            "--",
-            "-D",
-            "warnings",
-          ]
+        args: ["--all-targets", "--all-features"]
