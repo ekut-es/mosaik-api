@@ -81,6 +81,7 @@ pub struct ModelDescription {
 
 impl ModelDescription {
     /// Creates a new `ModelDescription` with fields `any_inputs`, `trigger` and `persistent` set to `None`.
+    #[must_use]
     pub fn new(
         public: bool,
         params: &'static [&'static str],
@@ -117,6 +118,7 @@ pub struct Meta {
 }
 
 impl Meta {
+    #[must_use]
     pub fn new(
         simulator_type: SimulatorType,
         models: HashMap<ModelName, ModelDescription>,
@@ -130,12 +132,14 @@ impl Meta {
         }
     }
 
+    #[must_use]
     pub fn get_version(&self) -> &str {
         self.api_version
     }
 }
 
 impl Default for Meta {
+    #[must_use]
     fn default() -> Self {
         Self {
             api_version: API_VERSION,
@@ -179,6 +183,7 @@ pub struct CreateResult {
 }
 
 impl CreateResult {
+    #[must_use]
     pub fn new(eid: EntityId, model_type: ModelName) -> Self {
         Self {
             eid,
