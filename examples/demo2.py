@@ -7,16 +7,12 @@ import mosaik.util
 # this_folder = __file__.rsplit("/", 1)[0]
 SIM_CONFIG = {
     "ExampleSim": {
-        # "python": "simulator_mosaik:ExampleSim",
         "cmd": "cargo run --example example_sim -- -a=%(addr)s",
     },
     "ExampleCtrl": {
-        # "cmd": f"%(python)s {this_folder}/controller.py %(addr)s",
-        # "python": "controller:Controller",
-        "cmd": "cargo run --example controller -- -a=%(addr)s",
+        "connect": "127.0.0.1:5678",
     },
     "Collector": {
-        # "cmd": f"%(python)s {this_folder}/collector.py %(addr)s",
         "cmd": "cargo run --example collector -- -a=%(addr)s",
     },
 }

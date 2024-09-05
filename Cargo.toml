@@ -10,17 +10,21 @@ async-std = "1"
 async-trait = "0.1.41"
 futures = "0.3.8"
 log = "0.4.11"
-serde = {version = "1.0.162", features = ["derive"]}
+serde = { version = "1.0.162", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0.22"
 
-
 [dev-dependencies]
-structopt = "0.3"
+clap = { version = "4.5.16", features = ["derive"] }
 env_logger = "0.11"
 mockall = "0.13"
-
 
 [features]
 default = []
 default_api = []
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+expect_used = "warn"
+panic_in_result_fn = "warn"
+unwrap_used = "deny"

@@ -1,7 +1,7 @@
 //! The async TCP-Manager for the communication between Mosaik and the simulators.
 
-use crate::{json, MosaikApi};
-use json::Response;
+use crate::{mosaik_protocol, MosaikApi};
+use mosaik_protocol::Response;
 
 use async_std::{
     net::{TcpListener, TcpStream},
@@ -34,60 +34,43 @@ pub(crate) async fn build_connection<T: MosaikApi>(
     simulator: T,
 ) -> Result<()> {
     debug!("accept loop debug");
-    match addr {
+    let stream: TcpStream = match addr {
         //Case: we need to listen for a possible connector
         ConnectionDirection::ListenOnAddress(addr) => {
             let listener = TcpListener::bind(addr).await?;
-            let (broker_sender, broker_receiver) = mpsc::unbounded();
-            let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-                mpsc::unbounded::<bool>();
-            let broker_handle = task::spawn(broker_loop(
-                broker_receiver,
-                shutdown_connection_loop_sender,
-                simulator,
-            ));
-
-            let mut incoming = listener.incoming();
-            let connection_handle = if let Some(stream) = incoming.next().await {
-                let stream = stream?;
-                info!("Accepting from: {}", stream.peer_addr()?);
-                spawn_and_log_error(connection_loop(
-                    broker_sender,
-                    shutdown_connection_loop_receiver,
-                    stream,
-                ))
-            } else {
-                panic!("No stream available.")
-            };
-            connection_handle.await;
-            broker_handle.await;
-
-            Ok(())
+            let (stream, _addr) = listener.accept().await?;
+            info!("Accepting from: {}", stream.peer_addr()?);
+            stream
         }
         //case: We need to connect to a stream
-        ConnectionDirection::ConnectToAddress(addr) => {
-            let stream = TcpStream::connect(addr).await?;
-            let (broker_sender, broker_receiver) = mpsc::unbounded();
-            let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-                mpsc::unbounded::<bool>();
-            let broker_handle = task::spawn(broker_loop(
-                broker_receiver,
-                shutdown_connection_loop_sender,
-                simulator,
-            ));
-            spawn_and_log_error(connection_loop(
-                broker_sender,
-                shutdown_connection_loop_receiver,
-                stream,
-            ));
-            //connection_handle.await;
-            broker_handle.await;
-            Ok(())
-        }
+        ConnectionDirection::ConnectToAddress(addr) => TcpStream::connect(addr).await?,
+    };
+
+    let (broker_sender, broker_receiver) = mpsc::unbounded();
+    let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
+        mpsc::unbounded::<bool>();
+    let broker_handle = task::spawn(broker_loop(
+        broker_receiver,
+        shutdown_connection_loop_sender,
+        simulator,
+    ));
+
+    let connection_handle = spawn_and_log_error(connection_loop(
+        broker_sender,
+        shutdown_connection_loop_receiver,
+        stream,
+    ));
+
+    if let ConnectionDirection::ListenOnAddress(_) = addr {
+        // FIXME should this be run in both cases
+        connection_handle.await;
     }
+
+    broker_handle.await;
+    Ok(())
 }
 
-///Receive the Requests, send them to the broker_loop.
+///Receive the Requests, send them to the `broker_loop`.
 async fn connection_loop(
     mut broker: Sender<Event>,
     mut connection_shutdown_receiver: Receiver<bool>,
@@ -95,7 +78,7 @@ async fn connection_loop(
 ) -> Result<()> {
     info!("Started connection loop");
 
-    let mut stream = stream;
+    let mut stream = stream; // FIXME why not make stream mutable in the first place?
     let name = String::from("Mosaik");
 
     let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
@@ -106,7 +89,8 @@ async fn connection_loop(
             shutdown: shutdown_receiver,
         })
         .await
-        .unwrap();
+        .expect("Failed to send NewPeer event to broker");
+    // FIXME should this be error! instead and therefore catched by spawn_and_log_error()?
 
     let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number in front of the request.
 
@@ -120,14 +104,8 @@ async fn connection_loop(
                     let mut full_package = vec![0; size];
                     match stream.read_exact(&mut full_package).await {
                         Ok(()) => {
-                            if let Err(e) = broker
-                                .send(Event::Request {
-                                    full_data: String::from_utf8(full_package[0..size].to_vec())
-                                        .expect("string from utf 8 connection loops"),
-                                    name: name.clone(),
-                                })
-                                .await
-                            {
+                            let msg = String::from_utf8(full_package[0..size].to_vec()).expect("Should convert to string from utf 8 in connection loops");
+                            if let Err(e) = broker.send(Event::Request {full_data: msg, name: name.clone(),}).await {
                                 error!("Error sending package to broker: {:?}", e);
                             }
                         }
@@ -136,27 +114,22 @@ async fn connection_loop(
 
                 },
                 Err(e) => {
-                    match e.kind() {
-                        async_std::io::ErrorKind::UnexpectedEof => {
+                    if e.kind() == async_std::io::ErrorKind::UnexpectedEof {
                             info!("Read unexpected EOF. Simulation and therefore TCP Connection should be finished. Waiting for Shutdown Request from Shutdown Sender.");
-                            panic!("Unexpected EOF. Error: {}", e);
-                        },
-                        _ => {
+                            panic!("Unexpected EOF. Error: {e}");
+                        } else {
                             error!("Error reading Stream Data: {:?}. Stopping connection loop.", e);
                             break;
                         }
-                    }
                 }
             },
-            void = connection_shutdown_receiver.next().fuse() => match void {
-                Some(_) => {
+            void = connection_shutdown_receiver.next().fuse() => {
+                if void.is_some() {
                     info!("receive connection_shutdown command");
-                    break;
-                },
-                None => {
+                } else{
                     error!("shutdown sender channel is closed and therefore we assume the connection can and should be stopped.");
-                    break;
                 }
+                break;
             }
         }
     }
@@ -176,7 +149,7 @@ async fn connection_writer_loop(
         select! {
             msg = messages.next().fuse() => match msg {
                 Some(msg) => {
-                    stream.write_all(&msg).await?//write the message
+                    stream.write_all(&msg).await?;//write the message
                 },
                 None => break,
             },
@@ -202,7 +175,7 @@ enum Event {
     },
 }
 
-///Receive requests from the connection_loop, parse them, get the values from the API and send the finished response to the connection_writer_loop
+///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
     events: Receiver<Event>,
     mut connection_shutdown_sender: Sender<bool>,
@@ -233,7 +206,7 @@ async fn broker_loop<T: MosaikApi>(
             disconnect_sender
                 .send((String::from("Mosaik"), client_receiver))
                 .await
-                .unwrap();
+                .expect("Failed to send disconnect message to broker");
             res
         });
     } else {
@@ -247,8 +220,8 @@ async fn broker_loop<T: MosaikApi>(
                 None => break,
                 Some(event) => event,
             },
-            disconnect = disconnect_receiver.next().fuse() => {
-                let (_name, _pending_messages) = disconnect.unwrap();
+            _disconnect = disconnect_receiver.next().fuse() => {
+                // let (_name, _pending_messages) = disconnect.unwrap(); // FIXME what is this line doing?
                 //assert!(peer.remove(&name).is_some());
                 continue;
             },
@@ -258,11 +231,11 @@ async fn broker_loop<T: MosaikApi>(
             //The event that will happen the rest of the time, because the only connector is mosaik.
             Event::Request { full_data, name } => {
                 //parse the request
-                match json::parse_json_request(&full_data) {
+                match mosaik_protocol::parse_json_request(&full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
                         trace!("The request: {:?} from {name}", request);
-                        match json::handle_request(&mut simulator, &request) {
+                        match mosaik_protocol::handle_request(&mut simulator, &request) {
                             Response::Reply(mosaik_msg) => {
                                 let response = mosaik_msg.serialize_to_vec();
 
@@ -288,7 +261,7 @@ async fn broker_loop<T: MosaikApi>(
                     }
                 }
             }
-            //The event for a new connector. //TODO: Check if new peer is even needed
+            //The event for a new connector. //TODO: Check if new peer is even needed // FIXME I don't understand this comment
             Event::NewPeer {
                 name,
                 stream: _,
@@ -314,7 +287,9 @@ where
     task::spawn(async move {
         trace!("Task Spawned");
         if let Err(e) = fut.await {
-            error!("{}", e)
+            error!("{}", e); // FIXME does this function simply log errors but continue running?
+                             // ... if so, should we introduce an Error enum with Unrecoverable and Recoverable errors,
+                             //  to be able to "panic" gracefully?
         }
     })
 }

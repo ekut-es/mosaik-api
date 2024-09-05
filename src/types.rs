@@ -21,13 +21,13 @@ pub type SimId = String;
 ///An entity ID
 pub type EntityId = String;
 
-///A full ID of the form "sim_id.entity_id"
+///A full ID of the form "`sim_id.entity_id`"
 pub type FullId = String;
 
 ///The format of input data for simulator's step methods.
 pub type InputData = HashMap<EntityId, HashMap<Attr, Map<FullId, Value>>>;
 
-///The requested outputs for get_data. For each entity where data is
+///The requested outputs for `get_data`. For each entity where data is
 ///needed, the required attributes are listed.
 pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 
@@ -81,6 +81,7 @@ pub struct ModelDescription {
 
 impl ModelDescription {
     /// Creates a new `ModelDescription` with fields `any_inputs`, `trigger` and `persistent` set to `None`.
+    #[must_use]
     pub fn new(
         public: bool,
         params: &'static [&'static str],
@@ -117,6 +118,7 @@ pub struct Meta {
 }
 
 impl Meta {
+    #[must_use]
     pub fn new(
         simulator_type: SimulatorType,
         models: HashMap<ModelName, ModelDescription>,
@@ -130,12 +132,14 @@ impl Meta {
         }
     }
 
+    #[must_use]
     pub fn get_version(&self) -> &str {
         self.api_version
     }
 }
 
 impl Default for Meta {
+    #[must_use]
     fn default() -> Self {
         Self {
             api_version: API_VERSION,
@@ -179,6 +183,7 @@ pub struct CreateResult {
 }
 
 impl CreateResult {
+    #[must_use]
     pub fn new(eid: EntityId, model_type: ModelName) -> Self {
         Self {
             eid,
@@ -204,6 +209,7 @@ class EntityGraph(TypedDict):
 
 // tests for Meta
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -256,7 +262,7 @@ mod tests {
         assert_eq!(
             r#"{"public":true,"params":["init_reading"],"attrs":["trades","total"]}"#,
             model_json
-        )
+        );
     }
 
     #[test]
@@ -280,7 +286,7 @@ mod tests {
         assert_eq!(
             r#"{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"trigger":["trigger1"]}"#,
             model_json
-        )
+        );
     }
 
     #[test]
@@ -363,7 +369,7 @@ mod tests {
         assert_eq!(
             r#"{"eid":"eid_1","type":"model_name"}"#, create_result_json,
             "New CreateResult should not contain any optional fields"
-        )
+        );
     }
 
     #[test]
@@ -390,6 +396,6 @@ mod tests {
             r#"{"eid":"eid_1","type":"model_name","rel":["eid_2"],"children":[{"eid":"child_1","type":"child"}]}"#,
             create_result_json,
             "Filled create result should contain optional fields without extra_info"
-        )
+        );
     }
 }

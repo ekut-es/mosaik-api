@@ -1,9 +1,9 @@
 //! JSON serialization and deserialization for Mosaik messages. And handling of Mosaik requests.
 
-use log::*;
+use log::{debug, error, warn};
 use serde::ser::{Serialize, SerializeTuple, Serializer};
 use serde::{Deserialize, Deserializer};
-use serde_json::{json, map::Map, to_vec, Value};
+use serde_json::{json, map::Map, Value};
 use thiserror::Error;
 
 use crate::MosaikApi;
@@ -28,39 +28,79 @@ pub(crate) enum MosaikError {
 #[derive(Debug, PartialEq, Deserialize)]
 /// Payload of the Network Message in the low-level Mosaik API.
 pub(crate) struct MosaikMessage {
-    /// [MsgType] is used to decide how to handle the message.
+    /// [`MsgType`] is used to decide how to handle the message.
     msg_type: MsgType,
-    /// unique [MessageID] for a message or message pair. Used to match a response to its request.
+    /// unique [`MessageID`] for a message or message pair. Used to match a response to its request.
     id: MessageID,
     /// a JSON Value of arbitrary length.
     content: Value,
 }
 
+impl Serialize for MosaikMessage {
+    /// Serialize a [`MosaikMessage`] to a tuple of 3 elements for the TCP connection.
+    /// Should look like this: `[msg_type, id, content]`.
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut tup = serializer.serialize_tuple(3)?;
+        tup.serialize_element(&(self.msg_type as u8))?;
+        tup.serialize_element(&self.id)?;
+        tup.serialize_element(&self.content)?;
+        tup.end()
+    }
+}
+
 impl MosaikMessage {
-    /// Serialize a [MosaikMessage] to a vector of bytes for the TCP connection.
+    /// Serialize a [`MosaikMessage`] to a vector of bytes for the TCP connection.
+    /// The message is serialized to a vector of bytes with a header of 4 bytes.
+    ///
+    ///  # Format
+    /// `\0x00\0x00\0x00\0x18[type, id, content]`
+    ///
+    /// # (No) Errors
+    /// If serialization failes or the message is too large, it will be serialized to a `ReplyFailure` message.
+    /// These messages are tested in the tests for this module. They should be smaller than `u32::MAX` and always serialize.
+    #[allow(clippy::expect_used)] // NOTE expect only used for the tested default messages which should not fail
+    #[allow(clippy::cast_possible_truncation)]
     pub fn serialize_to_vec(&self) -> Vec<u8> {
-        let response: Value = json!([self.msg_type, self.id, self.content]);
-        match to_vec(&response) {
-            Ok(vec) => {
-                let mut header = (vec.len() as u32).to_be_bytes().to_vec();
-                header.append(&mut vec.clone());
-                header
-            }
-            Err(e) => {
-                error!(
-                    "Failed to serialize response to MessageID {}: {}",
-                    self.id, e
-                );
+        // Serialize the content to a vector of bytes.
+        let mut payload = serde_json::to_vec(&self).unwrap_or_else(|e| {
+            error!(
+                "Failed to serialize a vector from the response to MessageID {}: {}",
+                self.id, e
+            );
+            // NOTE if this Message is changed, update [`test_serialize_to_vec_error_serializing_default()`].
+            let error_response = MosaikMessage {
+                msg_type: MsgType::ReplyFailure,
+                id: self.id,
                 // build an error response without e variable to ensure fixed size of MosaikMessage
-                let error_message = format!(
-                    "Failed to serialize a vector from the response to MessageID {}",
-                    self.id // without Err(e) to maintain a small error msg size
-                );
-                let error_response = json!([MsgType::ReplyFailure, self.id, error_message]);
-                to_vec(&error_response)
-                    .expect("should not fail, because the error message is a short enough string")
-            }
-        }
+                content: Value::from(
+                    "Failed to serialize a vector from the response", // without Err(e) to maintain a small error msg size
+                ),
+            };
+            serde_json::to_vec(&error_response)
+                .expect("Tested error response should be serializable.")
+        });
+        let header = u32::try_from(payload.len()).unwrap_or_else(|_| {
+            error!(
+                "Failed to serialize response to MessageID {}: Message too large for Mosaik API protocol (more than {} bytes)",
+                self.id, u32::MAX
+            );
+            // overwrite payload with error message to a ReplyFailure
+            // NOTE if this Message is changed, update [`test_serialize_to_vec_error_message_length_default()`].
+            payload = serde_json::to_vec(&MosaikMessage {
+                msg_type: MsgType::ReplyFailure,
+                id: self.id,
+                content: Value::from("Message too large"),
+            })
+            .expect("Tested error response should be serializable.");
+            // return the length of the ReplyFailure message, which is << u32::MAX
+            payload.len() as u32
+        });
+        let mut message = header.to_be_bytes().to_vec();
+        message.append(&mut payload);
+        message
     }
 }
 
@@ -73,7 +113,7 @@ enum MsgType {
     ReplyFailure = 2,
 }
 
-/// Serialize [MsgType] as an unsigned integer.
+/// Serialize [`MsgType`] as an unsigned integer.
 impl Serialize for MsgType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -83,7 +123,7 @@ impl Serialize for MsgType {
     }
 }
 
-/// Deserialize [MsgType] from an unsigned integer to the 3 valid variants.
+/// Deserialize [`MsgType`] from an unsigned integer to the 3 valid variants.
 impl<'de> Deserialize<'de> for MsgType {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -95,7 +135,7 @@ impl<'de> Deserialize<'de> for MsgType {
             1 => Ok(MsgType::ReplySuccess),
             2 => Ok(MsgType::ReplyFailure),
             _ => Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Unsigned(value as u64),
+                serde::de::Unexpected::Unsigned(value.into()),
                 &"expected a valid MsgType variant number. These are: 0, 1, 2",
             )),
         }
@@ -104,12 +144,12 @@ impl<'de> Deserialize<'de> for MsgType {
 type MessageID = u64;
 
 #[derive(Debug, Deserialize, PartialEq)]
-/// [MsgType::Request] type Message of the low-level Mosaik API.
-/// Defines a MosaikMessage in a more granular way.
-/// Dividing the [MosaikMessage::content] into method, args and kwargs.
+/// [`MsgType::Request`] type Message of the low-level Mosaik API.
+/// Defines a `MosaikMessage` in a more granular way.
+/// Dividing the [`MosaikMessage::content`] into method, args and kwargs.
 ///
-/// See [parse_json_request] for the conversion from MosaikMessage to Request.
-/// See [handle_request] for the Response creation to a Request.
+/// See [`parse_json_request`] for the conversion from `MosaikMessage` to Request.
+/// See [`handle_request`] for the Response creation to a Request.
 pub(crate) struct Request {
     #[serde(skip)]
     msg_id: MessageID,
@@ -118,7 +158,7 @@ pub(crate) struct Request {
     kwargs: Map<String, Value>,
 }
 
-/// Serializing the request to the array needed for the MosaikMessage content.
+/// Serializing the request to the array needed for the `MosaikMessage` content.
 impl Serialize for Request {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -135,32 +175,30 @@ impl Serialize for Request {
 #[derive(Debug, PartialEq)]
 /// This is for inner handling of a Response in the TCP Connection.
 ///
-/// See [MsgType] for the two different Response types.
+/// See [`MsgType`] for the two different Response types.
 pub(crate) enum Response {
-    /// signals the TCP Connection to reply with the [MosaikMessage]
-    /// with the msg_type either a [MsgType::ReplySuccess] or [MsgType::ReplyFailure].
+    /// signals the TCP Connection to reply with the [`MosaikMessage`]
+    /// with the `msg_type` either a [`MsgType::ReplySuccess`] or [`MsgType::ReplyFailure`].
     Reply(MosaikMessage),
     /// signal to stop the Simulation and TCP Connection
     Stop,
 }
 
-/// Parse a JSON string to a MosaikMessage and check if it is a [Request].
+/// Parse a JSON string to a `MosaikMessage` and check if it is a [Request].
 pub(crate) fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
     // Parse the string of data into serde_json::Value.
     let payload: MosaikMessage = match serde_json::from_str(data) {
         Ok(payload) => payload,
         Err(e) => {
             return Err(MosaikError::ParseError(format!(
-                "Payload is not a valid Mosaik Message: {}",
-                e
+                "Payload is not a valid Mosaik Message: {e}"
             )));
         }
     };
 
     if payload.msg_type != MsgType::Request {
         return Err(MosaikError::ParseError(format!(
-            "The Mosaik Message is not a request: {:?}",
-            payload
+            "The Mosaik Message is not a request: {payload:?}"
         )));
     }
 
@@ -168,8 +206,7 @@ pub(crate) fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
         Ok(request) => request,
         Err(e) => {
             return Err(MosaikError::ParseError(format!(
-                "The Mosaik Message has no valid Request content: {}",
-                e
+                "The Mosaik Message has no valid Request content: {e}"
             )));
         }
     };
@@ -178,7 +215,7 @@ pub(crate) fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
 }
 
 /// Handle a [Request] and return a [Response].
-/// See [MsgType] for the two different Response types.
+/// See [`MsgType`] for the two different Response types.
 /// Uses several helper functions to handle the different Mosaik API calls.
 pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Response {
     let handle_result = match request.method.as_ref() {
@@ -211,18 +248,21 @@ pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request)
     }
 }
 
-/// Helper function to handle the `init` API call. See [MosaikApi::init].
+/// Helper function to handle the `init` API call. See [`MosaikApi::init`].
 ///
 /// # Example
-/// ["init", [sim_id], {time_resolution=time_resolution, **sim_params}] -> meta
+/// ["init", \[`sim_id`\], {`time_resolution=time_resolution`, **`sim_params`}] -> meta
 fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
     let sid = serde_json::from_value(request.args[0].clone())
-        .map_err(|err| MosaikError::ParseError(format!("Failed to parse SimId: {}", err)))?;
+        .map_err(|err| MosaikError::ParseError(format!("Failed to parse SimId: {err}")))?;
     let time_resolution = request
         .kwargs
         .get("time_resolution")
-        .and_then(|value| value.as_f64())
-        .unwrap_or(1.0f64);
+        .and_then(Value::as_f64)
+        .unwrap_or_else(|| {
+            warn!("Invalid time resolution provided, defaulting to 1.0");
+            1.0f64
+        });
     let sim_params = request.kwargs.clone();
 
     match simulator.init(sid, time_resolution, sim_params) {
@@ -231,16 +271,16 @@ fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Val
     }
 }
 
-/// Helper function to handle the `create` API call. See [MosaikApi::create].
+/// Helper function to handle the `create` API call. See [`MosaikApi::create`].
 ///
 /// # Example
-/// ["create", [num, model], {**model_params}] -> entity_list
+/// ["create", [num, model], {**`model_params`}] -> `entity_list`
 fn handle_create<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
     let num = serde_json::from_value(request.args[0].clone()).map_err(|e| {
-        MosaikError::ParseError(format!("Failed to parse number of instances: {}", e))
+        MosaikError::ParseError(format!("Failed to parse number of instances: {e}"))
     })?;
     let model_name = serde_json::from_value(request.args[1].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse model name: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse model name: {e}")))?;
     let kwargs = request.kwargs.clone();
 
     match simulator.create(num, model_name, kwargs) {
@@ -249,17 +289,17 @@ fn handle_create<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<V
     }
 }
 
-/// Helper function to handle the `step` API call. See [MosaikApi::step].
+/// Helper function to handle the `step` API call. See [`MosaikApi::step`].
 ///
 /// # Example
-/// ["step", [time, inputs, max_advance], {}] -> Optional[time_next_step]
+/// ["step", [time, inputs, `max_advance`], {}] -> Optional\[`time_next_step`\]
 fn handle_step<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
     let time = serde_json::from_value(request.args[0].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse time: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse time: {e}")))?;
     let inputs = serde_json::from_value(request.args[1].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse inputs: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse inputs: {e}")))?;
     let max_advance = serde_json::from_value(request.args[2].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse max_advance: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse max_advance: {e}")))?;
 
     match simulator.step(time, inputs, max_advance) {
         Ok(value) => Ok(serde_json::to_value(value)?),
@@ -267,16 +307,16 @@ fn handle_step<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Val
     }
 }
 
-/// Helper function to handle the `get_data` API call. See [MosaikApi::get_data].
+/// Helper function to handle the `get_data` API call. See [`MosaikApi::get_data`].
 ///
 /// # Example
-/// ["get_data", [outputs], {}] -> data
+/// \["`get_data`", \[outputs\], {}\] -> data
 fn handle_get_data<T: MosaikApi>(
     simulator: &mut T,
     request: &Request,
 ) -> Result<Value, MosaikError> {
     let outputs = serde_json::from_value(request.args[0].clone())
-        .map_err(|e| MosaikError::ParseError(format!("Failed to parse output request: {}", e)))?;
+        .map_err(|e| MosaikError::ParseError(format!("Failed to parse output request: {e}")))?;
 
     match simulator.get_data(outputs) {
         Ok(output_data) => Ok(serde_json::to_value(output_data)?),
@@ -284,22 +324,23 @@ fn handle_get_data<T: MosaikApi>(
     }
 }
 
-/// Helper function to handle the `setup_done` API call. See [MosaikApi::setup_done].
+/// Helper function to handle the `setup_done` API call. See [`MosaikApi::setup_done`].
 ///
 /// # Example
-/// ["setup_done", [], {}] -> null
+/// ["`setup_done`", [], {}] -> null
 fn handle_setup_done<T: MosaikApi>(simulator: &mut T) -> Result<Value, MosaikError> {
     match simulator.setup_done() {
-        Ok(_) => Ok(json!(null)),
+        Ok(()) => Ok(json!(null)),
         Err(e) => Err(MosaikError::UserError(e)),
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::types::{InputData, Meta, SimulatorType};
-    use crate::{CreateResult, MockMosaikApi, OutputData, OutputRequest};
+    use crate::types::{CreateResult, InputData, Meta, OutputData, OutputRequest, SimulatorType};
+    use crate::MockMosaikApi;
 
     use mockall::predicate::*;
     use serde_json::json;
@@ -321,8 +362,7 @@ mod tests {
             args: vec![json!("hello"), json!("world")],
             kwargs: {
                 let mut map = Map::new();
-                map.insert("times".to_string(), json!(23))
-                    .unwrap_or_default();
+                map.insert("times".to_string(), json!(23));
                 map
             },
         };
@@ -381,6 +421,53 @@ mod tests {
         assert_eq!(actual[4..], expect);
     }
 
+    #[test]
+    fn test_serialize_to_vec_error_serializing_default() {
+        let expect = r#"[2,18446744073709551615,"Failed to serialize a vector from the response"]"#
+            .as_bytes()
+            .to_vec();
+        let error_response = MosaikMessage {
+            msg_type: MsgType::ReplyFailure,
+            id: u64::MAX,
+            // build an error response without e variable to ensure fixed size of MosaikMessage
+            content: Value::from(
+                "Failed to serialize a vector from the response", // without Err(e) to maintain a small error msg size
+            ),
+        };
+        assert!(expect.len() < u32::MAX as usize);
+        let to_vec = serde_json::to_vec(&error_response);
+        assert!(&to_vec.is_ok(), "Default response should be serializable.");
+        assert_eq!(
+            to_vec.unwrap(),
+            expect,
+            "JSON Serialized response should equal the expected response."
+        );
+        let actual = error_response.serialize_to_vec();
+        assert_eq!(actual.len(), 4 + expect.len());
+        assert_eq!(actual[4..], expect);
+    }
+
+    #[test]
+    fn test_serialize_to_vec_error_message_length_default() {
+        let expect = r#"[2,18446744073709551615,"Message too large"]"#.as_bytes().to_vec();
+        let error_response = MosaikMessage {
+            msg_type: MsgType::ReplyFailure,
+            id: u64::MAX,
+            content: Value::from("Message too large"),
+        };
+        assert!(expect.len() < u32::MAX as usize);
+        let to_vec = serde_json::to_vec(&error_response);
+        assert!(&to_vec.is_ok(), "Default response should be serializable.");
+        assert_eq!(
+            to_vec.unwrap(),
+            expect,
+            "JSON Serialized response should equal the expected response."
+        );
+        let actual = error_response.serialize_to_vec();
+        assert_eq!(actual.len(), 4 + expect.len());
+        assert_eq!(actual[4..], expect);
+    }
+
     // --------------------------------------------------------------------------
     // Tests for MsgType
     // --------------------------------------------------------------------------
@@ -419,7 +506,7 @@ mod tests {
     // -------------------------------------------------------------------------
 
     #[test]
-    fn test_parse_valid_request() -> Result<(), MosaikError> {
+    fn test_parse_valid_request() {
         let valid_request = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
         let expected = Request {
             msg_id: 1,
@@ -427,16 +514,13 @@ mod tests {
             args: vec![json!("hello"), json!("world")],
             kwargs: {
                 let mut map = Map::new();
-                map.insert("times".to_string(), json!(23))
-                    .unwrap_or_default();
+                map.insert("times".to_string(), json!(23));
                 map
             },
         };
         let result = parse_json_request(valid_request);
         assert!(result.is_ok());
-        assert_eq!(result?, expected);
-
-        Ok(())
+        assert_eq!(result.unwrap(), expected);
     }
 
     #[test]
@@ -448,9 +532,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
@@ -463,9 +545,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
@@ -478,9 +558,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
@@ -493,9 +571,7 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
@@ -509,14 +585,12 @@ mod tests {
         let actual = result.unwrap_err();
         assert!(
             actual.to_string().starts_with(&expect.to_string()),
-            "{} does not start with {}",
-            actual,
-            expect
+            "{actual} does not start with {expect}"
         );
     }
 
     #[test]
-    fn test_parse_step_request() -> Result<(), MosaikError> {
+    fn test_parse_step_request() {
         let valid_step_request = r#"
         [0, 1, ["step",
                 [1,
@@ -543,7 +617,7 @@ mod tests {
         assert!(result.is_ok());
 
         let request = result.unwrap();
-        let input: InputData = serde_json::from_value(request.args[1].clone())?;
+        let input: InputData = serde_json::from_value(request.args[1].clone()).unwrap();
 
         assert_eq!(
             input
@@ -556,11 +630,10 @@ mod tests {
             3
         );
         assert_eq!(request, expected);
-        Ok(())
     }
 
     #[test]
-    fn test_parse_get_data_request() -> Result<(), MosaikError> {
+    fn test_parse_get_data_request() {
         let valid_request = r#"[0, 1, ["get_data", [{"eid_1": ["attr_1", "attr_2"]}], {}]]"#;
         let mut outputs = Map::new();
         outputs.insert("eid_1".to_string(), json!(vec!["attr_1", "attr_2"]));
@@ -570,8 +643,8 @@ mod tests {
             args: vec![json!(outputs)],
             kwargs: Map::new(),
         };
-        assert_eq!(parse_json_request(valid_request)?, expected);
-        Ok(())
+        assert!(parse_json_request(valid_request).is_ok());
+        assert_eq!(parse_json_request(valid_request).unwrap(), expected);
     }
 
     // ------------------------------------------------------------------------
@@ -587,8 +660,7 @@ mod tests {
             args: vec![json!("hello"), json!("world")],
             kwargs: {
                 let mut map = Map::new();
-                map.insert("times".to_string(), json!(23))
-                    .unwrap_or_default();
+                map.insert("times".to_string(), json!(23));
                 map
             },
         };
@@ -627,7 +699,7 @@ mod tests {
     //     }
     // }
     #[test]
-    fn test_handle_request_init_success() -> Result<(), MosaikError> {
+    fn test_handle_request_init_success() {
         static META: LazyLock<Meta> =
             LazyLock::new(|| Meta::new(SimulatorType::default(), HashMap::new(), None));
         let mut simulator = MockMosaikApi::new();
@@ -654,8 +726,6 @@ mod tests {
                 content: payload
             })
         );
-
-        Ok(())
     }
 
     #[test]

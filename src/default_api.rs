@@ -1,6 +1,8 @@
 //! This module contains some default implementations for the mosaik API functions.
 
-use crate::types::*;
+use crate::types::{
+    Attr, CreateResult, EntityId, InputData, Meta, ModelName, OutputData, OutputRequest, Time,
+};
 
 use log::{debug, error, info, trace, warn};
 use serde_json::{Map, Value};
@@ -11,63 +13,63 @@ pub trait ApiHelpers {
     /// Retrieves the metadata associated with the current instance.
     ///
     /// # Used in:
-    /// - [default_init]
+    /// - [`default_init`]
     fn meta(&self) -> &'static Meta;
 
     /// Set the `eid_prefix` on the simulator, which we got from the interface.
     ///
     /// # Used in:
-    /// - [default_init]
+    /// - [`default_init`]
     fn set_eid_prefix(&mut self, eid_prefix: &str);
 
-    /// Set the step_size on the simulator, which we got from the interface.
+    /// Set the `step_size` on the simulator, which we got from the interface.
     ///
     /// # Used in:
-    /// - [default_init]
+    /// - [`default_init`]
     fn set_step_size(&mut self, step_size: u64);
 
-    ///Get the eid_prefix.
+    ///Get the `eid_prefix`.
     ///
     /// # Used in:
-    /// - [default_create]
+    /// - [`default_create`]
     fn get_eid_prefix(&self) -> &str;
 
-    /// Get the step_size in the api call step().
+    /// Get the `step_size` in the api call `step()`.
     ///
     /// # Used in:
-    /// - [default_step]
+    /// - [`default_step`]
     fn get_step_size(&self) -> u64;
 
     /// Get the list containing the created entities.
     ///
     /// # Used in:
-    /// - [default_create]
-    /// - [default_step]
+    /// - [`default_create`]
+    /// - [`default_step`]
     fn get_mut_entities(&mut self) -> &mut Map<EntityId, Value>;
 
     /// Get the list containing the created entities.
     ///
     /// # Used in:
-    /// - [default_get_data]
+    /// - [`default_get_data`]
     fn get_entities(&self) -> &Map<EntityId, Value>;
 
     /// Create a model instance (= entity) with an initial value. Returns the
     /// [types](CreateResult) representation of the children, if the entity has children.
     ///
     /// # Used in:
-    /// - [default_create]
+    /// - [`default_create`]
     fn add_model(&mut self, model_params: Map<Attr, Value>) -> Option<Vec<CreateResult>>;
 
     /// Get the value from an entity.
     ///
     /// # Used in:
-    /// - [default_get_data]
+    /// - [`default_get_data`]
     fn get_model_value(&self, model_idx: u64, attr: &str) -> Result<Value, String>;
 
     /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
     ///
     /// # Used in:
-    /// - [default_step]
+    /// - [`default_step`]
     fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
 
     /// Get the time resolution of the Simulator.
@@ -79,18 +81,18 @@ pub trait ApiHelpers {
     /// Set the time resolution of the Simulator.
     ///
     /// # Used in:
-    /// - [default_init]
+    /// - [`default_init`]
     fn set_time_resolution(&mut self, time_resolution: f64);
 
     /// Set the time of the Simulator.
     /// # Used in:
-    /// - [default_step]
+    /// - [`default_step`]
     fn set_time(&mut self, time: Time);
 
     /// Get the time of the Simulator.
     ///
     /// # Used in:
-    /// - [default_get_data]
+    /// - [`default_get_data`]
     fn get_time(&self) -> Time;
 }
 
@@ -106,7 +108,7 @@ pub fn default_init<T: ApiHelpers>(
     }
     simulator.set_time_resolution(time_resolution.abs());
 
-    for (key, value) in sim_params.into_iter() {
+    for (key, value) in sim_params {
         match (key.as_str(), value) {
             ("eid_prefix", Value::String(eid_prefix)) => {
                 simulator.set_eid_prefix(eid_prefix.as_str());
@@ -115,7 +117,7 @@ pub fn default_init<T: ApiHelpers>(
                 if let Some(step_size) = step_size.as_u64() {
                     simulator.set_step_size(step_size);
                 } else {
-                    let e = format!("Step size is not a valid number: {:?}", step_size);
+                    let e = format!("Step size is not a valid number: {step_size:?}");
                     error!("Error in default_init: {}", e);
                     return Err(e);
                 }
@@ -172,17 +174,17 @@ pub fn default_step<T: ApiHelpers>(
     simulator.set_time(time);
     // Check for new delta and do step for each model instance:
     let mut deltas: Vec<(EntityId, u64, Map<Attr, Value>)> = Vec::new();
-    for (eid, attrs) in inputs.into_iter() {
+    for (eid, attrs) in inputs {
         let model_idx = simulator
             .get_mut_entities()
             .get(&eid.clone())
-            .and_then(|eid| eid.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .ok_or(format!(
                 "No correct model eid available. Input: {:?}, Entities: {:?}",
                 eid,
                 simulator.get_mut_entities(),
             ))?;
-        for (attr, attr_values) in attrs.into_iter() {
+        for (attr, attr_values) in attrs {
             deltas.push((attr, model_idx, attr_values));
         }
     }
@@ -191,18 +193,18 @@ pub fn default_step<T: ApiHelpers>(
     Ok(Some(time + simulator.get_step_size()))
 }
 
-/// The default implementation for the get_data function.
+/// The default implementation for the `get_data` function.
 /// Allows to get `attr` values of the model instances.
 pub fn default_get_data<T: ApiHelpers>(
     simulator: &T,
     outputs: OutputRequest,
 ) -> Result<OutputData, String> {
     let mut data: HashMap<String, HashMap<Attr, Value>> = HashMap::new();
-    for (eid, attrs) in outputs.into_iter() {
+    for (eid, attrs) in outputs {
         let model_idx = simulator
             .get_entities()
             .get(&eid)
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .ok_or(format!(
                 "No correct model eid available. Input: {:?}, Entities: {:?}",
                 eid,
@@ -210,7 +212,7 @@ pub fn default_get_data<T: ApiHelpers>(
             ))?;
 
         let mut attribute_values: HashMap<Attr, Value> = HashMap::new();
-        for attr in attrs.into_iter() {
+        for attr in attrs {
             //Get the values of the model
             match simulator.get_model_value(model_idx, &attr) {
                 Ok(value) => {

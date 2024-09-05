@@ -1,10 +1,12 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Taken from official [tutorial](https://mosaik.readthedocs.io/en/3.3.3/tutorials/examplesim.html)
-//! This includes the example_model.py and the simulator_mosaik.py of the Python tutorial.
+//! This includes the `example_model.py` and the `simulator_mosaik.py` of the Python tutorial.
+
+use clap::Parser;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::HashMap, sync::LazyLock};
-use structopt::StructOpt;
 
 use mosaik_rust_api::{
     run_simulation,
@@ -97,15 +99,14 @@ impl MosaikApi for ExampleSim {
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> Result<&'static Meta, String> {
-        if time_resolution != 1.0f64 {
+        if (time_resolution - 1.0f64).abs() >= f64::EPSILON {
             return Err(format!(
-                "ExampleSim only supports time_resolution=1., but {} was set.",
-                time_resolution
+                "ExampleSim only supports time_resolution=1., but {time_resolution} was set."
             ));
         }
         self.time_resolution = time_resolution;
 
-        for (key, value) in sim_params.into_iter() {
+        for (key, value) in sim_params {
             match (key.as_str(), value) {
                 ("eid_prefix", Value::String(eid_prefix)) => {
                     info!("EID prefix is set to: {}", eid_prefix);
@@ -116,7 +117,7 @@ impl MosaikApi for ExampleSim {
                         info!("Step size is set to: {}", step_size);
                         self.step_size = step_size;
                     } else {
-                        let e = format!("Step size is not a valid number: {:?}", step_size);
+                        let e = format!("Step size is not a valid number: {step_size:?}");
                         error!("Error in default_init: {}", e);
                         return Err(e);
                     }
@@ -139,20 +140,10 @@ impl MosaikApi for ExampleSim {
         let next_eid = self.entities.len();
         let mut result: Vec<CreateResult> = Vec::new();
 
-        let init_val = match model_params.get("init_val") {
-            Some(v) => match v.as_f64() {
-                Some(val) => {
-                    info!("init_val is set to: {}", val);
-                    val
-                }
-                None => {
-                    let e = format!("init_val is not a valid number: {:?}", v);
-                    error!("Error in create: {}", e);
-                    return Err(e);
-                }
-            },
-            None => 0.0, // default
-        };
+        let init_val = model_params
+            .get("init_val")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
 
         for i in next_eid..(next_eid + num) {
             let model_instance =
@@ -177,11 +168,11 @@ impl MosaikApi for ExampleSim {
     ) -> Result<Option<Time>, String> {
         self.time = time;
 
-        // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
+        // NOTE this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
 
         // Check for new delta and do step for each model instance:
-        for (eid, model_value) in self.entities.iter_mut() {
+        for (eid, model_value) in &mut self.entities {
             let mut model_instance: Model =
                 Model::deserialize(model_value.clone()).map_err(|e| e.to_string())?;
             if let Some(attrs) = inputs.get(eid) {
@@ -201,7 +192,7 @@ impl MosaikApi for ExampleSim {
     fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String> {
         let mut data: HashMap<EntityId, HashMap<Attr, Value>> = HashMap::new();
 
-        for (eid, attrs) in outputs.iter() {
+        for (eid, attrs) in &outputs {
             let instance = self.entities.get(eid);
             let instance: Option<Model> =
                 instance.and_then(|i| serde_json::from_value(i.clone()).ok());
@@ -247,8 +238,7 @@ impl MosaikApi for ExampleSim {
                 Ok(Value::String("Printed something!".to_string()))
             }
             _ => Err(format!(
-                "Method '{}' not found with args: {:?} and kwargs: {:?}",
-                method, args, kwargs
+                "Method '{method}' not found with args: {args:?} and kwargs: {kwargs:?}"
             )),
         }
     }
@@ -262,24 +252,24 @@ impl ExampleSim {
     }
 }
 
-#[derive(StructOpt, Debug)]
-struct Opt {
-    //The local addres mosaik connects to or none, if we connect to them
-    #[structopt(short = "a", long)]
+#[derive(Parser, Debug)]
+struct Args {
+    /// The local address mosaik connects to, or none if we connect to them
+    #[clap(short, long)]
     addr: Option<String>,
 }
 
 pub fn main() {
     //get the address if there is one
-    let opt = Opt::from_args();
+    let args = Args::parse();
     env_logger::init();
 
     // TODO: Should this be part of `run_simulation`?
-    let address = match opt.addr {
+    let address = match args.addr {
         //case if we connect us to mosaik
-        Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
-            mosaik_addr.parse().expect("Address is not parseable."),
-        ),
+        Some(addr) => {
+            ConnectionDirection::ConnectToAddress(addr.parse().expect("Address is not parseable."))
+        }
         //case if mosaik connects to us
         None => {
             let addr = "127.0.0.1:3456";
@@ -291,6 +281,6 @@ pub fn main() {
     let simulator = ExampleSim::default();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        error!("Error running RExampleSim: {:?}", e);
+        panic!("Error running ExampleSim: {e:?}");
     }
 }

@@ -1,11 +1,8 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Taken from official [demo1](https://mosaik.readthedocs.io/en/3.3.3/tutorials/demo1.html)
 //! collects all data it receives each step in a dictionary (including the current simulation time)
 //! and simply prints everything at the end of the simulation.
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::LazyLock,
-};
-
+use clap::Parser;
 use log::error;
 use mosaik_rust_api::{
     run_simulation,
@@ -17,25 +14,28 @@ use mosaik_rust_api::{
     MosaikApi,
 };
 use serde_json::{Map, Value};
-use structopt::StructOpt;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::LazyLock,
+};
 
-#[derive(StructOpt, Debug)]
-struct Opt {
-    //The local addres mosaik connects to or none, if we connect to them
-    #[structopt(short = "a", long)]
+#[derive(Parser, Debug)]
+struct Args {
+    /// The local addres mosaik connects to, or none if we connect to them
+    #[structopt(short, long)]
     addr: Option<String>,
 }
 
 pub fn main() {
     //get the address if there is one
-    let opt = Opt::from_args();
+    let args = Args::parse();
     env_logger::init();
 
-    let address = match opt.addr {
+    let address = match args.addr {
         //case if we connect us to mosaik
-        Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
-            mosaik_addr.parse().expect("Address is not parseable."),
-        ),
+        Some(addr) => {
+            ConnectionDirection::ConnectToAddress(addr.parse().expect("Address is not parseable."))
+        }
         //case if mosaik connects to us
         None => {
             let addr = "127.0.0.1:3456";
@@ -141,12 +141,12 @@ impl MosaikApi for Collector {
         let sims: Vec<_> = self.data.iter().collect();
 
         for (sim, sim_data) in sims {
-            println!("- {}:", sim);
+            println!("- {sim}:");
 
             let attrs: Vec<_> = sim_data.iter().collect();
 
             for (attr, values) in attrs {
-                println!("  - {}: {:?}", attr, values);
+                println!("  - {attr}: {values:?}");
             }
         }
     }
