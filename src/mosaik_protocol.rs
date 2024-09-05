@@ -339,8 +339,8 @@ fn handle_setup_done<T: MosaikApi>(simulator: &mut T) -> Result<Value, MosaikErr
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::types::{InputData, Meta, SimulatorType};
-    use crate::{CreateResult, MockMosaikApi, OutputData, OutputRequest};
+    use crate::types::{CreateResult, InputData, Meta, OutputData, OutputRequest, SimulatorType};
+    use crate::MockMosaikApi;
 
     use mockall::predicate::*;
     use serde_json::json;
@@ -506,7 +506,7 @@ mod tests {
     // -------------------------------------------------------------------------
 
     #[test]
-    fn test_parse_valid_request() -> Result<(), MosaikError> {
+    fn test_parse_valid_request() {
         let valid_request = r#"[0, 1, ["my_func", ["hello", "world"], {"times": 23}]]"#;
         let expected = Request {
             msg_id: 1,
@@ -520,9 +520,7 @@ mod tests {
         };
         let result = parse_json_request(valid_request);
         assert!(result.is_ok());
-        assert_eq!(result?, expected);
-
-        Ok(())
+        assert_eq!(result.unwrap(), expected);
     }
 
     #[test]
@@ -592,7 +590,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_step_request() -> Result<(), MosaikError> {
+    fn test_parse_step_request() {
         let valid_step_request = r#"
         [0, 1, ["step",
                 [1,
@@ -619,7 +617,7 @@ mod tests {
         assert!(result.is_ok());
 
         let request = result.unwrap();
-        let input: InputData = serde_json::from_value(request.args[1].clone())?;
+        let input: InputData = serde_json::from_value(request.args[1].clone()).unwrap();
 
         assert_eq!(
             input
@@ -632,11 +630,10 @@ mod tests {
             3
         );
         assert_eq!(request, expected);
-        Ok(())
     }
 
     #[test]
-    fn test_parse_get_data_request() -> Result<(), MosaikError> {
+    fn test_parse_get_data_request() {
         let valid_request = r#"[0, 1, ["get_data", [{"eid_1": ["attr_1", "attr_2"]}], {}]]"#;
         let mut outputs = Map::new();
         outputs.insert("eid_1".to_string(), json!(vec!["attr_1", "attr_2"]));
@@ -646,8 +643,8 @@ mod tests {
             args: vec![json!(outputs)],
             kwargs: Map::new(),
         };
-        assert_eq!(parse_json_request(valid_request)?, expected);
-        Ok(())
+        assert!(parse_json_request(valid_request).is_ok());
+        assert_eq!(parse_json_request(valid_request).unwrap(), expected);
     }
 
     // ------------------------------------------------------------------------
@@ -702,7 +699,7 @@ mod tests {
     //     }
     // }
     #[test]
-    fn test_handle_request_init_success() -> Result<(), MosaikError> {
+    fn test_handle_request_init_success() {
         static META: LazyLock<Meta> =
             LazyLock::new(|| Meta::new(SimulatorType::default(), HashMap::new(), None));
         let mut simulator = MockMosaikApi::new();
@@ -729,8 +726,6 @@ mod tests {
                 content: payload
             })
         );
-
-        Ok(())
     }
 
     #[test]

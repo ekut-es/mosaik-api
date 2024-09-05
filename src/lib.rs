@@ -1,6 +1,6 @@
 #[cfg(feature = "default_api")]
 pub mod default_api;
-pub mod json;
+pub mod mosaik_protocol;
 pub mod tcp;
 pub mod types;
 
@@ -13,7 +13,7 @@ use async_std::task;
 use async_trait::async_trait;
 #[cfg(test)]
 use mockall::automock;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -94,6 +94,7 @@ mod tests {
     use super::*;
     use crate::MockMosaikApi;
     use mockall::predicate::*;
+    use serde_json::json;
 
     #[test]
     fn test_extra_method_with_logic() {

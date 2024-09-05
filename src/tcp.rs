@@ -1,7 +1,7 @@
 //! The async TCP-Manager for the communication between Mosaik and the simulators.
 
-use crate::{json, MosaikApi};
-use json::Response;
+use crate::{mosaik_protocol, MosaikApi};
+use mosaik_protocol::Response;
 
 use async_std::{
     net::{TcpListener, TcpStream},
@@ -246,11 +246,11 @@ async fn broker_loop<T: MosaikApi>(
             //The event that will happen the rest of the time, because the only connector is mosaik.
             Event::Request { full_data, name } => {
                 //parse the request
-                match json::parse_json_request(&full_data) {
+                match mosaik_protocol::parse_json_request(&full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
                         trace!("The request: {:?} from {name}", request);
-                        match json::handle_request(&mut simulator, &request) {
+                        match mosaik_protocol::handle_request(&mut simulator, &request) {
                             Response::Reply(mosaik_msg) => {
                                 let response = mosaik_msg.serialize_to_vec();
 
