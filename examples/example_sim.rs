@@ -178,7 +178,7 @@ impl MosaikApi for ExampleSim {
     ) -> Result<Option<Time>, String> {
         self.time = time;
 
-        // FIXME this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
+        // NOTE this code is implemented as on https://mosaik.readthedocs.io/en/latest/tutorials/examplesim.html#step
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
 
         // Check for new delta and do step for each model instance:
