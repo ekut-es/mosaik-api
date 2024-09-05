@@ -99,13 +99,12 @@ impl MosaikApi for Controller {
             }
 
             if let Some(values_dict) = attrs.get("val_in") {
-                if values_dict.len() != 1 {
-                    panic!(
-                        "Only one ingoing connection allowed per agent, but \"{}\" has {}.",
-                        agent_eid,
-                        values_dict.len()
-                    );
-                }
+                assert!(
+                    values_dict.len() == 1,
+                    "Only one ingoing connection allowed per agent, but \"{}\" has {}.",
+                    agent_eid,
+                    values_dict.len()
+                );
 
                 let value = values_dict.values().next().unwrap();
 

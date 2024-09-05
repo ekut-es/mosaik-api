@@ -99,14 +99,14 @@ impl MosaikApi for ExampleSim {
         time_resolution: f64,
         sim_params: Map<String, Value>,
     ) -> Result<&'static Meta, String> {
-        if time_resolution != 1.0f64 {
+        if (time_resolution - 1.0f64).abs() >= f64::EPSILON {
             return Err(format!(
                 "ExampleSim only supports time_resolution=1., but {time_resolution} was set."
             ));
         }
         self.time_resolution = time_resolution;
 
-        for (key, value) in sim_params.into_iter() {
+        for (key, value) in sim_params {
             match (key.as_str(), value) {
                 ("eid_prefix", Value::String(eid_prefix)) => {
                     info!("EID prefix is set to: {}", eid_prefix);
@@ -182,7 +182,7 @@ impl MosaikApi for ExampleSim {
         // but it seems to contain a bug. The delta is overridden by each loop before it's written to the model_instance.
 
         // Check for new delta and do step for each model instance:
-        for (eid, model_value) in self.entities.iter_mut() {
+        for (eid, model_value) in &mut self.entities {
             let mut model_instance: Model =
                 Model::deserialize(model_value.clone()).map_err(|e| e.to_string())?;
             if let Some(attrs) = inputs.get(eid) {
@@ -202,7 +202,7 @@ impl MosaikApi for ExampleSim {
     fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String> {
         let mut data: HashMap<EntityId, HashMap<Attr, Value>> = HashMap::new();
 
-        for (eid, attrs) in outputs.iter() {
+        for (eid, attrs) in &outputs {
             let instance = self.entities.get(eid);
             let instance: Option<Model> =
                 instance.and_then(|i| serde_json::from_value(i.clone()).ok());
@@ -291,6 +291,6 @@ pub fn main() {
     let simulator = ExampleSim::default();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        panic!("Error running ExampleSim: {:?}", e);
+        panic!("Error running ExampleSim: {e:?}");
     }
 }
