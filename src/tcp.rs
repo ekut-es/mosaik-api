@@ -89,7 +89,8 @@ async fn connection_loop(
             shutdown: shutdown_receiver,
         })
         .await
-        .expect("Failed to send NewPeer event to broker"); // FIXME should this be error! instead?
+        .expect("Failed to send NewPeer event to broker");
+    // FIXME should this be error! instead and therefore catched by spawn_and_log_error()?
 
     let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number in front of the request.
 
@@ -260,7 +261,7 @@ async fn broker_loop<T: MosaikApi>(
                     }
                 }
             }
-            //The event for a new connector. //TODO: Check if new peer is even needed
+            //The event for a new connector. //TODO: Check if new peer is even needed // FIXME I don't understand this comment
             Event::NewPeer {
                 name,
                 stream: _,
@@ -287,6 +288,8 @@ where
         trace!("Task Spawned");
         if let Err(e) = fut.await {
             error!("{}", e); // FIXME does this function simply log errors but continue running?
+                             // ... if so, should we introduce an Error enum with Unrecoverable and Recoverable errors,
+                             //  to be able to "panic" gracefully?
         }
     })
 }
