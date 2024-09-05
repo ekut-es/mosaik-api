@@ -46,11 +46,7 @@ pub(crate) async fn build_connection<T: MosaikApi>(
                 shutdown_connection_loop_sender,
                 simulator,
             ));
-            let stream = listener
-                .incoming()
-                .next()
-                .await
-                .expect("No stream available")?;
+            let (stream, _addr) = listener.accept().await?;
             info!("Accepting from: {}", stream.peer_addr()?);
             let connection_handle = spawn_and_log_error(connection_loop(
                 broker_sender,
