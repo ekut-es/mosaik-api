@@ -277,9 +277,9 @@ pub fn main() {
     // TODO: Should this be part of `run_simulation`?
     let address = match args.addr {
         //case if we connect us to mosaik
-        Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
-            mosaik_addr.parse().expect("Address is not parseable."),
-        ),
+        Some(addr) => {
+            ConnectionDirection::ConnectToAddress(addr.parse().expect("Address is not parseable."))
+        }
         //case if mosaik connects to us
         None => {
             let addr = "127.0.0.1:3456";
@@ -291,6 +291,6 @@ pub fn main() {
     let simulator = ExampleSim::default();
     //start build_connection in the library.
     if let Err(e) = run_simulation(address, simulator) {
-        error!("Error running RExampleSim: {:?}", e);
+        panic!("Error running ExampleSim: {:?}", e);
     }
 }

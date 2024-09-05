@@ -172,12 +172,12 @@ pub fn main() {
 
     let address = match args.addr {
         //case if we connect us to mosaik
-        Some(mosaik_addr) => ConnectionDirection::ConnectToAddress(
-            mosaik_addr.parse().expect("Address is not parseable."),
-        ),
+        Some(addr) => {
+            ConnectionDirection::ConnectToAddress(addr.parse().expect("Address is not parseable."))
+        }
         //case if mosaik connects to us
         None => {
-            let addr = "127.0.0.1:3456";
+            let addr = "127.0.0.1:5678";
             ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
         }
     };

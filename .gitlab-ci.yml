@@ -80,7 +80,7 @@ Integration-tests:
     - pip install "mosaik>=3.3" # Install requirements
     # Run examples and check outputs
     - python3 examples/demo1.py > output1.txt
-    - python3 examples/demo2.py > output2.txt
+    - cargo run --example controller & python3 examples/demo2.py > output2.txt
     - diff output1.txt examples/expected_output/demo1_output.txt
     - diff output2.txt examples/expected_output/demo2_output.txt
 # Error: "Failed to run tests: ASLR disable failed: EPERM: Operation not permitted"
