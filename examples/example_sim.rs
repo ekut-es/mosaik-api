@@ -140,20 +140,10 @@ impl MosaikApi for ExampleSim {
         let next_eid = self.entities.len();
         let mut result: Vec<CreateResult> = Vec::new();
 
-        let init_val = match model_params.get("init_val") {
-            Some(v) => match v.as_f64() {
-                Some(val) => {
-                    info!("init_val is set to: {}", val);
-                    val
-                }
-                None => {
-                    let e = format!("init_val is not a valid number: {v:?}");
-                    error!("Error in create: {}", e);
-                    return Err(e);
-                }
-            },
-            None => 0.0, // default
-        };
+        let init_val = model_params
+            .get("init_val")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
 
         for i in next_eid..(next_eid + num) {
             let model_instance =
