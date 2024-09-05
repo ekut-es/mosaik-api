@@ -34,51 +34,40 @@ pub(crate) async fn build_connection<T: MosaikApi>(
     simulator: T,
 ) -> Result<()> {
     debug!("accept loop debug");
-    match addr {
+    let stream: TcpStream = match addr {
         //Case: we need to listen for a possible connector
         ConnectionDirection::ListenOnAddress(addr) => {
             let listener = TcpListener::bind(addr).await?;
-            let (broker_sender, broker_receiver) = mpsc::unbounded();
-            let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-                mpsc::unbounded::<bool>();
-            let broker_handle = task::spawn(broker_loop(
-                broker_receiver,
-                shutdown_connection_loop_sender,
-                simulator,
-            ));
             let (stream, _addr) = listener.accept().await?;
             info!("Accepting from: {}", stream.peer_addr()?);
-            let connection_handle = spawn_and_log_error(connection_loop(
-                broker_sender,
-                shutdown_connection_loop_receiver,
-                stream,
-            ));
-            connection_handle.await;
-            broker_handle.await;
-
-            Ok(())
+            stream
         }
         //case: We need to connect to a stream
-        ConnectionDirection::ConnectToAddress(addr) => {
-            let stream = TcpStream::connect(addr).await?;
-            let (broker_sender, broker_receiver) = mpsc::unbounded();
-            let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-                mpsc::unbounded::<bool>();
-            let broker_handle = task::spawn(broker_loop(
-                broker_receiver,
-                shutdown_connection_loop_sender,
-                simulator,
-            ));
-            spawn_and_log_error(connection_loop(
-                broker_sender,
-                shutdown_connection_loop_receiver,
-                stream,
-            ));
-            //connection_handle.await;
-            broker_handle.await;
-            Ok(())
-        }
+        ConnectionDirection::ConnectToAddress(addr) => TcpStream::connect(addr).await?,
+    };
+
+    let (broker_sender, broker_receiver) = mpsc::unbounded();
+    let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
+        mpsc::unbounded::<bool>();
+    let broker_handle = task::spawn(broker_loop(
+        broker_receiver,
+        shutdown_connection_loop_sender,
+        simulator,
+    ));
+
+    let connection_handle = spawn_and_log_error(connection_loop(
+        broker_sender,
+        shutdown_connection_loop_receiver,
+        stream,
+    ));
+
+    if let ConnectionDirection::ListenOnAddress(_) = addr {
+        // FIXME should this be run in both cases
+        connection_handle.await;
     }
+
+    broker_handle.await;
+    Ok(())
 }
 
 ///Receive the Requests, send them to the `broker_loop`.
