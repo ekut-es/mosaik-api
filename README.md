@@ -1,8 +1,6 @@
-# mosaik-rust-api
+# Rust API for Mosaik
 
-Currently for mosaik < v3
-
-Repository for the marketplace simulation.
+Compatible with Mosaik version 3 <mark>but does not support asynchronous communication yet.</mark>
 
 The [src](./src/) folder contains the API and the TCP manager in `lib.rs` with a parser in `json.rs`. These are the main components for communicating with mosaik.
 
@@ -53,7 +51,7 @@ The example simulations are located in the [examples folder](./examples/).
 It includes two scenarios inspired by the [Python tutorials](https://mosaik.readthedocs.io/en/3.3.3/tutorials/index.html): demo1 and demo2.
 In contrast to the Python tutorials, the simulations are written in Rust and only invoked by a modified Python script to connect the Rust simulators with Mosaik.
 - The scenario in **Demo 1** consists of an example model `Model` used in the *hybrid* `ExampleSim` both implemented in [example_sim.rs](./examples/example_sim.rs) and an *event-based* Monitor called `Collector` in [collector.rs](./examples/collector.rs).
-- The scenario in **Demo 2** consists additionaly of the Rust implementation of an event-based [`Controller`](./examples/controller.rs).
+- The scenario in **Demo 2** consists additionaly of the Rust implementation of an event-based [`Controller`](./examples/controller.rs). This controller is connected via a TCP connection instead of run by the Python script for the sake of demonstration.
 
 To run them, build a virtual environment for python:
 
@@ -72,5 +70,5 @@ python examples/demo1.py
 or
 ```bash
 cargo build --examples
-python examples/demo2.py
+cargo run --example connector & python examples/demo2.py
 ```
