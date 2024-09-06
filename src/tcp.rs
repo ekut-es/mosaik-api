@@ -156,7 +156,7 @@ async fn broker_loop<T: MosaikApi>(
             Ok(request) => {
                 //Handle the request -> simulations calls etc.
                 trace!("The request: {:?}", request);
-                match mosaik_protocol::handle_request(&mut simulator, &request) {
+                match mosaik_protocol::handle_request(&mut simulator, request) {
                     Response::Reply(mosaik_msg) => {
                         let response = mosaik_msg.serialize_to_vec();
 

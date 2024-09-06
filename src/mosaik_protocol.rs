@@ -217,7 +217,8 @@ pub(crate) fn parse_json_request(data: &str) -> Result<Request, MosaikError> {
 /// Handle a [Request] and return a [Response].
 /// See [`MsgType`] for the two different Response types.
 /// Uses several helper functions to handle the different Mosaik API calls.
-pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request) -> Response {
+pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: Request) -> Response {
+    let id = request.msg_id;
     let handle_result = match request.method.as_ref() {
         "init" => handle_init(simulator, request),
         "create" => handle_create(simulator, request),
@@ -237,12 +238,12 @@ pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request)
     match handle_result {
         Ok(content) => Response::Reply(MosaikMessage {
             msg_type: MsgType::ReplySuccess,
-            id: request.msg_id,
+            id,
             content,
         }),
         Err(mosaik_error) => Response::Reply(MosaikMessage {
             msg_type: MsgType::ReplyFailure,
-            id: request.msg_id,
+            id,
             content: json!(mosaik_error.to_string()),
         }),
     }
@@ -252,13 +253,14 @@ pub(crate) fn handle_request<T: MosaikApi>(simulator: &mut T, request: &Request)
 ///
 /// # Example
 /// ["init", \[`sim_id`\], {`time_resolution=time_resolution`, **`sim_params`}] -> meta
-fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
+fn handle_init<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Value, MosaikError> {
+    let mut request = request;
     let sid = serde_json::from_value(request.args[0].clone())
         .map_err(|err| MosaikError::ParseError(format!("Failed to parse SimId: {err}")))?;
     let time_resolution = request
         .kwargs
-        .get("time_resolution")
-        .and_then(Value::as_f64)
+        .remove("time_resolution")
+        .and_then(|v| v.as_f64())
         .unwrap_or_else(|| {
             warn!("Invalid time resolution provided, defaulting to 1.0");
             1.0f64
@@ -275,7 +277,7 @@ fn handle_init<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Val
 ///
 /// # Example
 /// ["create", [num, model], {**`model_params`}] -> `entity_list`
-fn handle_create<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
+fn handle_create<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Value, MosaikError> {
     let num = serde_json::from_value(request.args[0].clone()).map_err(|e| {
         MosaikError::ParseError(format!("Failed to parse number of instances: {e}"))
     })?;
@@ -293,7 +295,7 @@ fn handle_create<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<V
 ///
 /// # Example
 /// ["step", [time, inputs, `max_advance`], {}] -> Optional\[`time_next_step`\]
-fn handle_step<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Value, MosaikError> {
+fn handle_step<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Value, MosaikError> {
     let time = serde_json::from_value(request.args[0].clone())
         .map_err(|e| MosaikError::ParseError(format!("Failed to parse time: {e}")))?;
     let inputs = serde_json::from_value(request.args[1].clone())
@@ -313,7 +315,7 @@ fn handle_step<T: MosaikApi>(simulator: &mut T, request: &Request) -> Result<Val
 /// \["`get_data`", \[outputs\], {}\] -> data
 fn handle_get_data<T: MosaikApi>(
     simulator: &mut T,
-    request: &Request,
+    request: Request,
 ) -> Result<Value, MosaikError> {
     let outputs = serde_json::from_value(request.args[0].clone())
         .map_err(|e| MosaikError::ParseError(format!("Failed to parse output request: {e}")))?;
@@ -717,12 +719,12 @@ mod tests {
             .returning(|_, _, _| Ok(&META));
 
         let payload = json!(Meta::new(SimulatorType::default(), HashMap::new(), None));
-        let actual_response = handle_request(&mut simulator, &request);
+        let actual_response = handle_request(&mut simulator, request);
         assert_eq!(
             actual_response,
             Response::Reply(MosaikMessage {
                 msg_type: MsgType::ReplySuccess,
-                id: request.msg_id,
+                id: 789,
                 content: payload
             })
         );
@@ -743,10 +745,10 @@ mod tests {
         let mut mock_simulator = MockMosaikApi::new();
         mock_simulator.expect_init().never();
 
-        let actual = handle_request(&mut mock_simulator, &request);
+        let actual = handle_request(&mut mock_simulator, request);
         let expected = Response::Reply(MosaikMessage {
             msg_type: MsgType::ReplyFailure,
-            id: request.msg_id,
+            id: 123,
             content: json!(MosaikError::ParseError(
                 "Failed to parse SimId: invalid type: integer `0`, expected a string".to_string()
             )
@@ -775,7 +777,7 @@ mod tests {
             id: 789,
             content: json!(MosaikError::UserError("some custom error".to_string()).to_string()),
         });
-        let actual_response = handle_request(&mut simulator, &request);
+        let actual_response = handle_request(&mut simulator, request);
 
         assert_eq!(actual_response, expected_response);
     }
@@ -848,7 +850,7 @@ mod tests {
             .with(eq(1), eq("Grid".to_string()), eq(request.kwargs.clone()))
             .returning(move |_, _, _| Ok(vec![cr.clone()]));
 
-        let result = handle_request(&mut mock_simulator, &request);
+        let result = handle_request(&mut mock_simulator, request);
         assert_eq!(result, Response::Reply(expect));
     }
 
@@ -883,7 +885,7 @@ mod tests {
             .with()
             .returning(move || Ok(()));
 
-        let result = handle_request(&mut mock_simulator, &request);
+        let result = handle_request(&mut mock_simulator, request);
         assert_eq!(result, Response::Reply(expect));
     }
 
@@ -942,7 +944,7 @@ mod tests {
             )
             .returning(move |_, _, _| Ok(Some(120)));
 
-        let result = handle_request(&mut mock_simulator, &request);
+        let result = handle_request(&mut mock_simulator, request);
         assert_eq!(result, Response::Reply(expect));
     }
 
@@ -989,7 +991,7 @@ mod tests {
                 .unwrap())
             });
 
-        let result = handle_request(&mut mock_simulator, &request);
+        let result = handle_request(&mut mock_simulator, request);
         assert_eq!(result, Response::Reply(expect));
     }
 
@@ -1021,7 +1023,7 @@ mod tests {
             .with()
             .returning(move || ());
 
-        let result = handle_request(&mut mock_simulator, &request);
+        let result = handle_request(&mut mock_simulator, request);
         assert_eq!(result, Response::Stop);
     }
 
