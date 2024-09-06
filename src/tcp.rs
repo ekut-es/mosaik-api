@@ -70,7 +70,7 @@ pub(crate) async fn build_connection<T: MosaikApi>(
 
 ///Receive the Requests, send them to the `broker_loop`.
 async fn connection_loop(
-    mut broker: Sender<Event>,
+    mut broker: Sender<Request>,
     mut connection_shutdown_receiver: Receiver<bool>,
     mut stream: TcpStream,
 ) -> Result<()> {
@@ -89,7 +89,7 @@ async fn connection_loop(
                     match stream.read_exact(&mut full_package).await {
                         Ok(()) => {
                             let msg = String::from_utf8(full_package[0..size].to_vec()).expect("Should convert to string from utf 8 in connection loops");
-                            if let Err(e) = broker.send(Event::Request {full_data: msg}).await {
+                            if let Err(e) = broker.send(Request {full_data: msg}).await {
                                 error!("Error sending package to broker: {:?}", e);
                             }
                         }
@@ -133,13 +133,13 @@ async fn connection_writer_loop(
 }
 
 #[derive(Debug)]
-enum Event {
-    Request { full_data: String },
+struct Request {
+    full_data: String,
 }
 
 ///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
-    mut events: Receiver<Event>,
+    mut events: Receiver<Request>,
     mut connection_shutdown_sender: Sender<bool>,
     mut simulator: T,
     stream: Arc<TcpStream>,
@@ -153,44 +153,37 @@ async fn broker_loop<T: MosaikApi>(
     });
 
     //loop for the different events.
-    'event_loop: loop {
-        let Some(event) = events.next().await else {
-            break;
-        };
+    'event_loop: while let Some(event) = events.next().await {
         debug!("Received event: {:?}", event);
-        match event {
-            //The event that will happen the rest of the time, because the only connector is mosaik.
-            Event::Request { full_data } => {
-                //parse the request
-                match mosaik_protocol::parse_json_request(&full_data) {
-                    Ok(request) => {
-                        //Handle the request -> simulations calls etc.
-                        trace!("The request: {:?}", request);
-                        match mosaik_protocol::handle_request(&mut simulator, &request) {
-                            Response::Reply(mosaik_msg) => {
-                                let response = mosaik_msg.serialize_to_vec();
+        //The event that will happen the rest of the time, because the only connector is mosaik.
+        //parse the request
+        match mosaik_protocol::parse_json_request(&event.full_data) {
+            Ok(request) => {
+                //Handle the request -> simulations calls etc.
+                trace!("The request: {:?}", request);
+                match mosaik_protocol::handle_request(&mut simulator, &request) {
+                    Response::Reply(mosaik_msg) => {
+                        let response = mosaik_msg.serialize_to_vec();
 
-                                //get the second argument in the tuple of peer
-                                //-> send the message to mosaik channel receiver
-                                if let Err(e) = client_sender.send(response).await {
-                                    error!("error sending response to peer: {}", e);
-                                    // FIXME what to send in this case? Failure?
-                                }
-                            }
-                            Response::Stop => {
-                                if let Err(e) = connection_shutdown_sender.send(true).await {
-                                    error!("error sending to the shutdown channel: {}", e);
-                                }
-                                break 'event_loop;
-                            }
+                        //get the second argument in the tuple of peer
+                        //-> send the message to mosaik channel receiver
+                        if let Err(e) = client_sender.send(response).await {
+                            error!("error sending response to peer: {}", e);
+                            // FIXME what to send in this case? Failure?
                         }
                     }
-                    Err(e) => {
-                        //if let Err(e) = peer.1.send()
-                        error!("Error while parsing the request: {:?}", e);
-                        todo!("send a failure message")
+                    Response::Stop => {
+                        if let Err(e) = connection_shutdown_sender.send(true).await {
+                            error!("error sending to the shutdown channel: {}", e);
+                        }
+                        break 'event_loop;
                     }
                 }
+            }
+            Err(e) => {
+                //if let Err(e) = peer.1.send()
+                error!("Error while parsing the request: {:?}", e);
+                todo!("send a failure message")
             }
         }
     }
