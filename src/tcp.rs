@@ -70,7 +70,7 @@ pub(crate) async fn build_connection<T: MosaikApi>(
 
 ///Receive the Requests, send them to the `broker_loop`.
 async fn connection_loop(
-    mut broker: Sender<Request>,
+    mut broker: Sender<String>,
     mut connection_shutdown_receiver: Receiver<bool>,
     mut stream: TcpStream,
 ) -> Result<()> {
@@ -88,8 +88,8 @@ async fn connection_loop(
                     let mut full_package = vec![0; size];
                     match stream.read_exact(&mut full_package).await {
                         Ok(()) => {
-                            let msg = String::from_utf8(full_package[0..size].to_vec()).expect("Should convert to string from utf 8 in connection loops");
-                            if let Err(e) = broker.send(Request {full_data: msg}).await {
+                            let json_string = String::from_utf8(full_package[0..size].to_vec()).expect("Should convert to string from utf 8 in connection loops");
+                            if let Err(e) = broker.send(json_string).await {
                                 error!("Error sending package to broker: {:?}", e);
                             }
                         }
@@ -132,14 +132,9 @@ async fn connection_writer_loop(
     Ok(())
 }
 
-#[derive(Debug)]
-struct Request {
-    full_data: String,
-}
-
 ///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
-    mut events: Receiver<Request>,
+    mut events: Receiver<String>,
     mut connection_shutdown_sender: Sender<bool>,
     mut simulator: T,
     stream: Arc<TcpStream>,
@@ -153,11 +148,11 @@ async fn broker_loop<T: MosaikApi>(
     });
 
     //loop for the different events.
-    'event_loop: while let Some(event) = events.next().await {
-        debug!("Received event: {:?}", event);
+    'event_loop: while let Some(json_string) = events.next().await {
+        debug!("Received event: {:?}", json_string);
         //The event that will happen the rest of the time, because the only connector is mosaik.
         //parse the request
-        match mosaik_protocol::parse_json_request(&event.full_data) {
+        match mosaik_protocol::parse_json_request(&json_string) {
             Ok(request) => {
                 //Handle the request -> simulations calls etc.
                 trace!("The request: {:?}", request);
