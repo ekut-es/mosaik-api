@@ -17,9 +17,6 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>
 type Sender<T> = mpsc::UnboundedSender<T>;
 type Receiver<T> = mpsc::UnboundedReceiver<T>;
 
-#[derive(Debug)]
-enum Void {}
-
 /// The direction of the connection with the address of the socket.
 /// Either we listen on an address or we connect to an address.
 /// This is used in the `run_simulation` function.
@@ -53,6 +50,7 @@ pub(crate) async fn build_connection<T: MosaikApi>(
         broker_receiver,
         shutdown_connection_loop_sender,
         simulator,
+        Arc::new(stream.clone()),
     ));
 
     let connection_handle = spawn_and_log_error(connection_loop(
@@ -77,16 +75,6 @@ async fn connection_loop(
     mut stream: TcpStream,
 ) -> Result<()> {
     info!("Started connection loop");
-
-    let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
-    broker
-        .send(Event::NewPeer {
-            stream: Arc::new(stream.clone()),
-            shutdown: shutdown_receiver,
-        })
-        .await
-        .expect("Failed to send NewPeer event to broker");
-    // FIXME should this be error! instead and therefore catched by spawn_and_log_error()?
 
     let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number in front of the request.
 
@@ -136,11 +124,9 @@ async fn connection_loop(
 async fn connection_writer_loop(
     messages: &mut Receiver<Vec<u8>>,
     stream: Arc<TcpStream>,
-    shutdown: Receiver<Void>,
 ) -> Result<()> {
     let mut stream = &*stream;
     let mut messages = messages.fuse();
-    let mut shutdown = shutdown.fuse();
     loop {
         select! {
             msg = messages.next().fuse() => match msg {
@@ -149,10 +135,6 @@ async fn connection_writer_loop(
                 },
                 None => break,
             },
-            void = shutdown.next().fuse() => match void {
-                Some(void) => match void {},
-                None => break,
-            }
         }
     }
     Ok(())
@@ -160,13 +142,7 @@ async fn connection_writer_loop(
 
 #[derive(Debug)]
 enum Event {
-    NewPeer {
-        stream: Arc<TcpStream>,
-        shutdown: Receiver<Void>,
-    },
-    Request {
-        full_data: String,
-    },
+    Request { full_data: String },
 }
 
 ///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
@@ -174,19 +150,15 @@ async fn broker_loop<T: MosaikApi>(
     mut events: Receiver<Event>,
     mut connection_shutdown_sender: Sender<bool>,
     mut simulator: T,
+    stream: Arc<TcpStream>,
 ) {
     // Channel to the writer loop
     let (mut client_sender, mut client_receiver) = mpsc::unbounded();
 
-    info!("New peer -> creating channels");
-    if let Some(Event::NewPeer { stream, shutdown }) = events.next().await {
-        spawn_and_log_error(async move {
-            //spawn a connection writer with the message received over the channel
-            connection_writer_loop(&mut client_receiver, stream, shutdown).await
-        });
-    } else {
-        panic!("Didn't receive new peer as first event.");
-    }
+    spawn_and_log_error(async move {
+        //spawn a connection writer with the message received over the channel
+        connection_writer_loop(&mut client_receiver, stream).await
+    });
 
     //loop for the different events.
     'event_loop: loop {
@@ -227,13 +199,6 @@ async fn broker_loop<T: MosaikApi>(
                         todo!("send a failure message")
                     }
                 }
-            }
-            //The event for a new connector. //TODO: Check if new peer is even needed // FIXME I don't understand this comment
-            Event::NewPeer {
-                stream: _,
-                shutdown: _,
-            } => {
-                error!("There is a peer already. No new peer needed.");
             }
         }
     }
