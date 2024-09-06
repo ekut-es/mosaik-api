@@ -74,17 +74,13 @@ pub(crate) async fn build_connection<T: MosaikApi>(
 async fn connection_loop(
     mut broker: Sender<Event>,
     mut connection_shutdown_receiver: Receiver<bool>,
-    stream: TcpStream,
+    mut stream: TcpStream,
 ) -> Result<()> {
     info!("Started connection loop");
-
-    let mut stream = stream; // FIXME why not make stream mutable in the first place?
-    let name = String::from("Mosaik");
 
     let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
     broker
         .send(Event::NewPeer {
-            name: name.clone(),
             stream: Arc::new(stream.clone()),
             shutdown: shutdown_receiver,
         })
@@ -105,7 +101,7 @@ async fn connection_loop(
                     match stream.read_exact(&mut full_package).await {
                         Ok(()) => {
                             let msg = String::from_utf8(full_package[0..size].to_vec()).expect("Should convert to string from utf 8 in connection loops");
-                            if let Err(e) = broker.send(Event::Request {full_data: msg, name: name.clone(),}).await {
+                            if let Err(e) = broker.send(Event::Request {full_data: msg}).await {
                                 error!("Error sending package to broker: {:?}", e);
                             }
                         }
@@ -165,13 +161,11 @@ async fn connection_writer_loop(
 #[derive(Debug)]
 enum Event {
     NewPeer {
-        name: String, //here Mosaik
         stream: Arc<TcpStream>,
         shutdown: Receiver<Void>,
     },
     Request {
         full_data: String,
-        name: String,
     },
 }
 
@@ -185,12 +179,7 @@ async fn broker_loop<T: MosaikApi>(
     let (mut client_sender, mut client_receiver) = mpsc::unbounded();
 
     info!("New peer -> creating channels");
-    if let Some(Event::NewPeer {
-        name: _,
-        stream,
-        shutdown,
-    }) = events.next().await
-    {
+    if let Some(Event::NewPeer { stream, shutdown }) = events.next().await {
         spawn_and_log_error(async move {
             //spawn a connection writer with the message received over the channel
             connection_writer_loop(&mut client_receiver, stream, shutdown).await
@@ -207,12 +196,12 @@ async fn broker_loop<T: MosaikApi>(
         debug!("Received event: {:?}", event);
         match event {
             //The event that will happen the rest of the time, because the only connector is mosaik.
-            Event::Request { full_data, name } => {
+            Event::Request { full_data } => {
                 //parse the request
                 match mosaik_protocol::parse_json_request(&full_data) {
                     Ok(request) => {
                         //Handle the request -> simulations calls etc.
-                        trace!("The request: {:?} from {name}", request);
+                        trace!("The request: {:?}", request);
                         match mosaik_protocol::handle_request(&mut simulator, &request) {
                             Response::Reply(mosaik_msg) => {
                                 let response = mosaik_msg.serialize_to_vec();
@@ -234,18 +223,17 @@ async fn broker_loop<T: MosaikApi>(
                     }
                     Err(e) => {
                         //if let Err(e) = peer.1.send()
-                        error!("Error while parsing the request from {name}: {:?}", e);
+                        error!("Error while parsing the request: {:?}", e);
                         todo!("send a failure message")
                     }
                 }
             }
             //The event for a new connector. //TODO: Check if new peer is even needed // FIXME I don't understand this comment
             Event::NewPeer {
-                name,
                 stream: _,
                 shutdown: _,
             } => {
-                error!("There is a peer already. No new peer from {name} needed.");
+                error!("There is a peer already. No new peer needed.");
             }
         }
     }
