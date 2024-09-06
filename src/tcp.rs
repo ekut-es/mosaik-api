@@ -117,6 +117,7 @@ async fn connection_loop(
             }
         }
     }
+    info!("Closed connection loop");
     Ok(())
 }
 
@@ -129,6 +130,8 @@ async fn connection_writer_loop(
     while let Some(msg) = messages.next().await {
         stream.write_all(&msg).await?; //write the message
     }
+
+    info!("Closed connection writer loop");
     Ok(())
 }
 
@@ -184,6 +187,7 @@ async fn broker_loop<T: MosaikApi>(
     }
     info!("closing channels");
     drop(client_sender);
+    info!("Closed broker loop");
 }
 
 ///spawns the tasks and handles errors.
