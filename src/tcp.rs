@@ -126,16 +126,8 @@ async fn connection_writer_loop(
     stream: Arc<TcpStream>,
 ) -> Result<()> {
     let mut stream = &*stream;
-    let mut messages = messages.fuse();
-    loop {
-        select! {
-            msg = messages.next().fuse() => match msg {
-                Some(msg) => {
-                    stream.write_all(&msg).await?;//write the message
-                },
-                None => break,
-            },
-        }
+    while let Some(msg) = messages.next().await {
+        stream.write_all(&msg).await?; //write the message
     }
     Ok(())
 }
