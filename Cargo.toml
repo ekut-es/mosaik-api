@@ -21,7 +21,6 @@ mockall = "0.13"
 
 [features]
 default = []
-default_api = []
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }

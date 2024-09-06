@@ -1,5 +1,3 @@
-#[cfg(feature = "default_api")]
-pub mod default_api;
 pub mod mosaik_protocol;
 pub mod tcp;
 pub mod types;
