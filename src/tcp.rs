@@ -73,15 +73,15 @@ async fn connection_loop(
         let size = u32::from_be_bytes(size_data) as usize;
         info!("Received {} Bytes Message", size);
         let mut full_package = vec![0; size];
-        match stream.read_exact(&mut full_package).await {
-            Ok(()) => {
-                let json_string = String::from_utf8(full_package[0..size].to_vec())
-                    .expect("Should convert to string from utf 8 in connection loops");
-                if let Err(e) = broker.send(json_string).await {
-                    error!("Error sending package to broker: {:?}", e);
-                }
-            }
-            Err(e) => error!("Error reading Full Package: {:?}", e),
+        if let Err(e) = stream.read_exact(&mut full_package).await {
+            error!("Error reading Full Package: {:?}", e);
+            continue;
+        }
+        let json_string = String::from_utf8(full_package[0..size].to_vec())
+            .expect("Should convert to string from utf 8 in connection loops");
+        if let Err(e) = broker.send(json_string).await {
+            error!("Error sending package to broker: {:?}", e);
+            //TODO I would add a break; here or just use await? instead
         }
     }
     info!("Closed connection loop");
@@ -162,9 +162,7 @@ where
     task::spawn(async move {
         trace!("Task Spawned");
         if let Err(e) = fut.await {
-            error!("{}", e); // FIXME does this function simply log errors but continue running?
-                             // ... if so, should we introduce an Error enum with Unrecoverable and Recoverable errors,
-                             //  to be able to "panic" gracefully?
+            error!("{}", e);
         }
     })
 }
