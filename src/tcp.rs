@@ -8,7 +8,7 @@ use async_std::{
     prelude::*,
     task,
 };
-use futures::{channel::mpsc, select, sink::SinkExt, FutureExt};
+use futures::{channel::mpsc, sink::SinkExt};
 use log::{debug, error, info, trace};
 use std::{future::Future, net::SocketAddr, sync::Arc};
 
@@ -42,79 +42,46 @@ pub(crate) async fn build_connection<T: MosaikApi>(
         //case: We need to connect to a stream
         ConnectionDirection::ConnectToAddress(addr) => TcpStream::connect(addr).await?,
     };
+    let stream = Arc::new(stream);
 
     let (broker_sender, broker_receiver) = mpsc::unbounded();
-    let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-        mpsc::unbounded::<bool>();
-    let broker_handle = task::spawn(broker_loop(
-        broker_receiver,
-        shutdown_connection_loop_sender,
-        simulator,
-        Arc::new(stream.clone()),
-    ));
+    let broker_handle = task::spawn(broker_loop(broker_receiver, simulator, Arc::clone(&stream)));
 
-    let connection_handle = spawn_and_log_error(connection_loop(
-        broker_sender,
-        shutdown_connection_loop_receiver,
-        stream,
-    ));
+    let connection_handle =
+        spawn_and_log_error(connection_loop(broker_sender, Arc::clone(&stream)));
 
-    if let ConnectionDirection::ListenOnAddress(_) = addr {
-        // FIXME should this be run in both cases
-        connection_handle.await;
-    }
-
+    connection_handle.await;
     broker_handle.await;
+    drop(stream);
+    info!("Finished TCP");
     Ok(())
 }
 
 ///Receive the Requests, send them to the `broker_loop`.
 async fn connection_loop(
     mut broker: Sender<String>,
-    mut connection_shutdown_receiver: Receiver<bool>,
-    mut stream: TcpStream,
+    // mut connection_shutdown_receiver: Receiver<bool>,
+    stream: Arc<TcpStream>,
 ) -> Result<()> {
     info!("Started connection loop");
-
+    let mut stream = &*stream;
     let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number in front of the request.
 
     //Read the rest of the data and send it to the broker_loop
     loop {
-        select! {
-            msg = stream.read_exact(&mut size_data).fuse() => match msg {
-                Ok(()) => {
-                    let size = u32::from_be_bytes(size_data) as usize;
-                    info!("Received {} Bytes Message", size);
-                    let mut full_package = vec![0; size];
-                    match stream.read_exact(&mut full_package).await {
-                        Ok(()) => {
-                            let json_string = String::from_utf8(full_package[0..size].to_vec()).expect("Should convert to string from utf 8 in connection loops");
-                            if let Err(e) = broker.send(json_string).await {
-                                error!("Error sending package to broker: {:?}", e);
-                            }
-                        }
-                        Err(e) => error!("Error reading Full Package: {:?}", e),
-                    }
-
-                },
-                Err(e) => {
-                    if e.kind() == async_std::io::ErrorKind::UnexpectedEof {
-                            info!("Read unexpected EOF. Simulation and therefore TCP Connection should be finished. Waiting for Shutdown Request from Shutdown Sender.");
-                            panic!("Unexpected EOF. Error: {e}");
-                        } else {
-                            error!("Error reading Stream Data: {:?}. Stopping connection loop.", e);
-                            break;
-                        }
+        stream.read_exact(&mut size_data).await?;
+        let size = u32::from_be_bytes(size_data) as usize;
+        info!("Received {} Bytes Message", size);
+        let mut full_package = vec![0; size];
+        match stream.read_exact(&mut full_package).await {
+            Ok(()) => {
+                let json_string = String::from_utf8(full_package[0..size].to_vec())
+                    .expect("Should convert to string from utf 8 in connection loops");
+                if let Err(e) = broker.send(json_string).await {
+                    error!("Error sending package to broker: {:?}", e);
                 }
-            },
-            void = connection_shutdown_receiver.next().fuse() => {
-                if void.is_some() {
-                    info!("receive connection_shutdown command");
-                } else{
-                    error!("shutdown sender channel is closed and therefore we assume the connection can and should be stopped.");
-                }
-                break;
             }
+            Err(e) => error!("Error reading Full Package: {:?}", e),
         }
     }
     info!("Closed connection loop");
@@ -138,7 +105,6 @@ async fn connection_writer_loop(
 ///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
     mut events: Receiver<String>,
-    mut connection_shutdown_sender: Sender<bool>,
     mut simulator: T,
     stream: Arc<TcpStream>,
 ) {
@@ -171,9 +137,6 @@ async fn broker_loop<T: MosaikApi>(
                         }
                     }
                     Response::Stop => {
-                        if let Err(e) = connection_shutdown_sender.send(true).await {
-                            error!("error sending to the shutdown channel: {}", e);
-                        }
                         break 'event_loop;
                     }
                 }
