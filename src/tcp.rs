@@ -177,14 +177,12 @@ enum Event {
 
 ///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
-    events: Receiver<Event>,
+    mut events: Receiver<Event>,
     mut connection_shutdown_sender: Sender<bool>,
     mut simulator: T,
 ) {
-    let (disconnect_sender, mut disconnect_receiver) =
-        mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
-    let mut peer: (std::net::SocketAddr, Sender<Vec<u8>>);
-    let mut events = events.fuse();
+    // Channel to the writer loop
+    let (mut client_sender, mut client_receiver) = mpsc::unbounded();
 
     info!("New peer -> creating channels");
     if let Some(Event::NewPeer {
@@ -193,21 +191,9 @@ async fn broker_loop<T: MosaikApi>(
         shutdown,
     }) = events.next().await
     {
-        let (client_sender, mut client_receiver) = mpsc::unbounded();
-        peer = (
-            stream
-                .peer_addr()
-                .expect("unable to read remote peer address from {name}"),
-            client_sender,
-        );
-        let mut disconnect_sender = disconnect_sender.clone();
         spawn_and_log_error(async move {
-            let res = connection_writer_loop(&mut client_receiver, stream, shutdown).await; //spawn a connection writer with the message received over the channel
-            disconnect_sender
-                .send((String::from("Mosaik"), client_receiver))
-                .await
-                .expect("Failed to send disconnect message to broker");
-            res
+            //spawn a connection writer with the message received over the channel
+            connection_writer_loop(&mut client_receiver, stream, shutdown).await
         });
     } else {
         panic!("Didn't receive new peer as first event.");
@@ -215,16 +201,8 @@ async fn broker_loop<T: MosaikApi>(
 
     //loop for the different events.
     'event_loop: loop {
-        let event = select! {
-            event = events.next().fuse() => match event {
-                None => break,
-                Some(event) => event,
-            },
-            _disconnect = disconnect_receiver.next().fuse() => {
-                // let (_name, _pending_messages) = disconnect.unwrap(); // FIXME what is this line doing?
-                //assert!(peer.remove(&name).is_some());
-                continue;
-            },
+        let Some(event) = events.next().await else {
+            break;
         };
         debug!("Received event: {:?}", event);
         match event {
@@ -241,7 +219,7 @@ async fn broker_loop<T: MosaikApi>(
 
                                 //get the second argument in the tuple of peer
                                 //-> send the message to mosaik channel receiver
-                                if let Err(e) = peer.1.send(response).await {
+                                if let Err(e) = client_sender.send(response).await {
                                     error!("error sending response to peer: {}", e);
                                     // FIXME what to send in this case? Failure?
                                 }
@@ -271,11 +249,8 @@ async fn broker_loop<T: MosaikApi>(
             }
         }
     }
-    info!("dropping peer");
-    drop(peer);
     info!("closing channels");
-    drop(disconnect_sender);
-    while let Some((_name, _pending_messages)) = disconnect_receiver.next().await {}
+    drop(client_sender);
 }
 
 ///spawns the tasks and handles errors.
