@@ -16,10 +16,7 @@ use async_std::{
     task,
 };
 use futures::{
-    channel::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
-        oneshot::{self, Receiver, Sender},
-    },
+    channel::{mpsc, oneshot},
     select,
     sink::SinkExt,
     FutureExt,
@@ -87,8 +84,8 @@ pub(crate) async fn build_connection<T: MosaikApi>(
 
 ///Receive the Requests, send them to the `broker_loop`.
 async fn tcp_receiver(
-    mut broker: UnboundedSender<String>,
-    shutdown_signal_rx: Receiver<bool>,
+    mut broker: mpsc::UnboundedSender<String>,
+    shutdown_signal_rx: oneshot::Receiver<bool>,
     stream: Arc<TcpStream>,
 ) -> Result<()> {
     info!("Started connection loop");
@@ -100,21 +97,21 @@ async fn tcp_receiver(
     loop {
         // handle all breakouts from the loop
         select! {
-            void = rx => {
-                if void.is_ok() {
-                    info!("Received shutdown signal.");
-                    break;
-                } else {
-                    info!("Shutdown signal channel closed.");
-                    break;
-                }
-            },
             msg = stream.read_exact(&mut size_data).fuse() => {
                 if msg.is_err() {
                     error!("Error reading size data: {:?}", msg.err());
                     break;
                 }
-            }
+                // escape select! to read the full message without breaking the loop
+            },
+            shutdown_signal = rx => {
+                if shutdown_signal.is_ok() {
+                    info!("Received shutdown signal.");
+                } else {
+                    info!("Shutdown signal channel closed.");
+                }
+                break;
+            },
         }
         // continue with handling the message
         let size = u32::from_be_bytes(size_data) as usize;
@@ -137,7 +134,7 @@ async fn tcp_receiver(
 
 //Receive the Response from the broker_loop and write it in the stream.
 async fn tcp_sender(
-    messages: &mut UnboundedReceiver<Vec<u8>>,
+    messages: &mut mpsc::UnboundedReceiver<Vec<u8>>,
     stream: Arc<TcpStream>,
 ) -> Result<()> {
     let mut stream = &*stream;
@@ -154,9 +151,9 @@ async fn tcp_sender(
 
 ///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
-    mut received_requests: UnboundedReceiver<String>,
+    mut received_requests: mpsc::UnboundedReceiver<String>,
     mut simulator: T,
-    shutdown_signal_tx: Sender<bool>,
+    shutdown_signal_tx: oneshot::Sender<bool>,
     stream: Arc<TcpStream>,
 ) {
     // Channel to the writer loop
