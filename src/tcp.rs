@@ -60,7 +60,7 @@ pub(crate) async fn build_connection<T: MosaikApi>(
     // The broker_loop needs to be able to shutdown the receiver_loop
     // the tcp_sender will be shutdown by dropping the channel to it in the broker_loop
     let (shutdown_signal_tx, shutdown_signal_rx) = oneshot::channel::<bool>();
-    // Channel to the writer loop
+    // Channel to the writer loop, gets shutdown by dropping the channel in the broker_loop
     let (broker2sender_tx, broker2sender_rx) = mpsc::unbounded();
 
     // Spawn the tasks
