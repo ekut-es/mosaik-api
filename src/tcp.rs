@@ -56,27 +56,34 @@ pub(crate) async fn build_connection<T: MosaikApi>(
     let stream = Arc::new(stream);
 
     // Create the channels for the communication between the tasks
-    let (broker_sender, broker_receiver) = mpsc::unbounded();
+    let (receiver2broker_tx, receiver2broker_rx) = mpsc::unbounded();
     // The broker_loop needs to be able to shutdown the receiver_loop
     // the tcp_sender will be shutdown by dropping the channel to it in the broker_loop
     let (shutdown_signal_tx, shutdown_signal_rx) = oneshot::channel::<bool>();
+    // Channel to the writer loop
+    let (broker2sender_tx, broker2sender_rx) = mpsc::unbounded();
 
     // Spawn the tasks
     // 1. Read the requests from the TCP-Stream and send them to the broker_loop
-    let connection_handle = spawn_and_log_error(tcp_receiver(
-        broker_sender,
+    let receiver_handle = spawn_and_log_error(tcp_receiver(
+        receiver2broker_tx,
         shutdown_signal_rx,
         Arc::clone(&stream),
     ));
     // 2. Connect broker_loop with the receiver_loop, simulator and sender_loop, add a connection to
     let broker_handle = task::spawn(broker_loop(
-        broker_receiver,
+        receiver2broker_rx,
+        broker2sender_tx,
         simulator,
         shutdown_signal_tx,
-        Arc::clone(&stream),
     ));
+    // 3. Connect broker loop to the TCP sender loop.
+    spawn_and_log_error(async move {
+        //spawn a connection writer with the message received over the channel
+        tcp_sender(broker2sender_rx, Arc::clone(&stream)).await
+    });
 
-    connection_handle.await;
+    receiver_handle.await;
     broker_handle.await;
     info!("Finished TCP");
     Ok(())
@@ -134,7 +141,7 @@ async fn tcp_receiver(
 
 //Receive the Response from the broker_loop and write it in the stream.
 async fn tcp_sender(
-    messages: &mut mpsc::UnboundedReceiver<Vec<u8>>,
+    mut messages: mpsc::UnboundedReceiver<Vec<u8>>,
     stream: Arc<TcpStream>,
 ) -> Result<()> {
     let mut stream = &*stream;
@@ -152,18 +159,10 @@ async fn tcp_sender(
 ///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
     mut received_requests: mpsc::UnboundedReceiver<String>,
+    mut response_sender: mpsc::UnboundedSender<Vec<u8>>,
     mut simulator: T,
     shutdown_signal_tx: oneshot::Sender<bool>,
-    stream: Arc<TcpStream>,
 ) {
-    // Channel to the writer loop
-    let (mut client_sender, mut client_receiver) = mpsc::unbounded();
-
-    spawn_and_log_error(async move {
-        //spawn a connection writer with the message received over the channel
-        tcp_sender(&mut client_receiver, Arc::clone(&stream)).await
-    });
-
     //loop for the different events.
     'event_loop: while let Some(json_string) = received_requests.next().await {
         debug!("Received event: {:?}", json_string);
@@ -179,7 +178,7 @@ async fn broker_loop<T: MosaikApi>(
 
                         //get the second argument in the tuple of peer
                         //-> send the message to mosaik channel receiver
-                        if let Err(e) = client_sender.send(response).await {
+                        if let Err(e) = response_sender.send(response).await {
                             error!("error sending response to peer: {}", e);
                             // FIXME what to send in this case? Failure?
                         }
@@ -187,7 +186,7 @@ async fn broker_loop<T: MosaikApi>(
                     Response::Stop => {
                         info!("Received stop signal. Closing all connections ...");
                         // shutdown sender loop
-                        drop(client_sender);
+                        drop(response_sender);
                         drop(received_requests);
                         // shutdown receiver loop
                         if let Err(e) = shutdown_signal_tx.send(true) {
