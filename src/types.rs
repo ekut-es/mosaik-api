@@ -1,9 +1,9 @@
 //! Mosaik types as defined in the [Mosaik API](https://gitlab.com/mosaik/api/mosaik-api-python/-/blob/3.0.9/mosaik_api_v3/types.py?ref_type=tags)
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::HashMap;
+
 ///Time is represented as the number of simulation steps since the
 ///simulation started. One step represents `time_resolution` seconds.
 /// All time-based or hybrid simulators start at time=0.
@@ -21,13 +21,13 @@ pub type SimId = String;
 ///An entity ID
 pub type EntityId = String;
 
-///A full ID of the form "sim_id.entity_id"
+///A full ID of the form "`sim_id.entity_id`"
 pub type FullId = String;
 
 ///The format of input data for simulator's step methods.
 pub type InputData = HashMap<EntityId, HashMap<Attr, Map<FullId, Value>>>;
 
-///The requested outputs for get_data. For each entity where data is
+///The requested outputs for `get_data`. For each entity where data is
 ///needed, the required attributes are listed.
 pub type OutputRequest = HashMap<EntityId, Vec<Attr>>;
 
@@ -44,14 +44,28 @@ pub struct OutputData {
 }
 
 /// Description of a single model in `Meta`
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+///
+/// ## Example implementation
+/// ```rust
+/// use mosaik_rust_api::types::ModelDescription;
+///
+/// const foo: ModelDescription = ModelDescription {
+///     public: true,
+///     params: &["init_val"],
+///     attrs: &["delta", "val"],
+///     trigger: Some(&["delta"]),
+///     any_inputs: None,
+///     persistent: None,
+/// };
+/// ```
+#[derive(Debug, Serialize, PartialEq, Clone, Default)]
 pub struct ModelDescription {
     /// Whether the model can be created directly.
     pub public: bool,
     /// The parameters given during creating of this model.
-    pub params: Vec<String>,
+    pub params: &'static [&'static str],
     /// The input and output attributes of this model.
-    pub attrs: Vec<Attr>,
+    pub attrs: &'static [&'static str],
     /// Whether this model accepts inputs other than those specified in `attrs`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub any_inputs: Option<bool>,
@@ -59,14 +73,20 @@ pub struct ModelDescription {
     /// (Non-trigger attributes are collected and supplied to the simulator when it
     /// steps next.)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub trigger: Option<Vec<Attr>>,
+    pub trigger: Option<&'static [&'static str]>,
     /// The output attributes that are persistent.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub persistent: Option<Vec<Attr>>,
+    pub persistent: Option<&'static [&'static str]>,
 }
 
 impl ModelDescription {
-    pub fn new(public: bool, params: Vec<String>, attrs: Vec<Attr>) -> Self {
+    /// Creates a new `ModelDescription` with fields `any_inputs`, `trigger` and `persistent` set to `None`.
+    #[must_use]
+    pub fn new(
+        public: bool,
+        params: &'static [&'static str],
+        attrs: &'static [&'static str],
+    ) -> Self {
         Self {
             public,
             params,
@@ -79,7 +99,7 @@ impl ModelDescription {
 }
 
 /// The meta-data for a simulator.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Clone)]
 pub struct Meta {
     /// The API version that this simulator supports in the format "major.minor".
     api_version: &'static str,
@@ -89,11 +109,16 @@ pub struct Meta {
     /// The descriptions of this simulator's models.
     pub models: HashMap<ModelName, ModelDescription>,
     /// The names of the extra methods this simulator supports.
+    ///
+    /// # Note
+    /// > These methods can be called while the scenario is being created and can be used
+    /// > for operations that don’t really belong into init() or create().
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra_methods: Option<Vec<String>>,
 }
 
 impl Meta {
+    #[must_use]
     pub fn new(
         simulator_type: SimulatorType,
         models: HashMap<ModelName, ModelDescription>,
@@ -106,12 +131,15 @@ impl Meta {
             extra_methods,
         }
     }
+
+    #[must_use]
     pub fn get_version(&self) -> &str {
         self.api_version
     }
 }
 
 impl Default for Meta {
+    #[must_use]
     fn default() -> Self {
         Self {
             api_version: API_VERSION,
@@ -155,6 +183,7 @@ pub struct CreateResult {
 }
 
 impl CreateResult {
+    #[must_use]
     pub fn new(eid: EntityId, model_type: ModelName) -> Self {
         Self {
             eid,
@@ -180,6 +209,7 @@ class EntityGraph(TypedDict):
 
 // tests for Meta
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -208,7 +238,7 @@ mod tests {
 
     #[test]
     fn test_model_description_without_optionals() {
-        let mut model = ModelDescription::new(false, vec![], vec![]);
+        let mut model = ModelDescription::default();
 
         assert!(!model.public);
         assert_eq!(model.params.len(), 0);
@@ -221,8 +251,8 @@ mod tests {
         assert_eq!(r#"{"public":false,"params":[],"attrs":[]}"#, model_json);
 
         model.public = true;
-        model.params.push("init_reading".to_string());
-        model.attrs = vec!["trades".to_string(), "total".to_string()];
+        model.params = &["init_reading"];
+        model.attrs = &["trades", "total"];
 
         assert!(model.public);
         assert_eq!(model.params.len(), 1);
@@ -232,19 +262,15 @@ mod tests {
         assert_eq!(
             r#"{"public":true,"params":["init_reading"],"attrs":["trades","total"]}"#,
             model_json
-        )
+        );
     }
 
     #[test]
     fn test_model_description_with_optionals() {
-        let mut model = ModelDescription::new(
-            true,
-            vec!["init_reading".to_string()],
-            vec!["p_mw_pv".to_string(), "p_mw_load".to_string()],
-        );
+        let mut model = ModelDescription::new(true, &["init_reading"], &["p_mw_pv", "p_mw_load"]);
         model.any_inputs = Some(true);
-        model.trigger = Some(vec!["trigger1".to_string()]);
-        model.persistent = Some(vec!["trades".to_string()]);
+        model.trigger = Some(&["trigger1"]);
+        model.persistent = Some(&["trades"]);
 
         let model_json = serde_json::to_string(&model).unwrap();
         assert_eq!(
@@ -252,7 +278,7 @@ mod tests {
             model_json
         );
 
-        model.trigger = Some(vec!["trigger1".to_string()]);
+        model.trigger = Some(&["trigger1"]);
         model.any_inputs = None;
         model.persistent = None;
 
@@ -260,13 +286,21 @@ mod tests {
         assert_eq!(
             r#"{"public":true,"params":["init_reading"],"attrs":["p_mw_pv","p_mw_load"],"trigger":["trigger1"]}"#,
             model_json
-        )
+        );
     }
 
     #[test]
-    fn test_meta() {
-        let mut meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
-        assert_eq!(meta.api_version, "3.0");
+    fn test_meta_empty() {
+        let meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
+        assert_eq!(
+            meta.api_version, API_VERSION,
+            "API version should match the global variable."
+        );
+        assert_eq!(
+            meta.get_version(),
+            API_VERSION,
+            "get_version should return the API version."
+        );
         assert_eq!(
             meta.simulator_type,
             SimulatorType::Hybrid,
@@ -276,41 +310,38 @@ mod tests {
         let empty_meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
             r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, empty_meta_json,
-            "Empty meta should not have extra_methods and no empty models."
+            "Empty meta should not have extra_methods and empty models."
         );
-
-        // TODO is this a bug in the python implementation?
-        meta.api_version = "3.1";
-        assert_eq!(meta.api_version, "3.1", "API version should be changeable");
-
         assert!(meta.models.is_empty());
-        let model1 = ModelDescription::new(
-            true,
-            vec!["init_reading".to_string()],
-            vec!["trades".to_string(), "total".to_string()],
+    }
+
+    #[test]
+    fn test_meta_with_models() {
+        let model1 = ModelDescription::new(true, &["init_reading"], &["trades", "total"]);
+        let meta = Meta::new(
+            SimulatorType::default(),
+            HashMap::from([("MarktplatzModel".to_string(), model1)]),
+            None,
         );
-        meta.models.insert("MarktplatzModel".to_string(), model1);
         assert_eq!(meta.models.len(), 1, "Should have one model");
 
         assert!(meta.extra_methods.is_none());
         let meta_json = serde_json::to_string(&meta).unwrap();
         assert_eq!(
-            r#"{"api_version":"3.1","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#,
+            r#"{"api_version":"3.0","type":"hybrid","models":{"MarktplatzModel":{"public":true,"params":["init_reading"],"attrs":["trades","total"]}}}"#,
             meta_json,
             "Meta should have one model and no extra methods."
-        )
+        );
     }
 
     #[test]
     fn test_meta_optionals() {
-        let mut meta = Meta::new(SimulatorType::default(), HashMap::new(), None);
-        let meta_json = serde_json::to_string(&meta).unwrap();
-        assert_eq!(
-            r#"{"api_version":"3.0","type":"hybrid","models":{}}"#, meta_json,
-            "JSON String should contain no 'extra_methods'."
+        let meta = Meta::new(
+            SimulatorType::default(),
+            HashMap::new(),
+            Some(vec!["foo".to_string(), "bar".to_string()]),
         );
 
-        meta.extra_methods = Some(vec!["foo".to_string(), "bar".to_string()]);
         assert_eq!(
             meta.extra_methods.as_ref().unwrap().len(),
             2,
@@ -322,7 +353,7 @@ mod tests {
             r#"{"api_version":"3.0","type":"hybrid","models":{},"extra_methods":["foo","bar"]}"#,
             meta_json,
             "JSON String should contain 'foo' and 'bar' as extra methods."
-        )
+        );
     }
 
     #[test]
@@ -338,7 +369,7 @@ mod tests {
         assert_eq!(
             r#"{"eid":"eid_1","type":"model_name"}"#, create_result_json,
             "New CreateResult should not contain any optional fields"
-        )
+        );
     }
 
     #[test]
@@ -365,6 +396,6 @@ mod tests {
             r#"{"eid":"eid_1","type":"model_name","rel":["eid_2"],"children":[{"eid":"child_1","type":"child"}]}"#,
             create_result_json,
             "Filled create result should contain optional fields without extra_info"
-        )
+        );
     }
 }

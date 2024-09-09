@@ -1,19 +1,17 @@
-#[cfg(feature = "default_api")]
-pub mod default_api;
-pub mod json;
+pub mod mosaik_protocol;
 pub mod tcp;
 pub mod types;
 
 use crate::{
     tcp::{build_connection, ConnectionDirection},
-    types::*,
+    types::{Attr, CreateResult, InputData, Meta, OutputData, OutputRequest, SimId, Time},
 };
 
 use async_std::task;
 use async_trait::async_trait;
 #[cfg(test)]
 use mockall::automock;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -22,7 +20,7 @@ pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> 
     task::block_on(build_connection(addr, simulator))
 }
 
-/// The MosaikApi trait defines the interface for a Mosaik simulator API.
+/// The `MosaikApi` trait defines the interface for a Mosaik simulator API.
 /// Errors will result in a Failure Response being sent to Mosaik containing the Error's message and/or Stack Trace.
 #[cfg_attr(test, automock)]
 pub trait MosaikApi: Send + 'static {
@@ -33,7 +31,7 @@ pub trait MosaikApi: Send + 'static {
         sid: SimId,
         time_resolution: f64,
         sim_params: Map<String, Value>,
-    ) -> Result<Meta, String>;
+    ) -> Result<&'static Meta, String>;
 
     /// Create `num` instances of the specified `model_name` using the provided `model_params`.
     /// The returned list must have the same length as `num`.
@@ -49,7 +47,7 @@ pub trait MosaikApi: Send + 'static {
     fn setup_done(&self) -> Result<(), String>;
 
     /// Perform the next simulation step at `time` and return the new simulation time (the time at which `step` should be called again),
-    /// or `None` if the simulator doesn't need to step itself.
+    /// or `None` if the simulator doesn't need to step itself. The Return value must be set for time-based simulators.
     fn step(
         &mut self,
         time: Time,
@@ -58,7 +56,7 @@ pub trait MosaikApi: Send + 'static {
     ) -> Result<Option<Time>, String>;
 
     /// Collect data from the simulation and return a nested vector (`OutputData`) containing the information.
-    fn get_data(&mut self, outputs: OutputRequest) -> Result<OutputData, String>;
+    fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String>;
 
     /// This function is called by Mosaik when the simulation is finished.
     /// Returns `Null`. The simulation API stops as soon as the function returns.
@@ -74,8 +72,7 @@ pub trait MosaikApi: Send + 'static {
         kwargs: &Map<String, Value>,
     ) -> Result<Value, String> {
         Err(format!(
-            "Method '{}' not found with args: {:?} and kwargs: {:?}",
-            method, args, kwargs
+            "Method '{method}' not found with args: {args:?} and kwargs: {kwargs:?}"
         ))
     }
 }
@@ -95,6 +92,7 @@ mod tests {
     use super::*;
     use crate::MockMosaikApi;
     use mockall::predicate::*;
+    use serde_json::json;
 
     #[test]
     fn test_extra_method_with_logic() {
@@ -105,7 +103,7 @@ mod tests {
         // Implement the logic for extra_method
         let actual_method = |method: &str| match method {
             "example_method" => Ok(Value::String("example result".to_string())),
-            _ => Err(format!("Method not found: {}", method)),
+            _ => Err(format!("Method not found: {method}")),
         };
 
         // Set up expectation
