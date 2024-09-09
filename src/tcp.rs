@@ -7,8 +7,10 @@
 //!
 //! The `build_connection` function is the entry point for the TCP-Manager. It creates a TCP-Stream and spawns the 3 loops.
 
-use crate::{mosaik_protocol, MosaikApi};
-use mosaik_protocol::Response;
+use crate::{
+    mosaik_protocol::{self, Response},
+    MosaikApi,
+};
 
 use async_std::{
     net::{TcpListener, TcpStream},
@@ -16,7 +18,10 @@ use async_std::{
     task,
 };
 use futures::{
-    channel::{mpsc, oneshot},
+    channel::{
+        mpsc,
+        oneshot::{self, Canceled},
+    },
     select,
     sink::SinkExt,
     FutureExt,
@@ -34,7 +39,7 @@ pub enum ConnectionDirection {
     ListenOnAddress(SocketAddr),
 }
 
-///Build the connection between Mosaik and us. 2 cases, we connect to them or they connect to us.
+/// Build the connection between Mosaik and us. 2 cases, we connect to them or they connect to us.
 pub(crate) async fn build_connection<T: MosaikApi>(
     addr: ConnectionDirection,
     simulator: T,
@@ -89,7 +94,7 @@ pub(crate) async fn build_connection<T: MosaikApi>(
     Ok(())
 }
 
-///Receive the Requests, send them to the `broker_loop`.
+/// Receive the Requests, send them to the `broker_loop`.
 async fn tcp_receiver(
     mut broker: mpsc::UnboundedSender<String>,
     shutdown_signal_rx: oneshot::Receiver<bool>,
@@ -100,46 +105,63 @@ async fn tcp_receiver(
     let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number in front of the request.
 
     let mut rx = shutdown_signal_rx.fuse();
-    //Read the rest of the data and send it to the broker_loop
+
+    // Loop until no incoming message stream gets closed or shutdown signal is received
     loop {
-        // handle all breakouts from the loop
         select! {
             msg = stream.read_exact(&mut size_data).fuse() => {
-                if msg.is_err() {
-                    error!("Error reading size data: {:?}", msg.err());
-                    break;
-                }
-                // escape select! to read the full message without breaking the loop
+                //Read the rest of the data and send it to the broker_loop
+                read_complete_message(msg, &size_data, stream, &mut broker).await?;
             },
             shutdown_signal = rx => {
-                if shutdown_signal.is_ok() {
-                    info!("Received shutdown signal.");
-                } else {
-                    info!("Shutdown signal channel closed.");
-                }
+                shutdown_msg(shutdown_signal);
                 break;
             },
         }
-        // continue with handling the message
-        let size = u32::from_be_bytes(size_data) as usize;
-        info!("Received {} Bytes Message", size);
-        let mut full_package = vec![0; size];
-        if let Err(e) = stream.read_exact(&mut full_package).await {
-            error!("Error reading Full Package: {:?}", e);
-            continue;
-        }
-        let json_string = String::from_utf8(full_package[0..size].to_vec())
-            .expect("Should convert to string from utf 8 in connection loops");
-        if let Err(e) = broker.send(json_string).await {
-            error!("Error sending package to broker: {:?}", e);
-            //TODO I would add a break; here or just use await? instead
-        }
     }
+
+    // Receiver finished
     info!("Receiver finished.");
     Ok(())
 }
 
-//Receive the Response from the broker_loop and write it in the stream.
+// Helper for the tcp receiver shutdown messages
+fn shutdown_msg(shutdown_signal: std::result::Result<bool, Canceled>) {
+    if shutdown_signal.is_ok() {
+        info!("TCP Receiver received shutdown signal.");
+    } else {
+        info!("TCP Receivers shutdown signal channel closed. Shutting down...");
+    }
+}
+
+// Helper to read messages in the tcp receiver messages
+async fn read_complete_message(
+    msg: std::result::Result<(), std::io::Error>,
+    size_data: &[u8; 4],
+    mut stream: &TcpStream,
+    broker: &mut mpsc::UnboundedSender<String>,
+) -> Result<()> {
+    //Check if there was an error reading the size data
+    debug!("Received a new message");
+    msg?;
+
+    let size = u32::from_be_bytes(*size_data) as usize;
+    debug!("New message contains {} Bytes", size);
+
+    // Read the rest of the data
+    let mut full_package = vec![0; size];
+    stream.read_exact(&mut full_package).await?;
+
+    debug!("Parsing string as utf8");
+    let json_string = String::from_utf8(full_package[0..size].to_vec())?;
+
+    debug!("Sending message to broker: {:?}", json_string);
+    broker.send(json_string).await?;
+
+    Ok(())
+}
+
+// Receive the Response from the broker_loop and write it in the stream.
 async fn tcp_sender(
     mut messages: mpsc::UnboundedReceiver<Vec<u8>>,
     stream: Arc<TcpStream>,
@@ -156,7 +178,7 @@ async fn tcp_sender(
     Ok(())
 }
 
-///Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
+/// Receive requests from the `connection_loop`, parse them, get the values from the API and send the finished response to the `connection_writer_loop`
 async fn broker_loop<T: MosaikApi>(
     mut received_requests: mpsc::UnboundedReceiver<String>,
     mut response_sender: mpsc::UnboundedSender<Vec<u8>>,
@@ -206,7 +228,7 @@ async fn broker_loop<T: MosaikApi>(
     info!("Broker finished.");
 }
 
-///spawns the tasks and handles errors.
+/// Spawns the tasks and handles errors.
 fn spawn_and_log_error<F>(fut: F) -> task::JoinHandle<()>
 where
     F: Future<Output = Result<()>> + Send + 'static,
