@@ -26,7 +26,7 @@ The [examples](./examples/) folder contains example simulators based on the [off
 For a simulator written in Rust to successfully communicate with Mosaik you must:
 
 1. Add `mosaik-api-rust = { git = "link/to/this/repo" }` to your `Cargo.toml` as a dependency.
-2. Implement the `MosaikApi`  trait for your simulator.
+2. Implement the `MosaikApi` trait for your simulator.
 3. Use the `run_simulation()` function in your `main` to connect your simulator to Mosaik. This connects your simulator to Mosaik and handles the communication over a TCP channel. The `ConnectionDirection` depends on how you connect your simulator to Mosaik in Python (see [Connection Setup](#connection-setup)).
 4. Then connect the simulators in the `SIM_CONFIG` of your Mosaik python script as described in the following paragraph.
 
