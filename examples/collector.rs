@@ -15,8 +15,7 @@ use mosaik_rust_api::{
 };
 use serde_json::{Map, Value};
 use std::{
-    collections::{BTreeMap, HashMap},
-    sync::LazyLock,
+    collections::{BTreeMap, HashMap}, net::{IpAddr, Ipv4Addr, SocketAddr}, sync::LazyLock
 };
 
 #[derive(Parser, Debug)]
@@ -25,6 +24,8 @@ struct Args {
     #[structopt(short, long)]
     addr: Option<String>,
 }
+
+
 
 pub fn main() {
     //get the address if there is one
@@ -38,8 +39,9 @@ pub fn main() {
         }
         //case if mosaik connects to us
         None => {
-            let addr = "127.0.0.1:3456";
-            ConnectionDirection::ListenOnAddress(addr.parse().expect("Address is not parseable."))
+            // Alternatively: "127.0.0.1:3456".parse().expect("Address is not parseable.")
+            let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3456);
+            ConnectionDirection::ListenOnAddress(addr)
         }
     };
 
