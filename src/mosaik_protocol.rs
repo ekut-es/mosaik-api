@@ -80,7 +80,7 @@ impl MosaikMessage {
                 ),
             };
             serde_json::to_vec(&error_response)
-                .expect("Tested error response should be serializable.")
+                .expect("Tested error response should always be serializable.")
         });
         let header = u32::try_from(payload.len()).unwrap_or_else(|_| {
             error!(
@@ -94,7 +94,7 @@ impl MosaikMessage {
                 id: self.id,
                 content: Value::from("Message too large"),
             })
-            .expect("Tested error response should be serializable.");
+            .expect("Tested error response should always be serializable.");
             // return the length of the ReplyFailure message, which is << u32::MAX
             payload.len() as u32
         });
