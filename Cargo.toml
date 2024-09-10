@@ -1,7 +1,7 @@
 [package]
 authors = ["Jakob Pohl", "Christoph Gross", "Lukas Seehuber"]
 edition = "2021"
-name = "mosaik-rust-api"
+name = "mosaik-api"
 version = "0.1.0"
 license = "MIT"
 
