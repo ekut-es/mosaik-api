@@ -73,3 +73,7 @@ or
 cargo build --examples
 cargo run --example connector & python examples/demo2.py
 ```
+
+## Local Development
+
+For further development in this repository, it is recommended that you use [pre-commit](https://pre-commit.com/) and install the local pre-commit hook by running `pre-commit install` in your terminal.
