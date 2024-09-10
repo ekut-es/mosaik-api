@@ -2,76 +2,87 @@
 image: rust:latest
 
 variables:
-    CARGO_HOME: $CI_PROJECT_DIR/cargo
+  CARGO_HOME: $CI_PROJECT_DIR/cargo
 
 # Caches some files for improved CI Times
 cache:
   paths:
-  - $CARGO_HOME
+    - $CARGO_HOME
   #- ./target/
-
 
 # Defines stages which are to be executed
 stages:
   - format
   - build
   - test
-  - coverage
 
-# Run `cargo build` for the project with stable Rust
+# ------------- Stage 1: Format----------------
 Rust and Cargo Version:
-  stage: format  
+  stage: format
   script:
-  - rustc --version && cargo --version
+    - rustc --version && cargo --version
 
 Cargo Format:
   stage: format
   before_script:
-  - rustup component add rustfmt
+    - rustup component add rustfmt
   script:
-  - cargo fmt --all -- --check
+    - cargo fmt --verbose --all -- --check
 
-Cargo Clippy:
-  stage: test
-  allow_failure: true
-  before_script:
-  - rustup component add clippy
-  script:
-  - cargo clippy --all-targets --all-features -- -D warnings
-
-Cargo check:
-  stage: format
-  script:
-  - cargo check
-
+# ------------- Stage 2: Build ----------------
 Build lib:
   stage: build
   script:
-  - cargo build
+    - cargo build
 
 Build examples:
-  stage: test
+  stage: build
   # artifacts:
   #   paths:
   #   - ./target/debug/examples/p2p_crust
   #   - ./target/debug/examples/p2p_libp2p
   script:
-  - cargo build --examples
+    - cargo build --examples
 
+# ------------- Stage 3: Test ----------------
 # Not necessary as this is just a lib
 # Cargo testbuild lib:
 #   stage: test
 #   script:
 #   - cargo build --release
 
+Cargo Clippy:
+  stage: test
+  allow_failure: true
+  before_script:
+    - rustup component add clippy
+  script:
+    - cargo clippy --all-targets --all-features -- -D warnings
+
 Cargo-test:
   stage: test
   script:
-  - cargo test
+    - cargo test
   artifacts:
     paths:
     #- target/debug/
 
+# Build the python environment as in README and run demo1.py and demo2.py
+Integration-tests:
+  stage: test
+  before_script:
+    - apt-get update && apt-get install -y python3 python3-venv python3-pip # Install Python
+    - cargo build --examples
+  script:
+    - python3 -m venv venv # Create virtual environment
+    - source venv/bin/activate # Activate virtual environment
+    - pip install --upgrade pip # Upgrade pip
+    - pip install "mosaik>=3.3" # Install requirements
+    # Run examples and check outputs
+    - python3 examples/demo1.py > output1.txt
+    - cargo run --example controller & python3 examples/demo2.py > output2.txt
+    - diff output1.txt examples/expected_output/demo1_output.txt
+    - diff output2.txt examples/expected_output/demo2_output.txt
 # Error: "Failed to run tests: ASLR disable failed: EPERM: Operation not permitted"
 # https://github.com/xd009642/tarpaulin/issues/146
 # Cargo test coverage:
@@ -80,5 +91,5 @@ Cargo-test:
 #   - cargo install cargo-tarpaulin
 #   script:
 #   - cargo tarpaulin
-#   dependencies: 
+#   dependencies:
 #   - Cargo-test

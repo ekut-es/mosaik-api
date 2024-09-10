@@ -1,164 +1,84 @@
-pub mod json; //the tcp manager
+pub mod mosaik_protocol;
+pub mod tcp;
+pub mod types;
 
-use async_std::{
-    net::{TcpListener, TcpStream},
-    prelude::*,
-    task,
+use crate::{
+    tcp::{build_connection, ConnectionDirection},
+    types::{Attr, CreateResult, InputData, Meta, OutputData, OutputRequest, SimId, Time},
 };
+
+use async_std::task;
 use async_trait::async_trait;
-use futures::sink::SinkExt;
-use futures::FutureExt;
-use futures::{channel::mpsc, select};
-use log::{debug, error, info, trace};
-use serde_json::{json, Map, Value};
-use std::{collections::HashMap, future::Future, net::SocketAddr, sync::Arc};
+#[cfg(test)]
+use mockall::automock;
+use serde_json::{Map, Value};
+
 type AResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-///Main calls this function with the simulator that should run. For the option that we connect our selfs addr as option!...
+///Main calls this function with the simulator that should run and the direction with an address for the connection to mosaik.
 pub fn run_simulation<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> AResult<()> {
     task::block_on(build_connection(addr, simulator))
 }
 
-///information about the model(s) of the simulation
-pub type Meta = serde_json::Value;
+/// The `MosaikApi` trait defines the interface for a Mosaik simulator API.
+/// Errors will result in a Failure Response being sent to Mosaik containing the Error's message and/or Stack Trace.
+#[cfg_attr(test, automock)]
+pub trait MosaikApi: Send + 'static {
+    /// Initialize the simulator with the specified ID (`sid`), time resolution (`time_resolution`), and additional parameters (`sim_params`).
+    /// Returns the meta data (`Meta`) of the simulator.
+    fn init(
+        &mut self,
+        sid: SimId,
+        time_resolution: f64,
+        sim_params: Map<String, Value>,
+    ) -> Result<&'static Meta, String>;
 
-///Id of the simulation
-pub type Sid = String;
-
-pub type Model = Value;
-
-///Id of an entity
-pub type Eid = String;
-
-///Id of an attribute of a Model
-pub type AttributeId = String;
-
-pub trait ApiHelpers {
-    /// Gets the meta from the simulator, needs to be implemented on the simulator side.
-    fn meta() -> serde_json::Value;
-    /// Set the eid\_prefix on the simulator, which we got from the interface.
-    fn set_eid_prefix(&mut self, eid_prefix: &str);
-    /// Set the step_size on the simulator, which we got from the interface.
-    fn set_step_size(&mut self, step_size: i64);
-    /// Get the eid_prefix.
-    fn get_eid_prefix(&self) -> &str;
-    /// Get the step_size for the api call step().
-    fn get_step_size(&self) -> i64;
-    /// Get the list containing the created entities.
-    fn get_mut_entities(&mut self) -> &mut Map<String, Value>;
-    /// Create a model instance (= entity) with an initial value. Returns the [JSON-Value](Value)
-    /// representation of the children, if the entity has children.
-    fn add_model(&mut self, model_params: Map<AttributeId, Value>) -> Option<Value>;
-    /// Get the value from a entity.
-    fn get_model_value(&self, model_idx: u64, attr: &str) -> Option<Value>;
-    /// Call the step function to perform a simulation step and include the deltas from mosaik, if there are any.
-    fn sim_step(&mut self, deltas: Vec<(String, u64, Map<String, Value>)>);
-}
-///the class for the "empty" API calls
-pub trait MosaikApi: ApiHelpers + Send + 'static {
-    /// Initialize the simulator with the ID sid and apply additional parameters (sim_params) sent by mosaik. Return the meta data meta.
-    fn init(&mut self, _sid: Sid, sim_params: Option<Map<String, Value>>) -> Meta {
-        if let Some(sim_params) = sim_params {
-            if let Some(eid_prefix) = sim_params.get("eid_prefix") {
-                if let Some(prefix) = eid_prefix.as_str() {
-                    self.set_eid_prefix(prefix);
-                }
-            } else if let Some(step_size) = sim_params.get("step_size") {
-                if let Some(step_size) = step_size.as_i64() {
-                    self.set_step_size(step_size)
-                }
-            }
-        }
-        Self::meta()
-    }
-
-    ///Create *num* instances of *model* using the provided *model_params*.
+    /// Create `num` instances of the specified `model_name` using the provided `model_params`.
+    /// The returned list must have the same length as `num`.
     fn create(
         &mut self,
         num: usize,
-        model: Model,
-        model_params: Option<Map<AttributeId, Value>>,
-    ) -> Vec<Map<String, Value>> {
-        let mut out_entities: Map<String, Value>;
-        let mut out_vector = Vec::new();
-        let next_eid = self.get_mut_entities().len();
-        if let Some(model_params) = model_params {
-            for i in next_eid..(next_eid + num) {
-                out_entities = Map::new();
-                let eid = format!("{}{}", self.get_eid_prefix(), i);
-                let children = self.add_model(model_params.clone());
-                self.get_mut_entities().insert(eid.clone(), Value::from(i)); //create a mapping from the entity ID to our model
-                out_entities.insert(String::from("eid"), json!(eid));
-                out_entities.insert(String::from("type"), model.clone());
-                if let Some(children) = children {
-                    out_entities.insert(String::from("children"), children);
-                }
-                debug!("{:?}", out_entities);
-                out_vector.push(out_entities);
-            }
-        }
-        debug!("the created model: {:?}", out_vector);
-        out_vector
-    }
+        model_name: String,
+        model_params: Map<Attr, Value>,
+    ) -> Result<Vec<CreateResult>, String>;
 
-    ///The function mosaik calls, if the init() and create() calls are done. Return Null
-    fn setup_done(&self);
+    /// This function is called by Mosaik when the `init()` and `create()` calls are done.
+    /// Returns `Null`.
+    fn setup_done(&self) -> Result<(), String>;
 
-    ///perform a simulation step and return the new time
-    fn step(&mut self, time: usize, inputs: HashMap<Eid, Map<AttributeId, Value>>) -> usize {
-        trace!("the inputs in step: {:?}", inputs);
-        let mut deltas: Vec<(String, u64, Map<String, Value>)> = Vec::new();
-        for (eid, attrs) in inputs.into_iter() {
-            for (attr, attr_values) in attrs.into_iter() {
-                let model_idx = match self.get_mut_entities().get(&eid) {
-                    Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
-                    _ => panic!(
-                        "No correct model eid available. Input: {:?}, Entities: {:?}",
-                        eid,
-                        self.get_mut_entities()
-                    ),
-                };
-                if let Value::Object(values) = attr_values {
-                    deltas.push((attr, model_idx, values));
-                    debug!("the deltas for sim step: {:?}", deltas);
-                };
-            }
-        }
-        self.sim_step(deltas);
+    /// Perform the next simulation step at `time` and return the new simulation time (the time at which `step` should be called again),
+    /// or `None` if the simulator doesn't need to step itself. The Return value must be set for time-based simulators.
+    fn step(
+        &mut self,
+        time: Time,
+        inputs: InputData,
+        max_advance: Time,
+    ) -> Result<Option<Time>, String>;
 
-        time + (self.get_step_size() as usize)
-    }
+    /// Collect data from the simulation and return a nested vector (`OutputData`) containing the information.
+    fn get_data(&self, outputs: OutputRequest) -> Result<OutputData, String>;
 
-    //collect data from the simulation and return a nested Vector containing the information
-    fn get_data(&mut self, outputs: HashMap<Eid, Vec<AttributeId>>) -> Map<Eid, Value> {
-        let mut data: Map<String, Value> = Map::new();
-        for (eid, attrs) in outputs.into_iter() {
-            let model_idx = match self.get_mut_entities().get(&eid) {
-                Some(eid) if eid.is_u64() => eid.as_u64().unwrap(), //unwrap safe, because we check for u64
-                _ => panic!("No correct model eid available."),
-            };
-            let mut attribute_values = Map::new();
-            for attr in attrs.into_iter() {
-                //Get the values of the model
-                if let Some(value) = self.get_model_value(model_idx, &attr) {
-                    attribute_values.insert(attr, value);
-                } else {
-                    error!(
-                        "No attribute called {} available in model {}",
-                        &attr, model_idx
-                    );
-                }
-            }
-            data.insert(eid, Value::from(attribute_values));
-        }
-        data
-    }
-
-    ///The function mosaik calls, if the simulation finished. Return Null. The simulation API stops as soon as the function returns.
+    /// This function is called by Mosaik when the simulation is finished.
+    /// Returns `Null`. The simulation API stops as soon as the function returns.
     fn stop(&self);
+
+    /// A wrapper for extra methods that can be implemented by the simulator.
+    /// This method is not required by the Mosaik API, but can be used for additional functionality.
+    /// Returns a `Result` containing the result of the method call or an error message if the method is not found.
+    fn extra_method(
+        &mut self,
+        method: &str,
+        args: &Vec<Value>,
+        kwargs: &Map<String, Value>,
+    ) -> Result<Value, String> {
+        Err(format!(
+            "Method '{method}' not found with args: {args:?} and kwargs: {kwargs:?}"
+        ))
+    }
 }
 
 ///Async API calls, not implemented!
+#[allow(dead_code)]
 #[async_trait]
 trait AsyncApi {
     async fn get_progress();
@@ -167,294 +87,48 @@ trait AsyncApi {
     async fn set_data();
 }
 
-//------------------------------------------------------------------
-// Here begins the async TCP-Manager
-//------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::MockMosaikApi;
+    use mockall::predicate::*;
+    use serde_json::json;
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
-//channels needed for the communication in the async tcp
-type Sender<T> = mpsc::UnboundedSender<T>;
-type Receiver<T> = mpsc::UnboundedReceiver<T>;
+    #[test]
+    fn test_extra_method_with_logic() {
+        let mut mock = MockMosaikApi::new();
+        let args = vec![json!(1), json!("hello")];
+        let kwargs = Map::new();
 
-#[derive(Debug)]
-enum Void {}
-pub enum ConnectionDirection {
-    ConnectToAddress(SocketAddr),
-    ListenOnAddress(SocketAddr),
-}
-
-///Build the connection between Mosaik and us. 2 cases, we connect to them or they connect to us.
-async fn build_connection<T: MosaikApi>(addr: ConnectionDirection, simulator: T) -> Result<()> {
-    debug!("accept loop debug");
-    match addr {
-        //Case: we need to listen for a possible connector
-        ConnectionDirection::ListenOnAddress(addr) => {
-            let listener = TcpListener::bind(addr).await?;
-            let (broker_sender, broker_receiver) = mpsc::unbounded();
-            let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-                mpsc::unbounded::<bool>();
-            let broker_handle = task::spawn(broker_loop(
-                broker_receiver,
-                shutdown_connection_loop_sender,
-                simulator,
-            ));
-
-            let mut incoming = listener.incoming();
-            let connection_handle = if let Some(stream) = incoming.next().await {
-                let stream = stream?;
-                info!("Accepting from: {}", stream.peer_addr()?);
-                spawn_and_log_error(connection_loop(
-                    broker_sender,
-                    shutdown_connection_loop_receiver,
-                    stream,
-                ))
-            } else {
-                panic!("No stream available.")
-            };
-            connection_handle.await;
-            broker_handle.await;
-
-            Ok(())
-        }
-        //case: We need to connect to a stream
-        ConnectionDirection::ConnectToAddress(addr) => {
-            let stream = TcpStream::connect(addr).await?;
-            let (broker_sender, broker_receiver) = mpsc::unbounded();
-            let (shutdown_connection_loop_sender, shutdown_connection_loop_receiver) =
-                mpsc::unbounded::<bool>();
-            let broker_handle = task::spawn(broker_loop(
-                broker_receiver,
-                shutdown_connection_loop_sender,
-                simulator,
-            ));
-            spawn_and_log_error(connection_loop(
-                broker_sender,
-                shutdown_connection_loop_receiver,
-                stream,
-            ));
-            //connection_handle.await;
-            broker_handle.await;
-            Ok(())
-        }
-    }
-}
-
-///Recieve the Requests, send them to the broker_loop.
-async fn connection_loop(
-    mut broker: Sender<Event>,
-    mut connection_shutdown_reciever: Receiver<bool>,
-    stream: TcpStream,
-) -> Result<()> {
-    info!("Started connection loop");
-
-    let mut stream = stream;
-    let name = String::from("Mosaik");
-
-    let (_shutdown_sender, shutdown_receiver) = mpsc::unbounded::<Void>();
-    broker
-        .send(Event::NewPeer {
-            name: name.clone(),
-            stream: Arc::new(stream.clone()),
-            shutdown: shutdown_receiver,
-        })
-        .await
-        .unwrap();
-
-    let mut size_data = [0u8; 4]; // use 4 byte buffer for the big_endian number infront the request.
-
-    //Read the rest of the data and send it to the broker_loop
-    loop {
-        select! {
-            msg = stream.read_exact(&mut size_data).fuse() => match msg {
-                Ok(()) => {
-                    let size = u32::from_be_bytes(size_data) as usize;
-                    info!("Received {} Bytes Message", size);
-                    let mut full_package = vec![0; size];
-                    match stream.read_exact(&mut full_package).await {
-                        Ok(()) => {
-                            if let Err(e) = broker
-                                .send(Event::Request {
-                                    full_data: String::from_utf8(full_package[0..size].to_vec())
-                                        .expect("string from utf 8 connction loops"),
-                                    name: name.clone(),
-                                })
-                                .await
-                            {
-                                error!("Error sending package to broker: {:?}", e);
-                            }
-                        }
-                        Err(e) => error!("Error reading Full Package: {:?}", e),
-                    }
-
-                },
-                Err(_) => break,
-            },
-            void = connection_shutdown_reciever.next().fuse() => match void {
-                Some(_) => {
-                    info!("recieve connection_shutdown command");
-                    break;
-                },
-                None => break,
-            }
-        }
-    }
-    Ok(())
-}
-
-///Recieve the Response from the broker_loop and write it in the stream.
-async fn connection_writer_loop(
-    messages: &mut Receiver<Vec<u8>>,
-    stream: Arc<TcpStream>,
-    shutdown: Receiver<Void>,
-) -> Result<()> {
-    let mut stream = &*stream;
-    let mut messages = messages.fuse();
-    let mut shutdown = shutdown.fuse();
-    loop {
-        select! {
-            msg = messages.next().fuse() => match msg {
-                Some(msg) => {
-                    stream.write_all(&msg).await?//write the message
-                },
-                None => break,
-            },
-            void = shutdown.next().fuse() => match void {
-                Some(void) => match void {},
-                None => break,
-            }
-        }
-    }
-    Ok(())
-}
-
-#[derive(Debug)]
-enum Event {
-    NewPeer {
-        name: String, //here Mosaik
-        stream: Arc<TcpStream>,
-        shutdown: Receiver<Void>,
-    },
-    Request {
-        full_data: String,
-        name: String,
-    },
-}
-
-///Recieve requests from the connection_loop, parse them, get the values from the API and send the finished response to the connection_writer_loop
-async fn broker_loop<T: MosaikApi>(
-    events: Receiver<Event>,
-    mut connection_shutdown_sender: Sender<bool>,
-    mut simulator: T,
-) {
-    let (disconnect_sender, mut disconnect_receiver) =
-        mpsc::unbounded::<(String, Receiver<Vec<u8>>)>();
-    let mut peer: (std::net::SocketAddr, Sender<Vec<u8>>);
-    let mut events = events.fuse();
-
-    info!("New peer -> creating channels");
-    if let Some(Event::NewPeer {
-        name: _,
-        stream,
-        shutdown,
-    }) = events.next().await
-    {
-        let (client_sender, mut client_receiver) = mpsc::unbounded();
-        peer = (
-            stream
-                .peer_addr()
-                .expect("unaible to read remote peer address from {name}"),
-            client_sender,
-        );
-        let mut disconnect_sender = disconnect_sender.clone();
-        spawn_and_log_error(async move {
-            let res = connection_writer_loop(&mut client_receiver, stream, shutdown).await; //spawn a connection writer with the message recieved over the channel
-            disconnect_sender
-                .send((String::from("Mosaik"), client_receiver))
-                .await
-                .unwrap();
-            res
-        });
-    } else {
-        panic!("Didn't recieve new peer as first event.");
-    }
-
-    //loop for the different events.
-    'event_loop: loop {
-        let event = select! {
-            event = events.next().fuse() => match event {
-                None => break,
-                Some(event) => event,
-            },
-            disconnect = disconnect_receiver.next().fuse() => {
-                let (_name, _pending_messages) = disconnect.unwrap();
-                //assert!(peer.remove(&name).is_some());
-                continue;
-            },
+        // Implement the logic for extra_method
+        let actual_method = |method: &str| match method {
+            "example_method" => Ok(Value::String("example result".to_string())),
+            _ => Err(format!("Method not found: {method}")),
         };
-        debug!("Received event: {:?}", event);
-        match event {
-            //The event that will happen the rest of the time, because the only connector is mosaik.
-            Event::Request { full_data, name } => {
-                //parse the request
-                match json::parse_request(full_data) {
-                    Ok(request) => {
-                        //Handle the request -> simulations calls etc.
-                        trace!("The request: {:?} from {name}", request);
-                        use json::Response::*;
-                        match json::handle_request(request, &mut simulator) {
-                            Successfull(response) => {
-                                //get the second argument in the tuple of peer
-                                //-> send the message to mosaik channel reciever
-                                if let Err(e) = peer.1.send(response).await {
-                                    error!("error sending response to peer: {}", e);
-                                }
-                            }
-                            Stop(response) => {
-                                if let Err(e) = peer.1.send(response).await {
-                                    error!("error sending response to peer: {}", e);
-                                }
-                                if let Err(e) = connection_shutdown_sender.send(true).await {
-                                    error!("error sending to the shutdown channel: {}", e);
-                                }
-                                break 'event_loop;
-                            }
-                            None => {
-                                info!("Nothing to respond");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Error while parsing the request from {name}: {:?}", e);
-                    }
-                }
-            }
-            //The event for a new connector. //TODO: Check if new peer is even needed
-            Event::NewPeer {
-                name,
-                stream: _,
-                shutdown: _,
-            } => {
-                error!("There is a peer already. No new peer from {name} needed.");
-            }
-        }
-    }
-    info!("dropping peer");
-    drop(peer);
-    info!("closing channels");
-    drop(disconnect_sender);
-    while let Some((_name, _pending_messages)) = disconnect_receiver.next().await {}
-}
 
-///spawns the tasks and handles errors.
-fn spawn_and_log_error<F>(fut: F) -> task::JoinHandle<()>
-where
-    F: Future<Output = Result<()>> + Send + 'static,
-{
-    trace!("Spawn task");
-    task::spawn(async move {
-        trace!("Task Spawned");
-        if let Err(e) = fut.await {
-            error!("{}", e)
-        }
-    })
+        // Set up expectation
+        mock.expect_extra_method()
+            .with(
+                mockall::predicate::eq("example_method"),
+                mockall::predicate::eq(args.clone()),
+                mockall::predicate::eq(kwargs.clone()),
+            )
+            .returning(move |method, _, _| actual_method(method));
+
+        mock.expect_extra_method()
+            .with(
+                mockall::predicate::eq("unknown_method"),
+                mockall::predicate::eq(args.clone()),
+                mockall::predicate::eq(kwargs.clone()),
+            )
+            .returning(move |method, _, _| actual_method(method));
+
+        // Call the method and assert for known method
+        let result = mock.extra_method("example_method", &args, &kwargs);
+        assert_eq!(result, Ok(Value::String("example result".to_string())));
+
+        // Call the method and assert for unknown method
+        let result = mock.extra_method("unknown_method", &args, &kwargs);
+        assert_eq!(result, Err("Method not found: unknown_method".to_string()));
+    }
 }
