@@ -15,7 +15,9 @@ use mosaik_rust_api::{
 };
 use serde_json::{Map, Value};
 use std::{
-    collections::{BTreeMap, HashMap}, net::{IpAddr, Ipv4Addr, SocketAddr}, sync::LazyLock
+    collections::{BTreeMap, HashMap},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::LazyLock,
 };
 
 #[derive(Parser, Debug)]
@@ -24,8 +26,6 @@ struct Args {
     #[structopt(short, long)]
     addr: Option<String>,
 }
-
-
 
 pub fn main() {
     //get the address if there is one
