@@ -3,7 +3,7 @@
 This project allows Rust code to operate with Mosaik simulations in Python.
 It provides a high-level API for simulators written in Rust to communicate with the [Mosaik Smart-Grid co-simulation framework](https://mosaik.offis.de/).
 
-The API is based on the [Mosaik API](https://mosaik.readthedocs.io/en/3.3.3/api.html) and is compatible with Mosaik version 3 <mark>but does not support asynchronous communication yet.</mark>
+The API is based on the [Mosaik API](https://mosaik.readthedocs.io/en/3.3.3/mosaik-api/index.html) and is compatible with Mosaik version 3 <mark>but does not support asynchronous communication yet.</mark>
 
 ## Content of this repository
 
