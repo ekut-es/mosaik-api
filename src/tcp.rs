@@ -196,7 +196,7 @@ async fn broker_loop<T: MosaikApi>(
                 trace!("The request: {:?}", request);
                 match mosaik_protocol::handle_request(&mut simulator, request) {
                     Response::Reply(mosaik_msg) => {
-                        let response = mosaik_msg.serialize_to_vec();
+                        let response = mosaik_msg.to_network_message();
 
                         //get the second argument in the tuple of peer
                         //-> send the message to mosaik channel receiver
