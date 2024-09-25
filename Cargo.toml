@@ -4,6 +4,14 @@ edition = "2021"
 name = "mosaik-rust-api"
 version = "0.1.0"
 license = "MIT"
+description = "High-level API for Mosaik, a flexible Smart Grid co-simulation framework."
+# TODO homepage
+# TODO repository
+readme = "README.md"
+# max 5 keywords
+keywords = ["mosaik", "simulation", "framework", "api", "grid"]
+# max 5 categories. Taken from https://crates.io/category_slugs
+categories = ["api-bindings", "simulation"]
 
 [dependencies]
 async-std = "1"
