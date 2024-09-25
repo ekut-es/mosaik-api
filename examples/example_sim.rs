@@ -264,7 +264,6 @@ pub fn main() {
     let args = Args::parse();
     env_logger::init();
 
-    // TODO: Should this be part of `run_simulation`?
     let address = match args.addr {
         //case if we connect us to mosaik
         Some(addr) => {
