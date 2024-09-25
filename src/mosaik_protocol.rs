@@ -53,7 +53,7 @@ impl Serialize for MosaikMessage {
 }
 
 impl MosaikMessage {
-    /// Serialize the MosaikMessage as a JSON byte vector
+    /// Serialize the [`MosaikMessage`] as a JSON byte vector
     ///
     /// # Errors
     /// If serialization fails, a fallback `ReplyFailure` message will be serialized instead.
@@ -308,10 +308,15 @@ fn handle_create<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Va
         .ok_or_else(|| {
             MosaikError::ParseError("Missing number of instances in create request".to_string())
         })?
-        .as_u64() // use as_u64() to get number, then cast to usize
+        .as_u64() // use as_u64() to get number
         .ok_or_else(|| MosaikError::ParseError("Invalid number format".to_string()))?
-        as usize;
-
+        .try_into() // cast safely to usize
+        .map_err(|_| {
+            MosaikError::ParseError(format!(
+                "Num in create request is too large. Maximum is {:?}",
+                usize::MAX
+            ))
+        })?;
     let model_name: String = request
         .args
         .get(1)
@@ -594,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_parse_invalid_mosaik_message() {
-        let data = r#"invalid request format"#;
+        let data = r"invalid request format";
         let result = parse_json_request(data);
         assert!(result.is_err());
         let expect = MosaikError::ParseError("Payload is not a valid Mosaik Message:".to_string());
