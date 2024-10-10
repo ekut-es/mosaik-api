@@ -30,9 +30,9 @@ mockall = "0.13"
 [features]
 default = []
 
+# Increased Clippy levels...
 [lints.clippy]
 all = { level = "deny", priority = -1 }
-get_first = "allow"
 expect_used = "warn"
 panic_in_result_fn = "warn"
 unwrap_used = "deny"

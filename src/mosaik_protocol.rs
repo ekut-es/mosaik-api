@@ -274,7 +274,7 @@ fn handle_init<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Valu
     let mut request = request;
     let sid = request
         .args
-        .get(0)
+        .first()
         .ok_or_else(|| MosaikError::ParseError("Missing SimId in init request".to_string()))?
         .as_str()
         .ok_or_else(|| MosaikError::ParseError("Invalid SimId format".to_string()))?
@@ -304,7 +304,7 @@ fn handle_init<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Valu
 fn handle_create<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Value, MosaikError> {
     let num: usize = request
         .args
-        .get(0)
+        .first()
         .ok_or_else(|| {
             MosaikError::ParseError("Missing number of instances in create request".to_string())
         })?
@@ -340,7 +340,7 @@ fn handle_create<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Va
 fn handle_step<T: MosaikApi>(simulator: &mut T, request: Request) -> Result<Value, MosaikError> {
     let time: u64 = request
         .args
-        .get(0)
+        .first()
         .ok_or_else(|| MosaikError::ParseError("Missing time in step request".to_string()))?
         .as_u64()
         .ok_or_else(|| MosaikError::ParseError("Invalid time format".to_string()))?;
@@ -380,7 +380,7 @@ fn handle_get_data<T: MosaikApi>(
     let outputs: OutputRequest = serde_json::from_value(
         request
             .args
-            .get(0)
+            .first()
             .ok_or_else(|| {
                 MosaikError::ParseError("Missing outputs in get_data request".to_string())
             })?
