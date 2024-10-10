@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::HashMap, sync::LazyLock};
 
-use mosaik_rust_api::{
+use mosaik_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{

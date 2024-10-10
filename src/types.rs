@@ -47,7 +47,7 @@ pub struct OutputData {
 ///
 /// ## Example implementation
 /// ```rust
-/// use mosaik_rust_api::types::ModelDescription;
+/// use mosaik_api::types::ModelDescription;
 ///
 /// const foo: ModelDescription = ModelDescription {
 ///     public: true,

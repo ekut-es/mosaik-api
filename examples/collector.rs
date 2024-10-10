@@ -4,7 +4,7 @@
 //! and simply prints everything at the end of the simulation.
 use clap::Parser;
 use log::error;
-use mosaik_rust_api::{
+use mosaik_api::{
     run_simulation,
     tcp::ConnectionDirection,
     types::{

@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic_in_result_fn)]
 use clap::Parser;
 use log::error;
-use mosaik_rust_api::tcp::ConnectionDirection;
-use mosaik_rust_api::types::{
+use mosaik_api::tcp::ConnectionDirection;
+use mosaik_api::types::{
     Attr, CreateResult, EntityId, InputData, Meta, ModelDescription, OutputData, OutputRequest,
     SimId, SimulatorType, Time,
 };
-use mosaik_rust_api::{run_simulation, MosaikApi};
+use mosaik_api::{run_simulation, MosaikApi};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::sync::LazyLock;
