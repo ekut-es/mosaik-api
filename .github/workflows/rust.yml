@@ -1,0 +1,81 @@
+name: Mosaik API
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  
+jobs:
+  build_and_test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          # - nightly          
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - name: Version
+        run: rustc --version && cargo --version
+      - run: rustup component add rustfmt
+      - name: Format
+        run: cargo fmt --verbose --all -- --check
+      - name: Build Lib
+        run: cargo build --verbose
+      - name: Test
+        run: cargo test --verbose
+        
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta        
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - name: Version
+        run: rustc --version && cargo --version
+      - run: rustup component add clippy
+      - name: Clippy (Allowed to fail)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+  integration-test:
+    # Build the python environment as in README and run demo1.py and demo2.py
+    name: Integration Tests 
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta        
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - name: Version
+        run: rustc --version && cargo --version
+      # - name: Install Python
+      #   run: apt-get update && apt-get install -y python3 python3-venv python3-pip
+      - name: Build Examples
+        run: cargo build --examples --verbose
+      - name: Create Virtual environment
+        run: python3 -m venv venv
+      - name: Activate virtual environment
+        run: source venv/bin/activate
+      - name: Update pip
+        run: pip install --upgrade pip
+      - name: Install requirements
+        run: pip install "mosaik>=3.3"
+      - name: Run examples and check output
+        run: python3 examples/demo1.py > output1.txt
+      - run: cargo run --example controller & python3 examples/demo2.py > output2.txt
+      - run: diff output1.txt examples/expected_output/demo1_output.txt
+      - run: diff output2.txt examples/expected_output/demo2_output.txt
