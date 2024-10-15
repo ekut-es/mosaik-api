@@ -1,4 +1,4 @@
-name: Rust
+name: Mosaik API
 
 on:
   push:
@@ -11,7 +11,7 @@ env:
   
 jobs:
   build_and_test:
-    name: Mosaik API - Rust
+    name: Build and Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,6 +24,7 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - name: Version
         run: rustc --version && cargo --version
+      - run: rustup component add rustfmt
       - name: Format
         run: cargo fmt --verbose --all -- --check
       - name: Build Lib
@@ -32,7 +33,7 @@ jobs:
         run: cargo test --verbose
         
   clippy:
-    name: Mosaik API Rust Clippy
+    name: Clippy
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -44,11 +45,12 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - name: Version
         run: rustc --version && cargo --version
+      - run: rustup component add clippy
       - name: Clippy (Allowed to fail)
         run: cargo clippy --all-targets --all-features -- -D warnings
   integration-test:
     # Build the python environment as in README and run demo1.py and demo2.py
-    name: Mosaik API Rust Integration Tests 
+    name: Integration Tests 
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -60,8 +62,8 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - name: Version
         run: rustc --version && cargo --version
-      - name: Install Python
-        run: apt-get update && apt-get install -y python3 python3-venv python3-pip
+      # - name: Install Python
+      #   run: apt-get update && apt-get install -y python3 python3-venv python3-pip
       - name: Build Examples
         run: cargo build --examples --verbose
       - name: Create Virtual environment
