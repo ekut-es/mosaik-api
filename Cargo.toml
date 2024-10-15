@@ -1,5 +1,5 @@
 [package]
-authors = ["Jakob Pohl", "Christoph Gross", "Lukas Seehuber"]
+authors = ["Jakob Pohl", "Christoph Gross", "Lukas Seehuber", "Florian Gehring"]
 edition = "2021"
 name = "mosaik-api"
 version = "0.1.0"
