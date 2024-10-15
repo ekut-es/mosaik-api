@@ -47,7 +47,7 @@ pub struct OutputData {
 ///
 /// ## Example implementation
 /// ```rust
-/// use mosaik_rust_api::types::ModelDescription;
+/// use mosaik_api::types::ModelDescription;
 ///
 /// const foo: ModelDescription = ModelDescription {
 ///     public: true,
@@ -133,7 +133,7 @@ impl Meta {
     }
 
     #[must_use]
-    pub fn get_version(&self) -> &str {
+    pub fn version(&self) -> &str {
         self.api_version
     }
 }
@@ -297,9 +297,9 @@ mod tests {
             "API version should match the global variable."
         );
         assert_eq!(
-            meta.get_version(),
+            meta.version(),
             API_VERSION,
-            "get_version should return the API version."
+            "version should return the API version."
         );
         assert_eq!(
             meta.simulator_type,

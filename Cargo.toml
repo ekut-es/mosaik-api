@@ -1,9 +1,17 @@
 [package]
 authors = ["Jakob Pohl", "Christoph Gross", "Lukas Seehuber"]
 edition = "2021"
-name = "mosaik-rust-api"
+name = "mosaik-api"
 version = "0.1.0"
 license = "MIT"
+description = "High-level API for Mosaik, a flexible Smart Grid co-simulation framework."
+# TODO homepage
+# TODO repository
+readme = "README.md"
+# max 5 keywords
+keywords = ["mosaik", "simulation", "framework", "api", "grid"]
+# max 5 categories. Taken from https://crates.io/category_slugs
+categories = ["api-bindings", "simulation"]
 
 [dependencies]
 async-std = "1"
@@ -22,6 +30,7 @@ mockall = "0.13"
 [features]
 default = []
 
+# Increased Clippy levels...
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 expect_used = "warn"
