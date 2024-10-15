@@ -5,8 +5,8 @@ name = "mosaik-api"
 version = "0.1.0"
 license = "MIT"
 description = "High-level API for Mosaik, a flexible Smart Grid co-simulation framework."
-# TODO homepage
-# TODO repository
+# homepage: only for dedicated websites different from the homepage of the repository
+repository = "https://github.com/ekut-es/mosaik-api"
 readme = "README.md"
 # max 5 keywords
 keywords = ["mosaik", "simulation", "framework", "api", "grid"]

@@ -25,7 +25,7 @@ The [examples](./examples/) folder contains example simulators based on the [off
 
 For a simulator written in Rust to successfully communicate with Mosaik you must:
 
-1. Add `mosaik-api = { git = "link/to/this/repo" }` to your `Cargo.toml` as a dependency.
+1. Add `mosaik-api = { git = "https://github.com/ekut-es/mosaik-api" }` to your `Cargo.toml` as a dependency.
 2. Implement the `MosaikApi` trait for your simulator.
 3. Use the `run_simulation()` function in your `main` to connect your simulator to Mosaik. This connects your simulator to Mosaik and handles the communication over a TCP channel. The `ConnectionDirection` depends on how you connect your simulator to Mosaik in Python (see [Connection Setup](#connection-setup)).
 4. Then connect the simulators in the `SIM_CONFIG` of your Mosaik python script as described in the following paragraph.
@@ -38,6 +38,7 @@ We support two ways to connect Rust simulators for communication with Mosaik. It
 2. Run the Rust simulator manually with a predefined `addr` and connect Mosaik to it with the `"connect"` keyword in Mosaik's `SIM_CONFIG` in Python. In Rust you need to use `ConnectionDirecton::ListenOnAddress` for the `run_simulation()`.
 
 Example setup to illustrate these two options with `ADDR` as the address of the communication channel between Mosaik and the Rust simulator, e.g. `127.0.0.1:5678`:
+
 | Mosaik `SIM_CONFIG` key                       | Rust `ConnectionDirection` for `run_simulation()` | Notes                                                                                  |
 | --------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `"cmd": "cargo run SIMULATOR -- -a=%(addr)s"` | `ConnectionDirection::ConnectToAddress(ADDR)`     | ADDR needs to be read in from the CLI in Rust.                                         |
